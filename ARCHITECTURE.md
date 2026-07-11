@@ -171,7 +171,29 @@ rewrite.
 
 ---
 
-## 7. Hierarchy
+## 7. Identity & paths
+
+**Decision.** A **UUID** is the stored, real identity of every entity — it never
+changes and survives renames. A human **slug** is a mutable label used for paths,
+URLs, and display.
+
+- **Slug uniqueness is per-parent.** Project slug is unique within the instance;
+  epic slug unique within its project; task slug unique within its epic. This lets
+  paths and URLs nest without a global slug namespace
+  (`auth-revamp/oauth-epic/token-refresh`).
+- **Git paths are slug-based and readable** —
+  `projects/<project-slug>/epics/<epic-slug>/tasks/<task-slug>/...` — because the
+  artifact repo is meant to be browsed by humans on GitHub/GitLab. The trade is
+  that a **rename rewrites the path**, handled as a `git mv` through the single
+  write path (§5); git follows the rename so history is preserved. UUID-based
+  (stable but unreadable) and hybrid `<slug>-<shortid>` were rejected in favor of
+  clean browsability.
+- The DB's doc pointer stays `(path, version)`; `path` is derivable from the slug
+  chain, so a rename is one DB update plus one `git mv`.
+
+---
+
+## 8. Hierarchy
 
 ```
 Nook instance
@@ -191,7 +213,7 @@ Nook instance
 
 ---
 
-## 8. Skills
+## 9. Skills
 
 **Decision.** Skills are the transforms that move the workflow forward
 (epic→tasks, task→plan). They are **layered**, not overridden.
@@ -205,6 +227,28 @@ Nook instance
 - **Tenets are the always-on layer** — the same composition mechanism, applied to
   every skill invocation.
 
+**Layer format & merge.**
+
+- **Base skills** ship inside Nook (code resources). **Project layers** live in the
+  **artifact repo** under `skills/`, versioned like every other artifact — they
+  diff and travel with the project.
+- A layer is **markdown + frontmatter**: `skill: <base-id>` (which base it
+  refines), `order: <int>`, then the overlay body.
+- **Merge is append-only, deterministic, base intact.** The resolved prompt is the
+  base template unmodified, then a `## Project refinements` section built from
+  layers sorted by `order` (filename as tiebreak), then a `## Tenets (must honor)`
+  section from active tenets as the always-on final layer. Layers can only *add* —
+  they cannot replace base sections — so a project can never silently diverge from
+  upstream base improvements.
+
+**Invocation — both tools and prompts** (see §11 for the MCP mapping).
+
+- **As MCP tools:** the agent can call a skill itself and chain autonomously
+  (split epic → generate a plan per task in one run); works in every client. This
+  is the workhorse path.
+- **As MCP prompts:** the same composition engine surfaced as human-facing
+  slash-commands for clients that support prompts. Nicer human UX.
+
 **Who runs the model? Agent-first, both-capable.** In v1 the *connected agent's*
 model does the reasoning; Nook ships the skill definitions and the MCP tools they
 call, and needs no API keys of its own. The skill interface is designed so that
@@ -213,7 +257,7 @@ be added later behind the *same* interface, without reworking skills.
 
 ---
 
-## 9. Tenets
+## 10. Tenets
 
 **Decision.** Tenets are project-level rules the agent must honor (e.g. "never use
 XCTest, only Swift Testing"). **Advisory** in v1: exposed via an MCP resource
@@ -228,7 +272,38 @@ agent to honor them.
 
 ---
 
-## 10. Stack
+## 11. MCP surface
+
+**Decision.** Nook's three concerns map onto MCP's three primitives, which differ
+by *who initiates use*: **tools** (model-initiated), **resources**
+(application/user-initiated), **prompts** (user-initiated).
+
+- **Tools** — structure CRUD + queries + editor-grade document ops + skills.
+- **Resources** — tenets (`nook://project/tenets`) and per-entity documents,
+  surfaced read-only for attachment.
+- **Prompts** — skills again, as human-facing slash-commands (the same composition
+  engine as the skill tools; see §9).
+
+**Project is bound at the session/connection level** (the project-by-config
+decision, §4), so tools take epic/task refs *relative to* the bound project — no
+`projectId` on every call.
+
+Proposed surface (initial; signatures firmed up with the data model):
+
+- **Structure tools:** `create_epic`, `update_epic`, `create_task`, `update_task`,
+  `set_task_blocked_by`, `create_release`, `assign_epic_to_release`, `get_epic`,
+  `get_task`, `list_epics`, `list_tasks(filter)`, `get_ready_tasks()` (open ∧ not
+  blocked — the "what's ready to work on" query).
+- **Document tools:** `read_doc(ref, name, {section?|range?, version?})`,
+  `write_doc` (whole replace / regenerate), `replace_section`, `insert`,
+  `append_to_section`, `apply_patch`, `doc_history`.
+- **Skill tools + prompts:** `split_epic(epicId)`, `generate_task_plan(taskId)`,
+  `author_manifesto(epicId)`.
+- **Resources:** `nook://project/tenets`, per-entity documents.
+
+---
+
+## 12. Stack
 
 | Layer            | Choice                                   | Note |
 | ---------------- | ---------------------------------------- | ---- |
@@ -243,7 +318,17 @@ The UI reads **structure** from the DB and document **content/history** through 
 
 ---
 
-## 11. v1 scope
+## 13. Auth & multi-user
+
+**Decision.** v1 is **single-user, localhost-bound, no auth**. But every mutation
+carries a nominal **`actor`** so multi-user is purely additive later, never a
+rewrite. Auth is infrastructure, not one of the product surfaces that must stay
+shallow-not-skipped — and there is no v1 workflow value in it — so this is the one
+place deferring is genuinely safe.
+
+---
+
+## 14. v1 scope
 
 **Shallow end-to-end.** Every part present, none deep: MCP endpoint + structure
 store + document store + the two core skills (epic→tasks, task→plan) + tenets +
@@ -252,22 +337,20 @@ part. Simplify every part rather than skip any.
 
 **Deferred (not rejected):**
 
-- Server-side inference for skills (§8) — interface is ready for it.
-- Tenet gating/validation engine (§9) — tenets are authored to accept it.
+- Server-side inference for skills (§9) — interface is ready for it.
+- Tenet gating/validation engine (§10) — tenets are authored to accept it.
 - `fsck`/reconciliation depth (§5) — present but minimal in v1.
-- Richer task dependency graphs beyond `blocked_by` (§7).
+- Richer task dependency graphs beyond `blocked_by` (§8).
 - Status-change audit history (git already versions documents; structural history
   is a later nicety).
+- Auth / multi-user (§13).
 
 ---
 
 ## Open questions
 
 - Concrete Postgres schema for structure (projects/releases/epics/tasks/deps) and
-  the `(path, version)` doc pointer.
-- Identity: **UUID stored** as the real identity, with a mutable human **slug** for
-  paths/URLs and display. (Decided; schema TBD.)
-- Exact MCP tool surface and resource list.
-- Skill layer file format and deterministic merge order.
-- Auth / multi-user (single-user assumed for v1; the service shape doesn't
-  preclude it).
+  the `(path, version)` doc pointer — **up next.**
+- Firm MCP tool/prompt signatures and resource URIs (surface shape settled in §11;
+  exact types land with the schema).
+- Status vocabulary per entity (the set of allowed statuses and their transitions).
