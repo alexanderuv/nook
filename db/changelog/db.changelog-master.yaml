@@ -1,0 +1,10 @@
+# Nook — Liquibase master changelog.
+#
+# Supported databases (must provide partial/filtered UNIQUE indexes + CHECK
+# constraints): PostgreSQL (primary), SQLite (tests/embedded), SQL Server.
+# Explicitly NOT supported: MySQL / MariaDB / Oracle — no partial indexes.
+# See db/README.md for the rationale and ARCHITECTURE.md §2, §7, §8, §13.
+databaseChangeLog:
+  - includeAll:
+      path: changes
+      relativeToChangelogFile: true

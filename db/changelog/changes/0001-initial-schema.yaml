@@ -1,0 +1,235 @@
+# Nook — initial structure schema.
+#
+# STRUCTURE ONLY: document *content* lives in git (the ArtifactStore); these
+# tables hold structure plus a pointer (path + current git version) to each
+# document. Skills and tenets live in the artifact repo, so they have no tables.
+#
+# Portability notes (whitelist = PostgreSQL / SQLite / SQL Server):
+#   * Column types use Liquibase abstract types so each dialect gets its own
+#     (uuid, timestamp, varchar, ...). UUIDs are generated in the application.
+#   * Status/kind domains are VARCHAR + CHECK, not native ENUM types.
+#   * CHECK constraints, partial UNIQUE indexes, and the view are emitted as
+#     ANSI-portable SQL that is valid as-is on all three whitelisted engines.
+databaseChangeLog:
+
+  # ── project ────────────────────────────────────────────────────────────────
+  - changeSet:
+      id: 0001-create-project
+      author: nook
+      changes:
+        - createTable:
+            tableName: project
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: slug, type: varchar(200), constraints: {nullable: false, unique: true, uniqueConstraintName: uq_project_slug}}
+              - column: {name: name, type: varchar(500), constraints: {nullable: false}}
+              - column: {name: description, type: clob, defaultValue: ''}
+              - column: {name: artifact_repo_url, type: varchar(1024)}
+              - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+              - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+
+  # ── release (optional grouping of epics) ────────────────────────────────────
+  - changeSet:
+      id: 0002-create-release
+      author: nook
+      changes:
+        - createTable:
+            tableName: release
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_release_project, references: project(id), deleteCascade: true}}
+              - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
+              - column: {name: name, type: varchar(500), constraints: {nullable: false}}
+              - column: {name: description, type: clob, defaultValue: ''}
+              - column: {name: status, type: varchar(20), defaultValue: planned, constraints: {nullable: false}}
+              - column: {name: target_date, type: date}
+              - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+              - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+        - addUniqueConstraint:
+            tableName: release
+            columnNames: project_id, slug
+            constraintName: uq_release_project_slug
+        # referenced by epic's composite FK (enforces same-project membership):
+        - addUniqueConstraint:
+            tableName: release
+            columnNames: project_id, id
+            constraintName: uq_release_project_id
+        - sql:
+            sql: ALTER TABLE release ADD CONSTRAINT ck_release_status CHECK (status IN ('planned','in_progress','released','cancelled'))
+
+  # ── epic ────────────────────────────────────────────────────────────────────
+  - changeSet:
+      id: 0003-create-epic
+      author: nook
+      changes:
+        - createTable:
+            tableName: epic
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_epic_project, references: project(id), deleteCascade: true}}
+              - column: {name: release_id, type: uuid}
+              - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
+              - column: {name: name, type: varchar(500), constraints: {nullable: false}}
+              - column: {name: description, type: clob, defaultValue: ''}
+              - column: {name: status, type: varchar(20), defaultValue: draft, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+              - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+        - addUniqueConstraint:
+            tableName: epic
+            columnNames: project_id, slug
+            constraintName: uq_epic_project_slug
+        # composite FK: an epic's release must be in the SAME project:
+        - addForeignKeyConstraint:
+            baseTableName: epic
+            baseColumnNames: project_id, release_id
+            referencedTableName: release
+            referencedColumnNames: project_id, id
+            constraintName: fk_epic_release_same_project
+            onDelete: SET NULL
+        - sql:
+            sql: ALTER TABLE epic ADD CONSTRAINT ck_epic_status CHECK (status IN ('draft','in_progress','done','cancelled'))
+
+  # ── task ────────────────────────────────────────────────────────────────────
+  - changeSet:
+      id: 0004-create-task
+      author: nook
+      changes:
+        - createTable:
+            tableName: task
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              - column: {name: epic_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_task_epic, references: epic(id), deleteCascade: true}}
+              - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
+              - column: {name: name, type: varchar(500), constraints: {nullable: false}}
+              - column: {name: description, type: clob, defaultValue: ''}
+              - column: {name: status, type: varchar(20), defaultValue: todo, constraints: {nullable: false}}
+              - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+              - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+        - addUniqueConstraint:
+            tableName: task
+            columnNames: epic_id, slug
+            constraintName: uq_task_epic_slug
+        - sql:
+            sql: ALTER TABLE task ADD CONSTRAINT ck_task_status CHECK (status IN ('todo','in_progress','done','cancelled'))
+
+  # ── task_dependency (blocked_by) ────────────────────────────────────────────
+  - changeSet:
+      id: 0005-create-task-dependency
+      author: nook
+      changes:
+        - createTable:
+            tableName: task_dependency
+            columns:
+              - column: {name: task_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_dep_task, references: task(id), deleteCascade: true}}
+              - column: {name: depends_on_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_dep_blocker, references: task(id), deleteCascade: true}}
+              - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+        - addPrimaryKey:
+            tableName: task_dependency
+            columnNames: task_id, depends_on_id
+            constraintName: pk_task_dependency
+        - createIndex:
+            tableName: task_dependency
+            indexName: ix_dep_depends_on
+            columns:
+              - column: {name: depends_on_id}
+        - sql:
+            sql: ALTER TABLE task_dependency ADD CONSTRAINT ck_dep_no_self_block CHECK (task_id <> depends_on_id)
+
+  # ── document (pointer; content is in git) ───────────────────────────────────
+  - changeSet:
+      id: 0006-create-document
+      author: nook
+      changes:
+        - createTable:
+            tableName: document
+            columns:
+              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
+              # exclusive-arc owner: exactly one of the three is set (see CHECK below).
+              - column: {name: project_id, type: uuid, constraints: {foreignKeyName: fk_doc_project, references: project(id), deleteCascade: true}}
+              - column: {name: epic_id, type: uuid, constraints: {foreignKeyName: fk_doc_epic, references: epic(id), deleteCascade: true}}
+              - column: {name: task_id, type: uuid, constraints: {foreignKeyName: fk_doc_task, references: task(id), deleteCascade: true}}
+              - column: {name: kind, type: varchar(20), constraints: {nullable: false}}
+              - column: {name: name, type: varchar(300), constraints: {nullable: false}}
+              - column: {name: title, type: varchar(500)}
+              - column: {name: path, type: varchar(1024), constraints: {nullable: false, unique: true, uniqueConstraintName: uq_document_path}}
+              - column: {name: current_version, type: varchar(64)}   # git commit sha; NULL until first write
+              - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
+              - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+              - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+        - sql:
+            sql: ALTER TABLE document ADD CONSTRAINT ck_document_kind CHECK (kind IN ('manifesto','plan','rfc','design_doc','attachment'))
+        # exactly one owner set (portable CASE form of Postgres num_nonnulls):
+        - sql:
+            sql: >-
+              ALTER TABLE document ADD CONSTRAINT ck_document_single_owner CHECK (
+                (CASE WHEN project_id IS NULL THEN 0 ELSE 1 END)
+              + (CASE WHEN epic_id    IS NULL THEN 0 ELSE 1 END)
+              + (CASE WHEN task_id    IS NULL THEN 0 ELSE 1 END) = 1)
+
+  # ── partial UNIQUE indexes (require whitelisted DB) ──────────────────────────
+  # name unique per owner; at most one manifesto per epic / one plan per task.
+  # `CREATE UNIQUE INDEX ... WHERE ...` is valid as-is on PostgreSQL, SQLite,
+  # and SQL Server (filtered index).
+  - changeSet:
+      id: 0007-document-partial-unique-indexes
+      author: nook
+      changes:
+        - sql: {sql: "CREATE UNIQUE INDEX uq_doc_project_name ON document (project_id, name) WHERE project_id IS NOT NULL"}
+        - sql: {sql: "CREATE UNIQUE INDEX uq_doc_epic_name ON document (epic_id, name) WHERE epic_id IS NOT NULL"}
+        - sql: {sql: "CREATE UNIQUE INDEX uq_doc_task_name ON document (task_id, name) WHERE task_id IS NOT NULL"}
+        - sql: {sql: "CREATE UNIQUE INDEX uq_epic_manifesto ON document (epic_id) WHERE kind = 'manifesto'"}
+        - sql: {sql: "CREATE UNIQUE INDEX uq_task_plan ON document (task_id) WHERE kind = 'plan'"}
+      rollback:
+        - sql: {sql: "DROP INDEX uq_doc_project_name"}
+        - sql: {sql: "DROP INDEX uq_doc_epic_name"}
+        - sql: {sql: "DROP INDEX uq_doc_task_name"}
+        - sql: {sql: "DROP INDEX uq_epic_manifesto"}
+        - sql: {sql: "DROP INDEX uq_task_plan"}
+
+  # ── query support indexes ────────────────────────────────────────────────────
+  - changeSet:
+      id: 0008-query-indexes
+      author: nook
+      changes:
+        - createIndex:
+            tableName: epic
+            indexName: ix_epic_project_status
+            columns:
+              - column: {name: project_id}
+              - column: {name: status}
+        - createIndex:
+            tableName: task
+            indexName: ix_task_epic_status
+            columns:
+              - column: {name: epic_id}
+              - column: {name: status}
+
+  # ── ready_task view (backs get_ready_tasks) ─────────────────────────────────
+  # READY = 'todo' and every blocker resolved (done or cancelled — a cancelled
+  # blocker is abandoned work and must not deadlock downstream tasks).
+  - changeSet:
+      id: 0009-create-ready-task-view
+      author: nook
+      changes:
+        - createView:
+            viewName: ready_task
+            selectQuery: >-
+              SELECT t.*
+              FROM task t
+              WHERE t.status = 'todo'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM task_dependency d
+                  JOIN task b ON b.id = d.depends_on_id
+                  WHERE d.task_id = t.id
+                    AND b.status NOT IN ('done','cancelled')
+                )

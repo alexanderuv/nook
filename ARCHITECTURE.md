@@ -309,7 +309,7 @@ Proposed surface (initial; signatures firmed up with the data model):
 | ---------------- | ---------------------------------------- | ---- |
 | Backend          | Kotlin + Ktor                            | Plays to the team's strengths; statically typed. |
 | Agent interface  | Official Kotlin MCP SDK, network endpoint | Project chosen by config, not cwd. |
-| Structure store  | PostgreSQL                               | Chosen over SQLite in anticipation of concurrent multi-project load. |
+| Structure store  | SQL — **PostgreSQL** primary             | Schema is a **Liquibase** changelog, not per-dialect SQL. Supported engines are *whitelisted* by capability rather than flattened to a lowest common denominator: PostgreSQL, SQLite (tests/embedded), SQL Server — the databases with **partial/filtered unique indexes**, which the integrity rules depend on. MySQL/MariaDB/Oracle excluded. See [db/README.md](./db/README.md). |
 | Document store   | Git (hosted remote) behind `ArtifactStore` | `LocalGit` impl for dev/test only. |
 | Web UI           | React + TypeScript (strict)              | TS-strict is statically typed — not the dynamic-language pain being avoided. Rejected all-Kotlin (Compose-for-Web/Kotlin-JS) as immature and ecosystem-hostile for a browser UI. |
 
@@ -347,10 +347,22 @@ part. Simplify every part rather than skip any.
 
 ---
 
+## Resolved since bootstrap
+
+- **Structure schema** — a Liquibase changelog under
+  [`db/changelog/`](./db/changelog/); see [db/README.md](./db/README.md). Exclusive-arc
+  document ownership, composite-FK release membership, `blocked_by` join table,
+  `(path, current_version)` doc pointer, partial unique indexes for the
+  one-manifesto/one-plan and name-per-owner rules.
+- **Status vocabulary** — epic: `draft`/`in_progress`/`done`/`cancelled`; task:
+  `todo`/`in_progress`/`done`/`cancelled` (`blocked` is *derived* from
+  dependencies, via the `ready_task` view, never stored); release:
+  `planned`/`in_progress`/`released`/`cancelled`.
+
 ## Open questions
 
-- Concrete Postgres schema for structure (projects/releases/epics/tasks/deps) and
-  the `(path, version)` doc pointer — **up next.**
 - Firm MCP tool/prompt signatures and resource URIs (surface shape settled in §11;
-  exact types land with the schema).
-- Status vocabulary per entity (the set of allowed statuses and their transitions).
+  exact types land against the schema).
+- Status *transitions* (which status changes are legal) — vocabulary is set;
+  the allowed-transition graph is not yet.
+- Cycle prevention for `blocked_by` (app-level; deferred).
