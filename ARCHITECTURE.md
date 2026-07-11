@@ -186,7 +186,7 @@ physically are.
                           ▼                            ▼
               ┌────────────────────────────────────────────────┐
               │                Nook service (Ktor)              │
-              │   the ONLY sanctioned writer to both stores     │
+              │   the ONLY authorized writer to both stores     │
               │  ┌──────────────────┐   ┌────────────────────┐  │
               │  │ Structure (SQL)  │   │  ArtifactStore     │  │
               │  └────────┬─────────┘   └─────────┬──────────┘  │
@@ -208,7 +208,7 @@ That last point is important enough to be its own principle.
 
 ## 4. Design principles
 
-### 4.1 One sanctioned writer, and a consistency model that tolerates the rest
+### 4.1 One authorized writer, and a consistency model that tolerates the rest
 
 Because there is no transaction that spans a database and git, the two stores are
 kept coherent by discipline rather than by a distributed commit: **every mutation
@@ -396,7 +396,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | Storage split | Structure in a relational DB; document content in git (§3.1). | *Pure DB* — would re-implement versioning, diffs, and document storage that git gives for free. *Pure git* — would make every cross-item query a hand-rolled file scan. |
 | Doc history | Versioned, forward-only artifact repo, not coupled to code branches (§3.2). | *Docs embedded in the code repo, branching with it* — with a global structure DB this guarantees skew (a task exists globally while its document is branch-local). |
 | Topology | Nook is a service; artifact store is a hosted git remote behind `ArtifactStore`; no colocated repo (§3.3). | *Colocated `.nook/` working copy* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
-| Consistency | Single sanctioned writer + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
+| Consistency | Single authorized writer + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |
 | Identity | UUID identity + per-parent slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
 | Hierarchy | Instance → Project → (Release) → Epic → Task, plus `blocked_by` (§2.1). | *Epic→task only* — leaves "what's ready" unanswerable. *Adding subtasks* — contradicts atomic-task framing. |

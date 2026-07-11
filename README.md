@@ -46,7 +46,7 @@ Two things govern that workflow:
   branch-local documents.
 - **Nook is a service.** The artifact store is a hosted git remote Nook manages;
   the MCP endpoint is a network service; a single instance manages many projects.
-- **The MCP server is the only sanctioned writer.** Every mutation routes through
+- **The MCP server is the only authorized writer.** Every mutation routes through
   it so structure and documents stay in sync. Because content lives in git, drift
   is always recoverable, never corrupting.
 - **The document API is editor-grade.** Agents edit sections and ranges by stable
