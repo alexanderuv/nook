@@ -1,0 +1,28 @@
+# Kotlin / Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+
+# IntelliJ / IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Node / React (UI)
+node_modules/
+dist/
+*.local
+
+# Env & secrets
+.env
+.env.*
+*.pem
+
+# OS
+.DS_Store
+
+# Local dev artifact-store clones (LocalGitArtifactStore)
+/.nook-local/
