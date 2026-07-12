@@ -171,11 +171,15 @@ serves many projects, "which project am I acting on?" is answered by
 
 Nothing above the store talks to git or the filesystem directly. Everything goes
 through an **`ArtifactStore`** interface, which exposes reading, writing, history,
-and the granular editing operations described in §4.2. This interface is the seam
-where deployment variation lives: the production implementation is backed by a
-managed clone of a hosted remote, while a local-git implementation exists purely for
-development, tests, and offline work. Callers are oblivious to where the bytes
-physically are.
+and the granular editing operations described in §4.2. Its implementation is
+**git-backed**: it works against a local working clone, and **syncing to a hosted
+remote is a configurable behavior** on top of that. In production a remote is
+configured, so writes are pushed and pulled to GitHub or GitLab; in development,
+tests, and offline use no remote is configured, and the same store operates purely
+on a local repository. The underlying git work — commit, read a version, diff,
+`git mv` on rename — is identical either way; the remote is a sync detail, not a
+separate design. What matters is the interface seam: callers are oblivious to
+whether a remote is involved or where the bytes physically are.
 
 ### 3.4 How the pieces fit
 
@@ -338,7 +342,7 @@ tasks are `todo → in_progress → done` (or `cancelled`); releases are
 | Backend          | Kotlin + Ktor                              | Statically typed; plays to the team's strengths. |
 | Agent interface  | Official Kotlin MCP SDK, network endpoint  | Project selected by configuration, not working directory. |
 | Structure store  | SQL — **PostgreSQL** primary               | Schema managed by **Liquibase**; supported engines whitelisted by capability (Postgres / SQLite / SQL Server). See [`db/README.md`](./db/README.md). |
-| Document store   | Git (hosted remote) behind `ArtifactStore` | Local-git implementation for dev/test only. |
+| Document store   | Git behind `ArtifactStore`                 | Git-backed; syncing to a hosted remote (GitHub/GitLab) is configurable. No remote configured → local-only, for dev/test/offline. |
 | Web UI           | React + TypeScript (strict)                | TypeScript in strict mode is statically typed — not the dynamic-language behavior being avoided. An all-Kotlin UI (Compose-for-Web / Kotlin-JS) was judged too immature for a browser UI. |
 
 The UI reads structure from the database and document content and history through
@@ -395,7 +399,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | ---- | -------- | ------------------------------ |
 | Storage split | Structure in a relational DB; document content in git (§3.1). | *Pure DB* — would re-implement versioning, diffs, and document storage that git gives for free. *Pure git* — would make every cross-item query a hand-rolled file scan. |
 | Doc history | Versioned, forward-only artifact repo, not coupled to code branches (§3.2). | *Docs embedded in the code repo, branching with it* — with a global structure DB this guarantees skew (a task exists globally while its document is branch-local). |
-| Topology | Nook is a service; artifact store is a hosted git remote behind `ArtifactStore`; no colocated repo (§3.3). | *Colocated `.nook/` working copy* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
+| Topology | Nook is a service; the git-backed `ArtifactStore` syncs to a hosted remote; no colocated repo (§3.3). | *Colocated `.nook/` working copy* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
 | Consistency | Single authorized writer + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |
 | Identity | UUID identity + per-parent slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
