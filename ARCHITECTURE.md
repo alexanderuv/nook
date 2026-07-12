@@ -10,10 +10,13 @@ concepts first, mechanics second.
 It is a living document and describes the **intended** architecture; the codebase
 is still being stood up. Where a shape has a concrete counterpart already in the
 repo, this document links to it (notably the database schema, which lives as a
-Liquibase changelog under [`db/`](./db/)). A compact record of the decisions
-behind the design — including the alternatives that were weighed and rejected —
-is kept in [Appendix A](#appendix-a--decisions-and-alternatives-considered) so the
-body can stay conceptual.
+Liquibase changelog under [`db/`](./db/)). The **detailed design specs** — one per
+area, turning this architecture into buildable requirements, each tracking its own
+open decisions — live under [`docs/`](./docs/); see [`docs/README.md`](./docs/README.md)
+for the roadmap and build order. A compact record of the decisions behind the design
+— including the alternatives that were weighed and rejected — is kept in
+[Appendix A](#appendix-a--decisions-and-alternatives-considered) so the body can
+stay conceptual.
 
 Status: settled in design, pre-implementation.
 
