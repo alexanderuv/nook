@@ -46,6 +46,30 @@ closer to "a spec-kit constitution and workflow, productized: a queryable task
 layer, a versioned document store, governing rules the agent must honor, and a
 human UI over all of it."
 
+### Non-goals
+
+Nook sits near a crowd of adjacent tools, and it is defined as much by what it
+leaves to them as by what it does. The following are deliberately **out of scope** —
+not deferred features, but boundaries of what Nook is:
+
+- **Nook is not a code host or version-control UI for the product's source.** Its
+  git repository holds *artifacts* (manifestos, plans, RFCs), versioned
+  independently of the code; the product's source lives in its own repository on
+  GitHub/GitLab, which Nook references but does not host, branch, or review.
+- **Nook is not a CI/CD, build, or test runner.** It never compiles, tests, or
+  deploys anything. Tenets such as "use Swift Testing" are guidance the agent
+  honors, not checks Nook executes.
+- **Nook is not an agent runtime, and it does not do the work.** It structures the
+  work and drafts the documents; the connected agent (and the human) carry the plan
+  out and write the product's code. Nook is the workshop and the record, not the
+  builder.
+- **Nook is not a general-purpose wiki or knowledge base.** Every document is
+  anchored to a project, epic, or task in the hierarchy; there is no free-floating
+  document space competing with Confluence or Notion.
+- **Nook is not a people- or resource-management tool.** It has no estimates,
+  sprints, burndown, velocity, or workload assignment. It models the *structure* of
+  work and its *readiness*, not the coordination of a team.
+
 ---
 
 ## 2. The domain
@@ -399,7 +423,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | ---- | -------- | ------------------------------ |
 | Storage split | Structure in a relational DB; document content in git (§3.1). | *Pure DB* — would re-implement versioning, diffs, and document storage that git gives for free. *Pure git* — would make every cross-item query a hand-rolled file scan. |
 | Doc history | Versioned, forward-only artifact repo, not coupled to code branches (§3.2). | *Docs embedded in the code repo, branching with it* — with a global structure DB this guarantees skew (a task exists globally while its document is branch-local). |
-| Topology | Nook is a service; the git-backed `ArtifactStore` syncs to a hosted remote; no colocated repo (§3.3). | *Colocated `.nook/` working copy* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
+| Topology | Nook is a service; the git-backed `ArtifactStore` is server-managed and synced to a hosted remote (§3.3). | *Colocated `.nook/` working copy embedded in each project checkout* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
 | Consistency | Single authorized writer + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |
 | Identity | UUID identity + per-parent slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
