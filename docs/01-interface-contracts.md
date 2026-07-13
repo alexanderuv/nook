@@ -8,16 +8,22 @@ from ARCHITECTURE.md §5; this spec pins the contracts.
 
 ## Decided
 
-### Two surfaces, one operation set
+### One operation set, three surfaces
 
-- **MCP** (agent surface) exposes the operations as **tools**, plus tenets and
-  documents as **resources**, and skills additionally as **prompts** (§5).
-- The **web app's RPC API** (human/UI surface) **mirrors the same operations** in
-  RPC style — same capabilities, one shared set of DTOs. Mirroring is pragmatic,
-  not a hard 1:1 rule: an operation is mirrored where it makes sense, and a few
-  extra plain reads may be added for the UI. REST was rejected: Nook's surface is
-  action-heavy and internal, so RPC keeps one contract instead of a second,
-  differently-shaped one. (Appendix-style rationale in the session record.)
+The **core service** defines the operation set once and exposes it as an internal
+RPC API; the two adapter apps translate their protocol into calls on it (§3.3). So
+there are three surfaces over one contract:
+
+- **MCP** (agent surface, in `:mcp-server`) exposes the operations as **tools**, plus
+  tenets and documents as **resources**, and skills additionally as **prompts** (§5).
+- The **web app's RPC API** (human/UI surface, in `:web-app`) **mirrors the same
+  operations** in RPC style — same capabilities, one shared set of DTOs. Mirroring is
+  pragmatic, not a hard 1:1 rule: an operation is mirrored where it makes sense, and
+  a few extra plain reads may be added for the UI. REST was rejected: Nook's surface
+  is action-heavy and internal, so RPC keeps one contract instead of a second,
+  differently-shaped one.
+- The **core service's internal RPC API** is the shared backing both adapters call;
+  it is not public. The adapters hold no store access of their own.
 
 ### Transport & project scoping
 

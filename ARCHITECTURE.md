@@ -188,24 +188,26 @@ There is nothing for the global database to fall out of sync with, and the point
 it stores stays trivial — a path and a version, with no branch coordinates or
 draft-versus-merged lifecycle to track.
 
-### 3.3 Two surfaces over a shared core; the ArtifactStore seam
+### 3.3 A core service with thin adapters; the ArtifactStore seam
 
-A Nook instance spans many projects and is delivered as **two separate applications
-over a shared core**. The **web app** serves the human surface (an HTTP API and the
-UI); the **MCP server** serves the agent surface. They are separate deployables —
-different clients, lifecycles, and scaling profiles — but they are **peers, not a
-hierarchy**: both embed a shared **`:core`** library that holds the domain, store
-access, and the single write path. Because one instance serves many projects,
-"which project am I acting on?" is answered by **configuration on the connection**,
-not by the agent's working directory.
+A Nook instance spans many projects and is delivered as a **core service** with two
+**thin adapter apps** in front of it. The **core service** owns everything that
+touches state — Postgres, the git document store, and the single write path — and
+exposes an **internal RPC API** (localhost in v1). The **web app** (human surface:
+an RPC API and the UI) and the **MCP server** (agent surface) are separate
+deployables that **translate their protocol into core-service calls and hold no
+store access of their own**. Because one instance serves many projects, "which
+project am I acting on?" is answered by **configuration on the connection**, not by
+the agent's working directory.
 
-Keeping the two stores consistent is `:core`'s responsibility, not any one app's,
-and the two stores impose different demands. Postgres is built for concurrent
-writers, so both apps simply hold their own connection to it. A git working clone is
-not — a working tree is unsafe for two processes to mutate at once — so writes to it
-are serialized through the `ArtifactStore` behind a **write-lock** (cross-process,
-e.g. a lock file on the clone or a Postgres advisory lock), giving the clone a single
-effective writer even though two applications are running.
+Concentrating all state in the core service is what makes the single-writer
+guarantee concrete: exactly one process ever touches a project's git repository, so
+there is no cross-process contention to coordinate. The core serializes its own
+writes to a given project with a simple **in-process, per-project mutex** — no
+distributed lock, no lock files. Postgres tolerates the core's concurrent
+connections natively. (An earlier design made the web app and MCP server peers that
+both wrote through a shared library; that required a cross-process lock on the git
+clone, and centralizing the writer removed it — see Appendix A.)
 
 Nothing above the store talks to git or the filesystem directly. Everything goes
 through an **`ArtifactStore`** interface, which exposes reading, writing, history,
@@ -217,37 +219,39 @@ tests, and offline use no remote is configured, and the same store operates pure
 on a local repository. The underlying git work — commit, read a version, diff,
 `git mv` on rename — is identical either way; the remote is a sync detail, not a
 separate design. What matters is the interface seam: callers are oblivious to
-whether a remote is involved or where the bytes physically are.
+whether a remote is involved or where the bytes physically are. Below the store, a
+project's repository lives in a pluggable **`RepoBackend`** (local filesystem in v1;
+object stores such as S3 later), and a new project's repo may be **created fresh or
+cloned from an existing source** — details in [`docs/05`](./docs/05-project-and-ops.md).
 
 ### 3.4 How the pieces fit
 
 ```
-   Human ─▶  :web-app  (Ktor: HTTP API + UI)     :mcp-server (Kotlin MCP SDK)  ◀─ Agent
-                    │                                     │
-                    └──────────────────┬──────────────────┘
-                                       │  both embed
-                                       ▼
+   Human ─▶  :web-app  (RPC API + UI)          :mcp-server (Kotlin MCP SDK)  ◀─ Agent
+                    │                                   │
+                    │  internal RPC (localhost)         │  internal RPC
+                    └────────────────┬──────────────────┘
+                                     ▼
                      ┌───────────────────────────────────────┐
-                     │        :core  (shared library)         │
-                     │  domain · single write path · stores   │
+                     │           core service                 │
+                     │  sole store owner · single write path  │
+                     │  · in-process per-project write mutex   │
                      │  ┌──────────────────┐  ┌────────────┐  │
                      │  │  Structure (SQL) │  │ArtifactStore│ │
                      │  └────────┬─────────┘  └──────┬──────┘  │
                      └───────────┼───────────────────┼─────────┘
                                  ▼                    ▼
                         ┌──────────────────┐  ┌──────────────────┐
-                        │    PostgreSQL    │  │  Git working     │
-                        │ (Liquibase-      │  │  clone (± remote │
-                        │  managed schema) │  │  sync); write-   │
-                        │                  │  │  lock serialized │
+                        │    PostgreSQL    │  │   RepoBackend    │
+                        │ (Liquibase-      │  │  (git; FS in v1, │
+                        │  managed schema) │  │  ± remote sync)  │
                         └──────────────────┘  └──────────────────┘
 ```
 
-Both surfaces — the web app and the MCP server — reach the two stores only through
-`:core`, which holds the single write path. Postgres tolerates both apps writing
-concurrently; the git clone is serialized behind a write-lock so it has one
-effective writer. That single-write-path discipline is important enough to be its
-own principle.
+The web app and the MCP server are thin adapters: they reach state **only** by
+calling the core service's internal RPC API, and never open the database or the git
+repository themselves. The core service is therefore the one and only writer, which
+makes the next principle almost trivially true.
 
 ---
 
@@ -257,23 +261,32 @@ own principle.
 
 Because there is no transaction that spans a database and git, the two stores are
 kept coherent by discipline rather than by a distributed commit: **every mutation
-routes through `:core`'s single write path** — embedded by both apps — which
-performs the git write and the database write in a fixed order (content to git, then
-the `(path, version)` pointer to the database). "Single writer" is a property of the
-*code path*, not of the process count: two applications run, but they share the one
-write path, and the git clone it touches is serialized behind a write-lock.
+routes through the core service's single write path**, which performs the git write
+and the database write in a fixed order (content to git, then the
+`(path, version)` pointer to the database). Making the core service the sole store
+owner is what makes this literal rather than aspirational — one process is the only
+writer, so within it a per-project mutex is all that's needed to serialize git
+writes; there is no cross-process lock.
+
+The **database's `current_version` pointer is the authority** for what is current.
+The fixed order matters because of that: git is written first, then the pointer is
+advanced to the new commit. If the pointer write fails, the pointer still names the
+*previous* commit, so the previous version simply remains the truth and the new
+commit is an unreferenced object git can garbage-collect — no compensating action,
+no "ahead" state to reason about. (Reads therefore resolve content by the DB's
+`current_version`, not by git `HEAD`.)
 
 The design does not *rely* on nothing ever writing out of band, because on a
 real system it cannot. Instead it is arranged so that drift is survivable:
 
-- With documents reachable only through the `ArtifactStore`, the agent has **no door
+- With documents reachable only through the core service, the agent has **no door
   to the content except the write path** — the "edit the files directly" hazard is
   structurally absent rather than merely discouraged.
 - Even a hypothetical out-of-band change is recoverable, because git — not the
   database — is the source of truth for content. The worst outcome is a **stale
   index**, never lost or corrupted data. This recoverability is the entire payoff
   of putting content in git.
-- A reconciliation pass (`fsck`) compares git `HEAD` against the versions the
+- A reconciliation pass (`fsck`) compares the git repository against the versions the
   database has recorded and re-absorbs any drift. It is deliberately shallow in v1
   but present by design.
 
@@ -382,16 +395,16 @@ tasks are `todo → in_progress → done` (or `cancelled`); releases are
 
 | Layer            | Choice                                     | Notes |
 | ---------------- | ------------------------------------------ | ----- |
-| Modules          | `:core` + `:web-app` + `:mcp-server`       | Web app and MCP server are **separate applications** (peers) that both embed the shared `:core` library; `:core` holds the domain, store access, and the single write path. |
-| Backend          | Kotlin + Ktor (web app)                    | Statically typed; plays to the team's strengths. |
-| Data access      | JetBrains **Exposed**                      | Apache-2.0, covers the whole DB whitelist incl. SQL Server; guard schema drift against Liquibase with a startup/test check. (jOOQ was rejected: its free edition excludes SQL Server.) |
+| Modules          | core service + `:web-app` + `:mcp-server` (+ shared contract) | The **core service** owns the stores and the single write path and exposes an internal RPC API; the web app and MCP server are **thin adapter apps** that call it and hold no store access. A shared contract library carries the DTOs. |
+| Backend          | Kotlin + Ktor                              | Statically typed; plays to the team's strengths. Serves both the core service's internal RPC API and the web app. |
+| Data access      | JetBrains **Exposed** (core service only)  | Apache-2.0, covers the whole DB whitelist incl. SQL Server; guard schema drift against Liquibase with a startup/test check. (jOOQ was rejected: its free edition excludes SQL Server.) |
 | Agent interface  | Official Kotlin MCP SDK (`:mcp-server`)    | Project selected by configuration, not working directory. |
 | Structure store  | SQL — **PostgreSQL** primary               | Schema managed by **Liquibase**; supported engines whitelisted by capability (Postgres / SQLite / SQL Server). See [`db/README.md`](./db/README.md). |
-| Document store   | Git behind `ArtifactStore`                 | Git-backed; syncing to a hosted remote (GitHub/GitLab) is configurable. No remote configured → local-only, for dev/test/offline. |
+| Document store   | Git behind `ArtifactStore`, over a pluggable `RepoBackend` | Git-backed; `RepoBackend` is local filesystem in v1 (S3/others later). Syncing to a hosted remote (GitHub/GitLab) is configurable. |
 | Web UI           | React + TypeScript (strict)                | TypeScript in strict mode is statically typed — not the dynamic-language behavior being avoided. An all-Kotlin UI (Compose-for-Web / Kotlin-JS) was judged too immature for a browser UI. |
 
-The UI reads structure from the database and document content and history through
-the `ArtifactStore`.
+Only the core service touches the stores; the UI and agents reach structure and
+document content/history by calling it.
 
 ---
 
@@ -445,7 +458,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | Storage split | Structure in a relational DB; document content in git (§3.1). | *Pure DB* — would re-implement versioning, diffs, and document storage that git gives for free. *Pure git* — would make every cross-item query a hand-rolled file scan. |
 | Doc history | Versioned, forward-only artifact repo, not coupled to code branches (§3.2). | *Docs embedded in the code repo, branching with it* — with a global structure DB this guarantees skew (a task exists globally while its document is branch-local). |
 | Topology | Nook is a service; the git-backed `ArtifactStore` is server-managed and synced to a hosted remote (§3.3). | *Colocated `.nook/` working copy embedded in each project checkout* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
-| App topology | Web app and MCP server are separate peer apps over a shared `:core` library; single write path in `:core`, git clone serialized by a write-lock (§3.3). | *One combined service* — couples two very different client surfaces. *MCP proxies the web backend* — makes web "primary" and MCP secondary, cutting against genuine separation. *Standalone core service* — cleanest single-writer but three deployables + an internal API, premature for v1. |
+| App topology | A **core service** owns the stores and the single write path; the web app and MCP server are thin adapter apps calling its internal RPC API. The core is the sole git writer, serialized by an in-process per-project mutex (§3.3). | *Peer apps over a shared `:core` library* — first chosen, then reversed: two writer processes forced a cross-process lock on the git clone; centralizing the writer removed it. *One combined app* — couples two very different client surfaces. *MCP proxies the web backend* — makes web "primary" and MCP secondary. |
 | Data access | JetBrains Exposed (§7). | *jOOQ* — codegen keeps migrations as single source of truth, but its free edition excludes SQL Server, which is on our whitelist. *Raw JDBC* — untyped, more room for query errors. |
 | Consistency | Single authorized write path + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |

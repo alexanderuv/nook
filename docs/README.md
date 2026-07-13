@@ -23,7 +23,7 @@ finish the requirements first.
 | [02](./02-document-layer.md) | Document layer | Editor-grade edit API, artifact-repo on-disk layout, manifesto/plan templates | Outline |
 | [03](./03-skills-and-tenets.md) | Skills & tenets | The three core skills, the composition engine, tenet format & scope | Outline |
 | [04](./04-structure-semantics.md) | Structure semantics | Status transitions, slug rules, query/filter model, cycle prevention | **Settled** |
-| [05](./05-project-and-ops.md) | Project bootstrapping & ops | Artifact-repo provisioning, config & deployment, write-lock & reconciliation | Outline |
+| [05](./05-project-and-ops.md) | Project bootstrapping & ops | Artifact-repo provisioning, config & deployment, write-lock & reconciliation | **Settled** |
 | [06](./06-web-ui.md) | Web UI | Screens and flows for the human surface | Outline |
 
 ## Build order — what we're aiming for first
