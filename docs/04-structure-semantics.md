@@ -14,10 +14,12 @@ worse than no rule here — rigor is added later when real usage justifies it.
 
 **Hierarchy & identity** (from §2.1, §4.3, §6, §7)
 - instance → project → (optional release) → epic → task; tasks have a `blocked_by`
-  join edge. Identity is a UUID; slug is per-parent unique and used in paths/URLs.
+  join edge. Identity is a UUID; slugs are **unique within their project** and used
+  in paths/URLs (tasks, epics, and releases alike — `(project_id, slug)`).
 - A **task always belongs to a project; its epic is optional.** An epic-less task
-  hangs directly off the project (see *Task type*). Its slug is unique within the
-  epic when it has one, else within the project.
+  hangs directly off the project (see *Task type*). Its slug is unique **within its
+  project**: identity follows the owning project, so a task keeps its slug when moved
+  between epics.
 
 **Task type — a discriminator, not a new entity.**
 - A task carries a `type`: `feature` (default) / `bug` / `chore`. A **bug is just a
@@ -50,7 +52,7 @@ worse than no rule here — rigor is added later when real usage justifies it.
 
 **Slugs — auto-generated, overridable.**
 - Default slug is derived from the name: lowercased, non-`[a-z0-9-]` collapsed to
-  hyphens, trimmed. Per-parent uniqueness is ensured by appending a numeric suffix
+  hyphens, trimmed. Per-project uniqueness is ensured by appending a numeric suffix
   (`-2`, `-3`, …) on collision. The caller may supply an explicit slug instead.
 - Rename is allowed: it updates the slug in the DB **and** performs a `git mv` of
   the document path through the single write path (§4.3), so both stores move

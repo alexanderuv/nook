@@ -4,12 +4,14 @@
 # tables hold structure plus a pointer (path + current git version) to each
 # document. Skills and tenets live in the artifact repo, so they have no tables.
 #
-# Portability notes (whitelist = PostgreSQL / SQLite / SQL Server):
+# Portability notes:
+#   * The schema is plain standard SQL — tables, plain UNIQUE / PK / FK
+#     constraints, CHECK constraints, and a view. No partial/filtered indexes or
+#     other engine-specific capabilities, so it is not tied to any one database.
 #   * Column types use Liquibase abstract types so each dialect gets its own
 #     (uuid, timestamp, varchar, ...). UUIDs are generated in the application.
 #   * Status/kind domains are VARCHAR + CHECK, not native ENUM types.
-#   * CHECK constraints, partial UNIQUE indexes, and the view are emitted as
-#     ANSI-portable SQL that is valid as-is on all three whitelisted engines.
+#   * CHECK constraints and the view are emitted as ANSI-portable SQL.
 databaseChangeLog:
 
   # ── project ────────────────────────────────────────────────────────────────
@@ -104,7 +106,7 @@ databaseChangeLog:
   # A task always has a project_id. epic_id is optional: NULL = a project-level
   # task (e.g. a bug not born inside an epic). The authoritative delete cascade is
   # project → task; the task → epic link is same-project integrity only (NO ACTION),
-  # to keep a single cascade path (SQL Server forbids multiple cascade paths).
+  # which also avoids multiple cascade paths (some engines forbid them).
   - changeSet:
       id: 0004-create-task
       author: nook
@@ -133,11 +135,13 @@ databaseChangeLog:
             referencedColumnNames: project_id, id
             constraintName: fk_task_epic_same_project
             onDelete: NO ACTION
-        # slug unique per parent: within the epic when set, else within the project.
-        # (Partial unique indexes — a NULL epic_id would otherwise defeat a plain
-        # composite UNIQUE, which treats NULLs as distinct.)
-        - sql: {sql: "CREATE UNIQUE INDEX uq_task_epic_slug ON task (epic_id, slug) WHERE epic_id IS NOT NULL"}
-        - sql: {sql: "CREATE UNIQUE INDEX uq_task_project_slug ON task (project_id, slug) WHERE epic_id IS NULL"}
+        # slug unique per project — consistent with epic and release. A task's
+        # identity follows its owning project, not the optional epic link, so no
+        # per-epic or partial-index scoping is needed (project_id is never NULL).
+        - addUniqueConstraint:
+            tableName: task
+            columnNames: project_id, slug
+            constraintName: uq_task_project_slug
         - sql:
             sql: ALTER TABLE task ADD CONSTRAINT ck_task_status CHECK (status IN ('todo','in_progress','done','cancelled'))
         - sql:
@@ -198,25 +202,13 @@ databaseChangeLog:
               + (CASE WHEN epic_id    IS NULL THEN 0 ELSE 1 END)
               + (CASE WHEN task_id    IS NULL THEN 0 ELSE 1 END) = 1)
 
-  # ── partial UNIQUE indexes (require whitelisted DB) ──────────────────────────
-  # name unique per owner; at most one manifesto per epic / one plan per task.
-  # `CREATE UNIQUE INDEX ... WHERE ...` is valid as-is on PostgreSQL, SQLite,
-  # and SQL Server (filtered index).
-  - changeSet:
-      id: 0007-document-partial-unique-indexes
-      author: nook
-      changes:
-        - sql: {sql: "CREATE UNIQUE INDEX uq_doc_project_name ON document (project_id, name) WHERE project_id IS NOT NULL"}
-        - sql: {sql: "CREATE UNIQUE INDEX uq_doc_epic_name ON document (epic_id, name) WHERE epic_id IS NOT NULL"}
-        - sql: {sql: "CREATE UNIQUE INDEX uq_doc_task_name ON document (task_id, name) WHERE task_id IS NOT NULL"}
-        - sql: {sql: "CREATE UNIQUE INDEX uq_epic_manifesto ON document (epic_id) WHERE kind = 'manifesto'"}
-        - sql: {sql: "CREATE UNIQUE INDEX uq_task_plan ON document (task_id) WHERE kind = 'plan'"}
-      rollback:
-        - sql: {sql: "DROP INDEX uq_doc_project_name"}
-        - sql: {sql: "DROP INDEX uq_doc_epic_name"}
-        - sql: {sql: "DROP INDEX uq_doc_task_name"}
-        - sql: {sql: "DROP INDEX uq_epic_manifesto"}
-        - sql: {sql: "DROP INDEX uq_task_plan"}
+  # Document name uniqueness is carried entirely by the global UNIQUE on
+  # `document.path` (uq_document_path, changeSet 0006). A path is the
+  # entity-scoped name (e.g. /epics/<slug>/notes.md), so two documents with the
+  # same name under the same entity collide on path and are rejected, while the
+  # same name may repeat across different entities in a project. No per-owner or
+  # per-kind uniqueness is enforced here — that would be domain policy, not
+  # structure, and belongs in the write path if ever needed.
 
   # ── query support indexes ────────────────────────────────────────────────────
   - changeSet:

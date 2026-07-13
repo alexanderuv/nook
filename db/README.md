@@ -1,6 +1,6 @@
 # Database
 
-Structure lives here (Postgres and other whitelisted SQL engines). Document
+Structure lives here (Postgres and other standard-SQL engines). Document
 **content** does not — it lives in git behind the `ArtifactStore`; these tables
 only hold structure plus a pointer (`path` + `current_version`) to each document.
 See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §2, §7, §8, §13.
@@ -14,33 +14,34 @@ SQL, so it targets several SQL databases from one source of truth.
 - Changes: [`changelog/changes/`](./changelog/changes/) (applied in order; each
   changeSet is immutable once released — evolve the schema by **adding** changeSets).
 
-## Supported databases (the whitelist)
+## Supported databases
 
-We do **not** flatten the schema to a lowest-common-denominator. Instead we support
-only databases that provide the features Nook's integrity rules depend on — chiefly
-**partial / filtered UNIQUE indexes** (used for name-uniqueness-per-owner and
-"one manifesto per epic / one plan per task").
+The schema is **plain standard SQL** — tables, plain UNIQUE / PK / FK constraints,
+CHECK constraints, and a view. It does **not** rely on partial/filtered indexes or
+any other engine-specific capability, so it is not tied to a particular database.
 
-| Database       | Role                    | Why in / out                         |
+| Database       | Role                    | Notes                                |
 | -------------- | ----------------------- | ------------------------------------ |
-| **PostgreSQL** | Primary (production)    | Full support; the reference engine.  |
-| **SQLite**     | Tests / embedded / dev  | Has partial indexes; zero-setup.     |
-| **SQL Server** | Enterprise deployments  | Has filtered indexes.                |
-| MySQL / MariaDB | ❌ not supported        | No partial indexes.                  |
-| Oracle         | ❌ not supported        | No partial indexes (only hacks).     |
+| **PostgreSQL** | Primary (production)    | The reference engine.                |
+| **SQLite**     | Tests / embedded / dev  | Zero-setup; used by the test suite.  |
+
+Only these two are actively exercised. Because the DDL is standard SQL, other
+engines (SQL Server, MySQL 8+, MariaDB, Oracle) are not excluded by design — they
+are simply not part of the tested matrix today.
 
 ## Portability choices
 
-To stay portable across the whitelist while keeping the strong constraints:
+To stay engine-agnostic while keeping the strong constraints:
 
 - **Abstract column types.** Liquibase maps `uuid`, `timestamp`, `varchar`, etc. to
   each dialect. **UUIDs are generated in the application**, so there is no
   DB-specific default (`gen_random_uuid()` and friends are avoided).
-- **Status/kind domains are `VARCHAR + CHECK`, not native `ENUM`** — SQLite and SQL
-  Server have no enum type, and varchar+check is easier to evolve.
-- **CHECK constraints, partial UNIQUE indexes, and the `ready_task` view** are
-  emitted as ANSI-portable SQL that is valid as-is on all three whitelisted
-  engines (`CREATE UNIQUE INDEX … WHERE …` in particular is common to all three).
+- **Status/kind domains are `VARCHAR + CHECK`, not native `ENUM`** — not every
+  engine has an enum type, and varchar+check is easier to evolve.
+- **Uniqueness is plain, not partial.** Every UNIQUE is a whole-table constraint
+  (e.g. task/epic/release slugs are unique per project via `(project_id, slug)`),
+  so there is no `WHERE`-filtered index to depend on.
+- **CHECK constraints and the `ready_task` view** are emitted as ANSI-portable SQL.
 
 ## Running migrations
 

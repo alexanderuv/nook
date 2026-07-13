@@ -19,8 +19,13 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   read-whole/write-whole. Granularity is a wire concern; git stores whole-file
   snapshots per version.
 - Documents attach to project/epic/task via an **exclusive-arc owner**; kinds are
-  `manifesto`, `plan`, `rfc`, `design_doc`, `attachment`; **one manifesto per epic,
-  one plan per task**.
+  `manifesto`, `plan`, `rfc`, `design_doc`, `attachment`. The schema enforces
+  *structure* (a document has exactly one owner and a valid kind), not *counts* —
+  it does not cap how many manifestos an epic or plans a task may have.
+- **Name uniqueness** is enforced by the single global `UNIQUE` on a document's
+  **path**. A path is the entity-scoped name (`/epics/<slug>/notes.md`), so the same
+  name may repeat freely across different entities in a project; only a same-name
+  clash **within the same entity** (a path collision) is rejected.
 
 ### Addressing — heading paths, no line numbers
 

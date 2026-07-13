@@ -382,7 +382,7 @@ invariants directly in the schema:
   `project_id` directly (so an epic-less task still has a project) and a nullable
   `epic_id`; a composite foreign key ties the epic to the task's own project, same as
   releases. The `project → task` cascade is the single delete path (the `task → epic`
-  link is integrity-only), which keeps the schema portable to SQL Server. A task's
+  link is integrity-only), so there is one clean cascade path on every engine. A task's
   `type` (`feature` / `bug` / `chore`) distinguishes a bug without a separate entity.
 - **`blocked_by` is a join table**, allowing a task several blockers (including
   cross-epic) while keeping the edge type minimal.
@@ -392,12 +392,12 @@ invariants directly in the schema:
 - **Readiness is derived, not stored.** A `ready_task` view computes it from
   dependencies, so a task's readiness can never drift from its actual blockers.
 
-Because the integrity rules depend on **partial / filtered unique indexes** (for
-"one manifesto per epic," "one plan per task," and name-uniqueness per owner), Nook
-supports only databases that provide them — **PostgreSQL** (primary), **SQLite**
-(tests and embedded use), and **SQL Server** — rather than flattening the schema to
-a lowest common denominator. MySQL, MariaDB, and Oracle are out of scope for that
-reason.
+The schema is **plain standard SQL** — tables, plain unique / foreign-key / check
+constraints, and a view, with no partial/filtered indexes or other engine-specific
+features — so it is not tied to a particular database. **PostgreSQL** is the primary
+target and **SQLite** backs tests and embedded use; slugs are unique **per project**
+(`(project_id, slug)` for tasks, epics, and releases alike), which needs only an
+ordinary UNIQUE constraint. Any standard-SQL engine can host it.
 
 **Status vocabulary.** Epics are `draft → in_progress → done` (or `cancelled`);
 tasks are `todo → in_progress → done` (or `cancelled`); releases are
@@ -412,9 +412,9 @@ tasks are `todo → in_progress → done` (or `cancelled`); releases are
 | ---------------- | ------------------------------------------ | ----- |
 | Modules          | core service + `:web-app` + `:mcp-server` (+ shared contract) | The **core service** owns the stores and the single write path and exposes an internal RPC API; the web app and MCP server are **thin adapter apps** that call it and hold no store access. A shared contract library carries the DTOs. |
 | Backend          | Kotlin + Ktor                              | Statically typed; plays to the team's strengths. Serves both the core service's internal RPC API and the web app. |
-| Data access      | JetBrains **Exposed** (core service only)  | Apache-2.0, covers the whole DB whitelist incl. SQL Server; guard schema drift against Liquibase with a startup/test check. (jOOQ was rejected: its free edition excludes SQL Server.) |
+| Data access      | JetBrains **Exposed** (core service only)  | Apache-2.0, Kotlin-native, and needs no code-generation build step; guard schema drift against Liquibase with a startup/test check. (jOOQ was considered but adds a codegen step for little gain at this scale.) |
 | Agent interface  | Official Kotlin MCP SDK (`:mcp-server`)    | Project selected by configuration, not working directory. |
-| Structure store  | SQL — **PostgreSQL** primary               | Schema managed by **Liquibase**; supported engines whitelisted by capability (Postgres / SQLite / SQL Server). See [`db/README.md`](./db/README.md). |
+| Structure store  | SQL — **PostgreSQL** primary               | Schema managed by **Liquibase** in plain standard SQL, so it is engine-agnostic (PostgreSQL primary, SQLite for tests). See [`db/README.md`](./db/README.md). |
 | Document store   | Git behind `ArtifactStore`, over a pluggable `RepoBackend` | Git-backed; `RepoBackend` is local filesystem in v1 (S3/others later). Syncing to a hosted remote (GitHub/GitLab) is configurable. |
 | Web UI           | React + TypeScript (strict)                | TypeScript in strict mode is statically typed — not the dynamic-language behavior being avoided. An all-Kotlin UI (Compose-for-Web / Kotlin-JS) was judged too immature for a browser UI. |
 
@@ -474,16 +474,16 @@ them, for traceability. The body above explains the resulting design; this is th
 | Doc history | Versioned, forward-only artifact repo, not coupled to code branches (§3.2). | *Docs embedded in the code repo, branching with it* — with a global structure DB this guarantees skew (a task exists globally while its document is branch-local). |
 | Topology | Nook is a service; the git-backed `ArtifactStore` is server-managed and synced to a hosted remote (§3.3). | *Colocated `.nook/` working copy embedded in each project checkout* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
 | App topology | A **core service** owns the stores and the single write path; the web app and MCP server are thin adapter apps calling its internal RPC API. The core is the sole git writer, serialized by an in-process per-project mutex (§3.3). | *Peer apps over a shared `:core` library* — first chosen, then reversed: two writer processes forced a cross-process lock on the git clone; centralizing the writer removed it. *One combined app* — couples two very different client surfaces. *MCP proxies the web backend* — makes web "primary" and MCP secondary. |
-| Data access | JetBrains Exposed (§7). | *jOOQ* — codegen keeps migrations as single source of truth, but its free edition excludes SQL Server, which is on our whitelist. *Raw JDBC* — untyped, more room for query errors. |
+| Data access | JetBrains Exposed — Kotlin-native, no codegen build step (§7). | *jOOQ* — its codegen keeps the schema as the single source of truth, but adds a generation step to the build for little gain at this scale. *Raw JDBC* — untyped, more room for query errors. |
 | Consistency | Single authorized write path + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |
-| Identity | UUID identity + per-parent slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
+| Identity | UUID identity + per-project slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
 | Hierarchy | Instance → Project → (Release) → Epic → Task, plus `blocked_by` (§2.1). | *Epic→task only* — leaves "what's ready" unanswerable. *Adding subtasks* — contradicts atomic-task framing. |
 | Bugs & epic-less tasks | A bug is a task with `type` (`feature`/`bug`/`chore`); a task's epic is optional, so a bug can hang off the project directly (§2.1, §6). | *A separate Bug entity* — duplicates the task's plan/status/blocked-by machinery. *Forcing every bug under an epic* — needs a catch-all "Bugs" epic, an artificial parent. |
 | Skills | Layered (shipped base + project overlays + tenets), append-only; agent-first, both-capable (§2.3). | *Override/replace base* — lets projects drift from upstream. *Server-side-only inference* — makes Nook own model keys and become an inference product prematurely. |
 | Skill invocation | Both MCP tools and prompts (§5). | *Prompts only* — an autonomous agent can't chain a prompt as a reasoning step. *Tools only* — loses the clean human trigger. |
 | Tenets | Advisory in v1, structured for later enforcement (§2.4). | *Gating engine now* — needs a checkable tenet DSL; too much for v1. |
-| Database support | Whitelist engines with partial/filtered unique indexes (§6). | *Lowest-common-denominator schema* — would push integrity rules out of the schema into app code. |
+| Database support | Plain standard SQL, engine-agnostic — every integrity rule (per-project slug uniqueness, exclusive-arc owner, status/kind domains) is an ordinary UNIQUE/FK/CHECK, needing no engine-specific feature (§6). | *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. |
 | Schema tooling | Liquibase changelog (§6, [`db/README.md`](./db/README.md)). | *Per-dialect hand-written SQL* — a variant to maintain per database. |
 | Auth | None in v1, nominal actor carried (§8). | *Full multi-user now* — heavy, no v1 workflow value. |
 | Stack | Ktor + Postgres + React/TS (§7). | *All-Kotlin UI (Compose-for-Web / Kotlin-JS)* — too immature for a browser UI. |
