@@ -15,6 +15,17 @@ worse than no rule here — rigor is added later when real usage justifies it.
 **Hierarchy & identity** (from §2.1, §4.3, §6, §7)
 - instance → project → (optional release) → epic → task; tasks have a `blocked_by`
   join edge. Identity is a UUID; slug is per-parent unique and used in paths/URLs.
+- A **task always belongs to a project; its epic is optional.** An epic-less task
+  hangs directly off the project (see *Task type*). Its slug is unique within the
+  epic when it has one, else within the project.
+
+**Task type — a discriminator, not a new entity.**
+- A task carries a `type`: `feature` (default) / `bug` / `chore`. A **bug is just a
+  task with `type=bug`**, reusing the plan, status, and `blocked_by` machinery — no
+  separate Bug entity. Bugs are the motivating case for **epic-less tasks**: a bug
+  reported against the product need not belong to any epic.
+- `type` is free to change like status (no transition rules). `list_tasks` may filter
+  by it.
 
 **Status transitions — free within the vocabulary.**
 - Any status may move to any other *valid* status for its entity; the write path

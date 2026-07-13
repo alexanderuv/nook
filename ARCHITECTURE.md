@@ -86,15 +86,19 @@ Nook instance          a single deployment
 └─ Project             the top-level unit of work; one instance manages many
    ├─ Release          an OPTIONAL grouping of epics — a milestone bucket
    └─ Epic             a body of work in a project; may be assigned to a release
-      └─ Task          an atomic, vertical unit of work
+      └─ Task          an atomic, vertical unit of work (epic is OPTIONAL)
 ```
 
 A **project** is the top level; a single Nook instance manages many of them. An
 **epic** is a coherent body of work within a project. A **release** is an optional
 grouping of epics — a milestone view, not a rigid parent, so an epic can exist
-without belonging to any release. A **task** is an atomic, vertical slice of an
-epic; tasks are intended to be small enough to finish in one focused session,
-which is why the hierarchy stops here and there are no subtasks.
+without belonging to any release. A **task** is an atomic, vertical slice of work;
+tasks are intended to be small enough to finish in one focused session, which is why
+the hierarchy stops here and there are no subtasks. A task usually belongs to an
+epic, but its epic is **optional**: it always belongs to a project and may hang
+directly off it. A task also carries a **type** (`feature` / `bug` / `chore`) — a
+**bug is just a task with `type=bug`**, which is the case epic-less tasks exist for
+(a bug reported against the product need not sit inside any epic).
 
 Tasks may declare that they are **blocked by** other tasks. This is the one
 relationship modelled beyond containment, and it exists because "what is ready to
@@ -309,14 +313,18 @@ that the agent sends a small patch rather than a full rewrite.
 Every entity has a **UUID** as its stored, permanent identity — it never changes and
 survives renames — plus a mutable, human-readable **slug** used in paths, URLs, and
 display. Slugs are unique within their parent (a project slug within the instance,
-an epic slug within its project, a task slug within its epic), which lets paths nest
-cleanly without a global slug namespace.
+an epic slug within its project, a task slug within its epic — or within its project
+when the task is epic-less), which lets paths nest cleanly without a global slug
+namespace.
 
 Because the artifact repository is meant to be browsed by humans on GitHub or
-GitLab, git paths are **slug-based and readable**
-(`projects/<slug>/epics/<slug>/tasks/<slug>/…`). The trade-off is that renaming an
-entity rewrites its path; this is handled as a `git mv` through the single write
-path, and git follows the rename so history is preserved.
+GitLab, git paths are **slug-based and readable**. Each project is its own repo
+(§3.3, [docs/05](docs/05-project-and-ops.md)), so paths are relative to that repo's
+root: `epics/<slug>/tasks/<slug>/…` for a task under an epic, `tasks/<slug>/…` for an
+epic-less one. The full on-disk layout is [docs/02](docs/02-document-layer.md)'s job.
+The trade-off is that renaming an entity rewrites its path; this is handled as a
+`git mv` through the single write path, and git follows the rename so history is
+preserved.
 
 ---
 
@@ -347,9 +355,10 @@ The initial surface (signatures firm up against the schema):
   `set_task_blocked_by`, `create_release`, `assign_epic_to_release`, `get_epic`,
   `get_task`, `list_epics`, `list_tasks(filter)`, and `get_ready_tasks()` (open and
   unblocked — the "what is ready to work on" query).
-- **Document tools** — `read_doc(ref, name, {section?|range?, version?})`,
-  `write_doc` (whole replace / regenerate), `replace_section`, `insert`,
-  `append_to_section`, `apply_patch`, `doc_history`.
+- **Document tools** — `read_doc(ref, {section?})`, `doc_outline`, `write_doc`
+  (whole replace / regenerate), `replace_section`, `prepend_to_section`,
+  `append_to_section`, `apply_patch`, `doc_history`. Full contracts in
+  [docs/02](docs/02-document-layer.md).
 - **Skills** (as tools and prompts) — `split_epic(epicId)`,
   `generate_task_plan(taskId)`, `author_manifesto(epicId)`.
 - **Resources** — `nook://project/tenets`, per-entity documents.
@@ -369,6 +378,12 @@ invariants directly in the schema:
 - **Release membership is enforced structurally**: a composite foreign key ties an
   epic's release to the epic's own project, so an epic literally cannot be assigned
   to another project's release.
+- **A task is owned by its project; its epic is optional.** The task carries
+  `project_id` directly (so an epic-less task still has a project) and a nullable
+  `epic_id`; a composite foreign key ties the epic to the task's own project, same as
+  releases. The `project → task` cascade is the single delete path (the `task → epic`
+  link is integrity-only), which keeps the schema portable to SQL Server. A task's
+  `type` (`feature` / `bug` / `chore`) distinguishes a bug without a separate entity.
 - **`blocked_by` is a join table**, allowing a task several blockers (including
   cross-epic) while keeping the edge type minimal.
 - **The document pointer is `(path, current_version)`** — the current git commit
@@ -464,6 +479,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |
 | Identity | UUID identity + per-parent slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
 | Hierarchy | Instance → Project → (Release) → Epic → Task, plus `blocked_by` (§2.1). | *Epic→task only* — leaves "what's ready" unanswerable. *Adding subtasks* — contradicts atomic-task framing. |
+| Bugs & epic-less tasks | A bug is a task with `type` (`feature`/`bug`/`chore`); a task's epic is optional, so a bug can hang off the project directly (§2.1, §6). | *A separate Bug entity* — duplicates the task's plan/status/blocked-by machinery. *Forcing every bug under an epic* — needs a catch-all "Bugs" epic, an artificial parent. |
 | Skills | Layered (shipped base + project overlays + tenets), append-only; agent-first, both-capable (§2.3). | *Override/replace base* — lets projects drift from upstream. *Server-side-only inference* — makes Nook own model keys and become an inference product prematurely. |
 | Skill invocation | Both MCP tools and prompts (§5). | *Prompts only* — an autonomous agent can't chain a prompt as a reasoning step. *Tools only* — loses the clean human trigger. |
 | Tenets | Advisory in v1, structured for later enforcement (§2.4). | *Gating engine now* — needs a checkable tenet DSL; too much for v1. |

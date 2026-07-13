@@ -20,11 +20,12 @@ finish the requirements first.
 | # | Spec | Covers | Status |
 |---|------|--------|--------|
 | [01](./01-interface-contracts.md) | Interface contracts | MCP tool/prompt signatures & payloads, project selection, the web HTTP API | **Settled** |
-| [02](./02-document-layer.md) | Document layer | Editor-grade edit API, artifact-repo on-disk layout, manifesto/plan templates | Outline |
+| [02](./02-document-layer.md) | Document layer | Editor-grade edit API, artifact-repo on-disk layout, attachment policy | **Settled** |
 | [03](./03-skills-and-tenets.md) | Skills & tenets | The three core skills, the composition engine, tenet format & scope | Outline |
 | [04](./04-structure-semantics.md) | Structure semantics | Status transitions, slug rules, query/filter model, cycle prevention | **Settled** |
 | [05](./05-project-and-ops.md) | Project bootstrapping & ops | Artifact-repo provisioning, config & deployment, write-lock & reconciliation | **Settled** |
 | [06](./06-web-ui.md) | Web UI | Screens and flows for the human surface | Outline |
+| [07](./07-document-templates.md) | Document templates | Manifesto & plan section structure, regeneration semantics | Outline |
 
 ## Build order — what we're aiming for first
 
@@ -38,10 +39,11 @@ sequence is by milestone, smallest-provable-loop first:
   the `ArtifactStore` and the editor-grade API. Requires **05** (repo
   provisioning) and **02** (document layer).
 - **Milestone 3 — Workflow.** Skills (`split_epic`, `generate_task_plan`) and
-  tenets on top of documents. Requires **03**.
+  tenets on top of documents. Requires **03** and the document templates in **07**.
 - **Milestone 4 — Human surface.** The web UI. Requires **06**.
 
-So the design order that unblocks the most, soonest: **04 → 01 → 05 → 02 → 03 → 06**.
+So the design order that unblocks the most, soonest:
+**04 → 01 → 05 → 02 → 03 → 07 → 06**.
 The product's real value lives in **02** and **03**; they come after the foundation
 they stand on, but they are where the effort should ultimately concentrate.
 

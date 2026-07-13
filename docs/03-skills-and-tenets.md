@@ -10,9 +10,9 @@ engine's contract, and the tenet format are open.
 
 - Skills are **layered, append-only**: resolved = shipped base + ordered project
   layers + active tenets; the base is never mutated. (§2.3, §9)
-- Layers live in the artifact repo under `skills/`, as markdown + frontmatter
-  (`skill: <base-id>`, `order: <int>`); merge is deterministic, sectioned append.
-  (§9)
+- Layers are markdown + frontmatter (`skill: <base-id>`, `order: <int>`); merge is
+  deterministic, sectioned append. (§9) *(Where the layers physically live is
+  reopened — see the layering-location open decision below.)*
 - Skills are **agent-first**: the connected agent's model does the reasoning; Nook
   needs no model of its own in v1 (server-side inference is designed-for, deferred).
   (§2.3)
@@ -22,6 +22,15 @@ engine's contract, and the tenet format are open.
 
 ## Open decisions
 
+- [ ] **Layering location & branching** — Nook ships a single **base** `tenets.md`
+      (and base skills); the **project's own** tenet/skill layers are the project's,
+      not Nook's. Open: do those layers live in Nook's artifact repo (versioned, not
+      branched — our default rule) or in the **project's code repo** (branched with
+      the code)? There is real value in these layers being **branched**, since they
+      are engineering rules that legitimately vary per branch — a departure from
+      versioned-not-branched that applies *only* to skills/tenets, not to
+      manifestos/plans. If they live in the code repo, how does Nook read them, and on
+      which ref? (Revises the "layers live in the artifact repo" line in Decided.)
 - [ ] **The three core skills, specified** — for `split_epic`, `generate_task_plan`,
       `author_manifesto`: inputs, what each instructs the agent to do, and the exact
       **output structure** (which maps to the document templates in **02**).

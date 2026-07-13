@@ -84,6 +84,11 @@ databaseChangeLog:
             tableName: epic
             columnNames: project_id, slug
             constraintName: uq_epic_project_slug
+        # referenced by task's composite FK (enforces same-project membership):
+        - addUniqueConstraint:
+            tableName: epic
+            columnNames: project_id, id
+            constraintName: uq_epic_project_id
         # composite FK: an epic's release must be in the SAME project:
         - addForeignKeyConstraint:
             baseTableName: epic
@@ -95,7 +100,11 @@ databaseChangeLog:
         - sql:
             sql: ALTER TABLE epic ADD CONSTRAINT ck_epic_status CHECK (status IN ('draft','in_progress','done','cancelled'))
 
-  # ── task ────────────────────────────────────────────────────────────────────
+  # ── task (belongs to a project; epic is optional) ────────────────────────────
+  # A task always has a project_id. epic_id is optional: NULL = a project-level
+  # task (e.g. a bug not born inside an epic). The authoritative delete cascade is
+  # project → task; the task → epic link is same-project integrity only (NO ACTION),
+  # to keep a single cascade path (SQL Server forbids multiple cascade paths).
   - changeSet:
       id: 0004-create-task
       author: nook
@@ -104,7 +113,9 @@ databaseChangeLog:
             tableName: task
             columns:
               - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
-              - column: {name: epic_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_task_epic, references: epic(id), deleteCascade: true}}
+              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_task_project, references: project(id), deleteCascade: true}}
+              - column: {name: epic_id, type: uuid}   # optional; NULL = project-level task
+              - column: {name: type, type: varchar(20), defaultValue: feature, constraints: {nullable: false}}
               - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
               - column: {name: name, type: varchar(500), constraints: {nullable: false}}
               - column: {name: description, type: clob, defaultValue: ''}
@@ -113,12 +124,24 @@ databaseChangeLog:
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
               - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
-        - addUniqueConstraint:
-            tableName: task
-            columnNames: epic_id, slug
-            constraintName: uq_task_epic_slug
+        # composite FK: a task's epic (when set) must be in the SAME project.
+        # NO ACTION (not CASCADE) keeps project → task the only cascade path.
+        - addForeignKeyConstraint:
+            baseTableName: task
+            baseColumnNames: project_id, epic_id
+            referencedTableName: epic
+            referencedColumnNames: project_id, id
+            constraintName: fk_task_epic_same_project
+            onDelete: NO ACTION
+        # slug unique per parent: within the epic when set, else within the project.
+        # (Partial unique indexes — a NULL epic_id would otherwise defeat a plain
+        # composite UNIQUE, which treats NULLs as distinct.)
+        - sql: {sql: "CREATE UNIQUE INDEX uq_task_epic_slug ON task (epic_id, slug) WHERE epic_id IS NOT NULL"}
+        - sql: {sql: "CREATE UNIQUE INDEX uq_task_project_slug ON task (project_id, slug) WHERE epic_id IS NULL"}
         - sql:
             sql: ALTER TABLE task ADD CONSTRAINT ck_task_status CHECK (status IN ('todo','in_progress','done','cancelled'))
+        - sql:
+            sql: ALTER TABLE task ADD CONSTRAINT ck_task_type CHECK (type IN ('feature','bug','chore'))
 
   # ── task_dependency (blocked_by) ────────────────────────────────────────────
   - changeSet:
@@ -203,6 +226,12 @@ databaseChangeLog:
         - createIndex:
             tableName: epic
             indexName: ix_epic_project_status
+            columns:
+              - column: {name: project_id}
+              - column: {name: status}
+        - createIndex:
+            tableName: task
+            indexName: ix_task_project_status
             columns:
               - column: {name: project_id}
               - column: {name: status}

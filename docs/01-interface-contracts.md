@@ -48,8 +48,8 @@ there are three surfaces over one contract:
 
 - Entities serialize as JSON with: `id` (UUID string), `slug`, `name`,
   `description`, `status` (where applicable), entity-specific fields (epic:
-  `releaseId?`; task: `epicId`, `blockedBy: [id]`), ISO-8601 `createdAt` /
-  `updatedAt`, and `createdBy` / `updatedBy`.
+  `releaseId?`; task: `epicId?` (null for an epic-less task), `type`, `blockedBy:
+  [id]`), ISO-8601 `createdAt` / `updatedAt`, and `createdBy` / `updatedBy`.
 - create / update / get return the **full entity**; `list_*` return arrays of the
   same, **newest-first**, **no pagination** in v1 (added as a cursor later).
 
@@ -58,15 +58,18 @@ there are three surfaces over one contract:
 - **Instance-level:** `create_project`, `get_project`, `list_projects`.
 - **Structure (project-scoped):** `create_epic(name, description?, releaseRef?)`,
   `update_epic(ref, {name?, description?, releaseRef?, status?})`,
-  `create_task(epicRef, name, description?)`, `update_task(ref, {…, status?})`,
+  `create_task(name, description?, epicRef?, type?)` — `epicRef` omitted makes an
+  epic-less (project-level) task; `type` defaults to `feature`,
+  `update_task(ref, {…, status?, type?, epicRef?})` — setting/clearing `epicRef`
+  reparents the task,
   `set_task_blocked_by(taskRef, blockerRefs[])` — **replaces** the task's blocker
   set (not incremental add/remove), `create_release(name, …)`,
   `assign_epic_to_release(epicRef, releaseRef?)`, `get_epic(ref)`, `get_task(ref)`,
   `list_epics(filter)`, `list_tasks(filter)`, `get_ready_tasks()`. Filter grammar
   and status rules per [04](./04-structure-semantics.md).
-- **Documents:** `read_doc`, `write_doc`, `replace_section`, `insert`,
-  `append_to_section`, `apply_patch`, `doc_history` — full contracts in
-  [02](./02-document-layer.md).
+- **Documents:** `read_doc`, `doc_outline`, `write_doc`, `replace_section`,
+  `prepend_to_section`, `append_to_section`, `apply_patch`, `doc_history` — full
+  contracts in [02](./02-document-layer.md).
 - **Skills** (tools + prompts): `split_epic(epicRef)`,
   `generate_task_plan(taskRef)`, `author_manifesto(epicRef)` — full contracts in
   [03](./03-skills-and-tenets.md).
