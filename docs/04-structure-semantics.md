@@ -1,40 +1,72 @@
 # 04 — Structure semantics
 
-**Status:** Outline · **Milestone:** 1 (foundation)
+**Status:** Settled · **Milestone:** 1 (foundation)
 
 The rules governing the structure store beyond what the schema already enforces:
 status transitions, slugs, queries, and dependency integrity. The schema and status
-*vocabulary* are settled (ARCHITECTURE.md §6, db/); the *behavior* is open.
+*vocabulary* come from ARCHITECTURE.md §6; this spec settles the *behavior*.
+
+Guiding stance for v1: status is single-user, advisory PM state and fully
+recoverable, so we impose the *least* policy that is still correct. A wrong rule is
+worse than no rule here — rigor is added later when real usage justifies it.
 
 ## Decided
 
-- Hierarchy: instance → project → (optional release) → epic → task; tasks have a
-  `blocked_by` join edge. (§2.1, §8)
-- Status vocabulary — epic `draft/in_progress/done/cancelled`; task
-  `todo/in_progress/done/cancelled`; release `planned/in_progress/released/cancelled`.
-  "Blocked" is derived, not stored. (§6)
-- Readiness = `todo` and every blocker resolved (`done` or `cancelled`), via the
-  `ready_task` view. (§6, db)
-- Identity = UUID; slug is per-parent unique and used in paths/URLs. (§4.3, §7)
+**Hierarchy & identity** (from §2.1, §4.3, §6, §7)
+- instance → project → (optional release) → epic → task; tasks have a `blocked_by`
+  join edge. Identity is a UUID; slug is per-parent unique and used in paths/URLs.
 
-## Open decisions
+**Status transitions — free within the vocabulary.**
+- Any status may move to any other *valid* status for its entity; the write path
+  validates only that the target is in the vocabulary (epic
+  `draft/in_progress/done/cancelled`; task `todo/in_progress/done/cancelled`;
+  release `planned/in_progress/released/cancelled`).
+- No transition graph is enforced in v1 — `done` may reopen, `cancelled` may
+  reactivate. A state machine is deferred until real policy is known.
+- "Blocked" remains derived (the `ready_task` view), never a stored status.
 
-- [ ] **Status transition rules** — the legal-transition state machine for each of
-      epic / task / release. Can `done` reopen to `todo`? Is `cancelled` terminal?
-      Are transitions validated, and where (core write path)?
-- [ ] **Side effects of transitions** — e.g. does completing an epic require its
-      tasks be terminal? Does cancelling an epic cascade to tasks?
-- [ ] **Slug rules** — generation (from name?), allowed charset, collision handling,
-      and the exact rename flow (DB update + `git mv`, atomicity).
-- [ ] **Query/filter model** — the filter grammar for `list_tasks` / `list_epics`
-      (status, release, blocked/ready, text search?), sort order, defaults.
-- [ ] **`blocked_by` integrity** — cycle prevention (app-level), self-block already
-      barred by schema; cross-project blocks allowed or not?
-- [ ] **Release semantics** — can an epic move between releases freely? What does
-      `released` status imply for its epics?
-- [ ] **Deletion semantics** — is deletion allowed, or only cancellation? Cascades
-      (FKs cascade in schema — confirm that's the intended product behavior).
+**Transition side effects — none.**
+- Status changes are independent. An epic may be `done` while tasks are still open
+  (the UI surfaces this; it is not blocked). Cancelling an epic does **not**
+  auto-change its tasks. No cascades, no guards — explicit over surprising.
+
+**Deletion — cancel, not delete.**
+- Epics and tasks are retired by setting `cancelled`, never hard-deleted in v1.
+  This preserves history and, critically, avoids **orphaning their git documents**:
+  git is not part of the DB's `ON DELETE CASCADE`, so a DB delete would leave
+  documents no row points at. Hard delete + coordinated git cleanup is a deferred,
+  deliberate operation (see [05](./05-project-and-ops.md)).
+
+**Slugs — auto-generated, overridable.**
+- Default slug is derived from the name: lowercased, non-`[a-z0-9-]` collapsed to
+  hyphens, trimmed. Per-parent uniqueness is ensured by appending a numeric suffix
+  (`-2`, `-3`, …) on collision. The caller may supply an explicit slug instead.
+- Rename is allowed: it updates the slug in the DB **and** performs a `git mv` of
+  the document path through the single write path (§4.3), so both stores move
+  together.
+
+**Queries — minimal.**
+- `list_tasks` filters by status (and the existing `ready` notion via
+  `get_ready_tasks`); `list_epics` by status and release. Default sort is
+  newest-first (`created_at` desc). Free-text search is deferred.
+
+**`blocked_by` integrity.**
+- Blockers must be in the **same project** (cross-epic within a project is allowed;
+  cross-project is not). Self-block is already barred by the schema `CHECK`.
+- Cycles are prevented at the application level: `set_task_blocked_by` rejects an
+  edge that would create a cycle.
+
+**Releases — loose buckets.**
+- A release is an optional grouping; epics may be assigned and reassigned freely.
+  `released` is informational and locks nothing.
+
+## Deferred (not open — intentionally later)
+
+- A status transition state machine, if usage shows a need.
+- Hard deletion with coordinated git cleanup ([05](./05-project-and-ops.md)).
+- Free-text search across structure.
 
 ## Depends on / feeds
 
-- These rules are enforced in `:core`'s write path and surfaced through **01**.
+- These rules are enforced in `:core`'s write path and surfaced through
+  [01](./01-interface-contracts.md).
