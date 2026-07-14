@@ -14,6 +14,14 @@
 # item_id attaches it to one project item (a composite FK keeps that item in the
 # same project). Project-level documents (tenets, README) leave item_id NULL.
 #
+# Tenancy & actor shape: project.owner_subject is the tenancy root — the subject
+# that owns a project. Every audit column (created_by / updated_by) and owner_subject
+# hold a stable *subject* string, shaped like a sign-in identity: a configured
+# constant ('system') on a single-user/localhost instance, and the subject asserted
+# by the edge gate (e.g. an OIDC `sub`) once Nook is reachable over the internet.
+# There is deliberately no users/accounts table in v1 — see ARCHITECTURE.md §8 and
+# docs/08.
+#
 # Enum codes: type/status/kind are stored as SMALLINT. The meaning lives in the
 # application enums, each member carrying an explicit, stable integer (never an
 # ordinal, so reordering the enum can't remap existing rows):
@@ -51,6 +59,10 @@ databaseChangeLog:
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
               - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
+              # owner_subject is the tenancy root: the subject that owns this project
+              # (distinct from created_by, which is audit). Single-valued in v1 (one
+              # owner); it makes per-owner isolation later a filter, not a migration.
+              - column: {name: owner_subject, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
 
   # ── release (optional grouping of epics) ────────────────────────────────────
   - changeSet:

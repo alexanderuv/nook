@@ -26,6 +26,7 @@ finish the requirements first.
 | [05](./05-project-and-ops.md) | Project bootstrapping & ops | Artifact-repo provisioning, config & deployment, write-lock & reconciliation | **Settled** |
 | [06](./06-web-ui.md) | Web UI | Basic human-surface workflows & v1 capabilities (screen detail is dev-time) | **Settled** |
 | [07](./07-document-templates.md) | Document templates | Why template content is a development-time concern; mechanism rides 02 + 03 | **Deferred** |
+| [08](./08-deployment-and-cloud.md) | Deployment & cloud | Running Nook on the internet reachable-from-anywhere, and staying open to productizing | **Direction set** |
 
 ## Build order — what we're aiming for first
 

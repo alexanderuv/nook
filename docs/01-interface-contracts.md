@@ -57,6 +57,16 @@ there are three surfaces over one contract:
   `parentId?` (null for a top-level item), `releaseId?` (epics), `blockedBy: [id]`
   (leaves), plus ISO-8601 `createdAt` / `updatedAt` and `createdBy` / `updatedBy`.
   (Releases serialize with `status` and `targetDate?`.)
+- The **project** serializes with `id`, `slug`, `name`, `description`,
+  `artifactRepoUrl?`, `ownerSubject`, and `createdAt` / `updatedAt` / `createdBy` /
+  `updatedBy`. `ownerSubject` is the subject that owns the project — the tenancy root
+  (§8, [08](./08-deployment-and-cloud.md)). It is **server-populated and read-only in
+  v1**: the core sets it to the connection's asserted subject, or to the configured
+  local default (`system`) on a single-user instance — it is *not* a `create_project` /
+  `update_project` input. (It becomes user-assignable only when accounts arrive.)
+- `createdBy` / `updatedBy` (and `ownerSubject`) are **subject** strings — a stable
+  sign-in identity (an OIDC `sub` behind the edge gate, or the local default) — not
+  display names; §8.
 - create / update / get return the **full entity**; `list_*` return arrays of the
   same, **newest-first**, **no pagination** in v1 (added as a cursor later).
 

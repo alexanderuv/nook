@@ -433,6 +433,10 @@ invariants directly in the schema:
   duplicated in the database.
 - **Readiness is derived, not stored.** A `ready_item` view computes it from
   dependencies (leaf items only), so readiness can never drift from actual blockers.
+- **The project is the tenancy root.** It carries an `owner_subject` (the owning
+  subject, distinct from the `created_by` audit actor), single-valued in v1. Every
+  other entity is already project-scoped, so per-owner isolation is a filter later, not
+  a migration (§8, [docs/08](./docs/08-deployment-and-cloud.md)).
 
 The schema is **plain standard SQL** — tables, plain unique / foreign-key / check
 constraints, and a view, with no partial/filtered indexes or other engine-specific
@@ -471,9 +475,23 @@ document content/history by calling it.
 Version 1 is **single-user and localhost-bound, with no authentication**. Every
 mutation nonetheless carries a nominal **actor** (recorded as `created_by` /
 `updated_by`), so introducing real users and permissions later is additive rather
-than a rewrite. Authentication is infrastructure rather than one of the product
+than a rewrite. That actor is stored as a stable **subject** string, shaped like a
+sign-in identity: a configured constant (`system`) on a single-user/localhost
+instance, and the subject the edge gate asserts (e.g. an OIDC `sub`) once Nook is
+reachable over the internet — so turning on real accounts swaps *where the subject
+comes from*, not the columns. There is no users/accounts table in v1.
+
+**Tenancy root.** Each **project** additionally carries an **`owner_subject`** — the
+subject that owns it — kept distinct from `created_by` (audit is "who made this row";
+ownership is "whose tenancy this is"). It is single-valued in v1 (one owner), and
+because every other entity is already project-scoped, it makes per-owner isolation a
+`WHERE owner_subject = …` filter later rather than a schema migration. A separate
+account/organization entity above `project`, if Nook is productized, is then purely
+additive. Authentication is infrastructure rather than one of the product
 surfaces that must be present-but-shallow in v1, and there is no v1 workflow value
-in it, so deferring it here is safe.
+in it, so deferring it here is safe. The moment Nook is reachable over the internet
+this "no authentication" assumption is revisited — the front door is gated at the edge
+and the actor is shaped like a real sign-in; see [`docs/08`](./docs/08-deployment-and-cloud.md).
 
 ---
 
