@@ -23,8 +23,11 @@ rather than a hand-wavy inline guess.
       to the edit API in [02](./02-document-layer.md) and the skills in
       [03](./03-skills-and-tenets.md).)
 - [ ] **Template source & override** — are templates shipped by Nook, overridable per
-      project, and if so where do the overrides live? (Couples to the tenet/skill
-      layering question in [03](./03-skills-and-tenets.md).)
+      project, and if so where do the overrides live? [03](./03-skills-and-tenets.md)
+      now settles the pattern this should follow: base shipped by Nook as a
+      system-level asset, project refinements as append-only layers, distributed to the
+      agent and versioned by Nook (templates are consumed by the skills, so the same
+      shipped-base + project-overlay model likely applies).
 
 ## Depends on / feeds
 

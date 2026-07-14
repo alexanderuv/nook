@@ -24,8 +24,12 @@ Only the stack is settled; the actual UI is undesigned.
       generate plan per task, mirrored for a human.
 - [ ] **Document editing in the UI** — read-only viewer with history in v1, or an
       editor that writes through the same editor-grade API (**02**)?
-- [ ] **Skill triggering from the UI** — how a human invokes `split_epic` etc.
-      (buttons that call the skill tools/prompts), and how results surface.
+- [ ] **Skill triggering from the UI** — sharper now that skills are **agent-side**,
+      not Nook-served tools ([03](./03-skills-and-tenets.md)): the web app is a human
+      surface, not an agent harness, so it can't "run" a skill directly. Options to
+      resolve: the UI only drives the structure/document operations manually (no skill
+      button), or the web app gains its own skill runner, or skills stay agent-only in
+      v1. And how results surface either way.
 - [ ] **Task board semantics** — grouping (by status/release), what "ready" looks
       like visually, dependency display.
 - [ ] **Auth-less v1 UX** — single-user assumptions in the UI; where the nominal

@@ -19,9 +19,9 @@ finish the requirements first.
 
 | # | Spec | Covers | Status |
 |---|------|--------|--------|
-| [01](./01-interface-contracts.md) | Interface contracts | MCP tool/prompt signatures & payloads, project selection, the web HTTP API | **Settled** |
+| [01](./01-interface-contracts.md) | Interface contracts | MCP tool signatures & payloads, project selection, the web HTTP API | **Settled** |
 | [02](./02-document-layer.md) | Document layer | Editor-grade edit API, artifact-repo on-disk layout, attachment policy | **Settled** |
-| [03](./03-skills-and-tenets.md) | Skills & tenets | The three core skills, the composition engine, tenet format & scope | Outline |
+| [03](./03-skills-and-tenets.md) | Skills & tenets | Skills/tenets storage, distribution & invocation; the operate-Nook skill; tenet scope | **Settled** |
 | [04](./04-structure-semantics.md) | Structure semantics | Status transitions, slug rules, query/filter model, cycle prevention | **Settled** |
 | [05](./05-project-and-ops.md) | Project bootstrapping & ops | Artifact-repo provisioning, config & deployment, write-lock & reconciliation | **Settled** |
 | [06](./06-web-ui.md) | Web UI | Screens and flows for the human surface | Outline |

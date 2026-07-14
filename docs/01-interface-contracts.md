@@ -15,7 +15,9 @@ RPC API; the two adapter apps translate their protocol into calls on it (§3.3).
 there are three surfaces over one contract:
 
 - **MCP** (agent surface, in `:mcp-server`) exposes the operations as **tools**, plus
-  tenets and documents as **resources**, and skills additionally as **prompts** (§5).
+  tenets and documents as **resources** (§5). Skills are **not** exposed here — they
+  are system-level, distributed to the agent's environment, and run agent-side, calling
+  these tools to persist ([03](./03-skills-and-tenets.md)).
 - The **web app's RPC API** (human/UI surface, in `:web-app`) **mirrors the same
   operations** in RPC style — same capabilities, one shared set of DTOs. Mirroring is
   pragmatic, not a hard 1:1 rule: an operation is mirrored where it makes sense, and
@@ -70,8 +72,10 @@ there are three surfaces over one contract:
 - **Documents:** `read_doc`, `doc_outline`, `write_doc`, `replace_section`,
   `prepend_to_section`, `append_to_section`, `apply_patch`, `doc_history` — full
   contracts in [02](./02-document-layer.md).
-- **Skills** (tools + prompts): `split_epic(epicRef)`,
-  `generate_task_plan(taskRef)`, `author_manifesto(epicRef)` — full contracts in
+- **Skills** are **not** operations in this catalog. `split_epic`,
+  `generate_task_plan`, and `author_manifesto` are local skills the agent runs; they
+  achieve their effect by calling the structure and document operations above (e.g.
+  `split_epic` drives repeated `create_task` calls). See
   [03](./03-skills-and-tenets.md).
 
 ### Error model
@@ -83,7 +87,9 @@ there are three surfaces over one contract:
 
 ### Resources (MCP)
 
-- `nook://project/tenets` — the composed tenets for the bound project.
+- `nook://project/tenets` — the bound project's canonical tenets, and the **pull
+  surface** an agent uses to refresh its local copy (Nook stamps the current version on
+  tool responses so the agent knows when to re-pull; [03](./03-skills-and-tenets.md)).
 - `nook://epic/{ref}/manifesto`, `nook://task/{ref}/plan`, `nook://doc/{path}` —
   document reads (content semantics in [02](./02-document-layer.md)).
 

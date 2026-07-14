@@ -124,21 +124,35 @@ Nook ships the core skills, but a project can **layer** its own conditions and
 refinements on top of them rather than replacing them. A layer only ever *adds*
 ("…and every task must include a rollback step"), so a project can sharpen a skill
 to its needs without forking it and drifting away from later improvements to the
-shipped base.
+shipped base (the base stays central and composes in, so those improvements keep
+flowing).
 
-Skills are **agent-first**: the connected agent's own model does the reasoning, and
-Nook supplies the composed instructions and the tools they call. Nook needs no
-model of its own to function, though the design leaves room for optional
-server-side inference later (§9).
+Skills are **system-level, not project artifacts**: Nook holds and versions them,
+and **distributes** them into the agent's environment as a local cache the agent
+runs. They are **agent-first** — the connected agent's own model does the reasoning
+over the composed instructions and calls Nook's operation tools to persist results.
+Nook needs no model of its own to function, though the design leaves room for
+optional server-side inference later (§9). One shipped base skill is the
+**operate-Nook** skill: the operating manual for how and when to call the MCP
+server, including reading the project's tenets at startup. Because it is itself a
+distributed skill, *how the agent uses Nook* is versioned and updatable, not baked
+into a client. The concrete storage, distribution, and invocation model is settled
+in [`docs/03`](./docs/03-skills-and-tenets.md).
 
 ### 2.4 Tenets
 
 **Tenets** are project-level rules the agent is expected to honor — for example,
-"never use XCTest, only Swift Testing." They are the always-on layer that composes
-into every skill invocation, so the agent sees them whenever it acts. In v1 they
-are **advisory**: injected into context rather than mechanically enforced, exactly
-as a spec-kit constitution is. They are authored in a form that a future validation
-engine could enforce for a checkable subset, but that enforcement is not built yet.
+"never use XCTest, only Swift Testing." They are the always-on layer the agent reads
+whenever it acts. Unlike skills, tenets **are** project artifacts: **Nook is their
+canonical, versioned source of truth** (project tenets are project-owned documents in
+the git artifact store), and each agent keeps an ephemeral local **copy** it reads at
+the moment of action. That copy is pulled, never committed and never branched — so the
+whole team converges on one canonical tenet set per project rather than tenets varying
+by code branch. In v1 they are **advisory**: injected into context rather than
+mechanically enforced, exactly as a spec-kit constitution is. They are authored in a
+form that a future validation engine could enforce for a checkable subset, but that
+enforcement is not built yet. Storage and distribution are settled in
+[`docs/03`](./docs/03-skills-and-tenets.md).
 
 ### 2.5 The workflow
 
@@ -330,24 +344,26 @@ preserved.
 
 ## 5. Interfaces: the MCP surface
 
-MCP offers three kinds of capability, distinguished by *who initiates their use*,
-and Nook's three concerns map onto them almost exactly:
+MCP offers capabilities distinguished by *who initiates their use*, and Nook uses
+two of them. The surface serves **state and content**, not skills — skills run
+agent-side (§2.3) and *call* this surface:
 
 - **Tools** are model-initiated — the agent calls them mid-reasoning. Nook exposes
-  structure operations, queries, the editor-grade document operations, and skills
-  as tools.
+  structure operations, queries, and the editor-grade document operations as tools.
+  Every mutation of state goes through them.
 - **Resources** are application- or user-attached read-only data. Nook exposes
-  tenets (`nook://project/tenets`) and per-entity documents as resources.
-- **Prompts** are user-initiated templates. Nook also exposes skills as prompts, so
-  a human can trigger "split this epic" as a first-class command in clients that
-  support them.
+  tenets (`nook://project/tenets`) and per-entity documents as resources. The tenets
+  resource is also the **pull surface** by which an agent refreshes its local tenet
+  copy from Nook's canonical version.
 
-Skills are offered as **both tools and prompts** over the same composition engine:
-as tools they can be chained autonomously by an agent (split an epic, then plan each
-task in one run) and work in every client; as prompts they give humans a cleaner
-trigger. The project is bound at the connection level, so tools take epic and task
-references relative to the current project rather than repeating a project id on
-every call.
+Skills are **not** an MCP capability Nook serves. They are distributed into the
+agent's environment (§2.3) and executed by the agent's harness; a skill returns
+instructions the agent then carries out by calling the tools above. To keep the
+agent's caches current, Nook **stamps its tenet/skill version on tool responses**;
+the operate-Nook skill's rule is to pull a newer version when it sees one — tenets at
+the moment of action, skills at the next load. The project is bound at the connection
+level, so tools take epic and task references relative to the current project rather
+than repeating a project id on every call.
 
 The initial surface (signatures firm up against the schema):
 
@@ -359,9 +375,12 @@ The initial surface (signatures firm up against the schema):
   (whole replace / regenerate), `replace_section`, `prepend_to_section`,
   `append_to_section`, `apply_patch`, `doc_history`. Full contracts in
   [docs/02](docs/02-document-layer.md).
-- **Skills** (as tools and prompts) — `split_epic(epicId)`,
-  `generate_task_plan(taskId)`, `author_manifesto(epicId)`.
-- **Resources** — `nook://project/tenets`, per-entity documents.
+- **Resources** — `nook://project/tenets` (canonical tenets + pull surface),
+  per-entity documents.
+
+The core skills (`split_epic`, `generate_task_plan`, `author_manifesto`) are local
+skills, not tools; `split_epic`, for instance, drives repeated `create_task` calls.
+See [docs/03](docs/03-skills-and-tenets.md).
 
 ---
 
@@ -374,7 +393,10 @@ invariants directly in the schema:
 
 - **Documents use an exclusive-arc owner** (exactly one of project / epic / task),
   which preserves real foreign-key integrity — something a polymorphic
-  `(entity_type, entity_id)` pair cannot give.
+  `(entity_type, entity_id)` pair cannot give. Project-scoped documents ride the
+  project arc — including a project's **tenets** (kind `tenet`), which are versioned
+  markdown like any other document; skills are system-level, not documents (§2.3,
+  [docs/03](./docs/03-skills-and-tenets.md)).
 - **Release membership is enforced structurally**: a composite foreign key ties an
   epic's release to the epic's own project, so an epic literally cannot be assigned
   to another project's release.
@@ -454,8 +476,8 @@ rule is to simplify every part rather than skip any.
 
 **Open questions:**
 
-- Firm MCP tool and prompt signatures and resource URIs — the surface shape is
-  settled (§5); exact types land against the schema.
+- Firm MCP tool signatures and resource URIs — the surface shape is settled (§5);
+  exact types land against the schema.
 - Legal status *transitions* — the vocabulary is fixed (§6), but which transitions
   are permitted is not yet defined.
 - Cycle prevention for `blocked_by` (application-level; deferred).
@@ -480,10 +502,11 @@ them, for traceability. The body above explains the resulting design; this is th
 | Identity | UUID identity + per-project slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
 | Hierarchy | Instance → Project → (Release) → Epic → Task, plus `blocked_by` (§2.1). | *Epic→task only* — leaves "what's ready" unanswerable. *Adding subtasks* — contradicts atomic-task framing. |
 | Bugs & epic-less tasks | A bug is a task with `type` (`feature`/`bug`/`chore`); a task's epic is optional, so a bug can hang off the project directly (§2.1, §6). | *A separate Bug entity* — duplicates the task's plan/status/blocked-by machinery. *Forcing every bug under an epic* — needs a catch-all "Bugs" epic, an artificial parent. |
-| Skills | Layered (shipped base + project overlays + tenets), append-only; agent-first, both-capable (§2.3). | *Override/replace base* — lets projects drift from upstream. *Server-side-only inference* — makes Nook own model keys and become an inference product prematurely. |
-| Skill invocation | Both MCP tools and prompts (§5). | *Prompts only* — an autonomous agent can't chain a prompt as a reasoning step. *Tools only* — loses the clean human trigger. |
+| Skills | System-level, Nook-canonical and versioned; distributed into the agent's environment as a local cache, layered append-only (shipped base + project overlays), agent-first (§2.3, [docs/03](./docs/03-skills-and-tenets.md)). | *Override/replace base* — lets projects drift from upstream. *Skills as project artifacts in the artifact repo* — skills are general operating instructions, not per-project content. *Server-side-only inference* — makes Nook own model keys and become an inference product prematurely. |
+| Skill invocation | Local skills the agent runs; a skill returns instructions the agent executes by calling Nook's operation tools (§5, [docs/03](./docs/03-skills-and-tenets.md)). | *Skills as Nook-served MCP tools/prompts* — first chosen, then reversed: a skill whose definition is distributed and agent-run can't also be a server-served tool without Nook reading it back at runtime; the operation tools it calls carry the state. *Server-side composition engine* — unnecessary once composition is agent-side. |
+| Tenets storage & distribution | Nook-canonical, versioned; project tenets are project-owned `tenet` documents in the git artifact store; agents read an ephemeral local copy, pulled (never committed, never branched), refreshed via a version stamp on tool responses (§2.4, [docs/03](./docs/03-skills-and-tenets.md)). | *Tenets in the code repo, branched with source* — reversed for one canonical set per project and guaranteed team reach over per-branch variance. *Dedicated DB-backed tenet store* — rebuilds git's versioning for markdown. |
 | Tenets | Advisory in v1, structured for later enforcement (§2.4). | *Gating engine now* — needs a checkable tenet DSL; too much for v1. |
-| Database support | Plain standard SQL, engine-agnostic — every integrity rule (per-project slug uniqueness, exclusive-arc owner, status/kind domains) is an ordinary UNIQUE/FK/CHECK, needing no engine-specific feature (§6). | *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. |
+| Database support | Plain standard SQL, engine-agnostic — structural rules (per-project slug uniqueness, exclusive-arc owner) are ordinary UNIQUE/FK/CHECK, and enum domains (status/kind/type) are SMALLINT codes validated by the application enums, so nothing needs an engine-specific feature (§6). | *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. *Native `ENUM` types* — not portable (SQLite has none) and awkward to evolve. |
 | Schema tooling | Liquibase changelog (§6, [`db/README.md`](./db/README.md)). | *Per-dialect hand-written SQL* — a variant to maintain per database. |
 | Auth | None in v1, nominal actor carried (§8). | *Full multi-user now* — heavy, no v1 workflow value. |
 | Stack | Ktor + Postgres + React/TS (§7). | *All-Kotlin UI (Compose-for-Web / Kotlin-JS)* — too immature for a browser UI. |

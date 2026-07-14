@@ -19,9 +19,12 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   read-whole/write-whole. Granularity is a wire concern; git stores whole-file
   snapshots per version.
 - Documents attach to project/epic/task via an **exclusive-arc owner**; kinds are
-  `manifesto`, `plan`, `rfc`, `design_doc`, `attachment`. The schema enforces
+  `manifesto`, `plan`, `rfc`, `design_doc`, `attachment`, `tenet`. The schema enforces
   *structure* (a document has exactly one owner and a valid kind), not *counts* —
-  it does not cap how many manifestos an epic or plans a task may have.
+  it does not cap how many manifestos an epic or plans a task may have. A **project's
+  tenets** are `tenet` documents on the project arc — Nook-canonical, versioned
+  markdown ([03](./03-skills-and-tenets.md)); **skills are not documents** (they are
+  system-level, distributed to the agent's environment, not stored here).
 - **Name uniqueness** is enforced by the single global `UNIQUE` on a document's
   **path**. A path is the entity-scoped name (`/epics/<slug>/notes.md`), so the same
   name may repeat freely across different entities in a project; only a same-name
@@ -87,8 +90,7 @@ to that repo's root — no project segment:
 
 ```
 /README.md                                     self-describing scaffold
-/tenets.md                                     project tenets — base file
-/skills/                                       skill overlay layers (spec 03)
+/tenets.md                                     project tenets (kind `tenet`; spec 03)
 /epics/<epic-slug>/manifesto.md                epic guiding doc
 /epics/<epic-slug>/attachments/<name>.md       epic-level attachments
 /epics/<epic-slug>/tasks/<task-slug>/plan.md   task plan (task under an epic)
@@ -102,10 +104,11 @@ to that repo's root — no project segment:
 - **Epic-less tasks** (a bug not tied to an epic — [04](./04-structure-semantics.md))
   live at the repo root under `/tasks/`; tasks under an epic live beneath it. A task's
   home is fixed by whether it has an epic parent.
-- `tenets.md` here is a single **base** file — the scaffold seed. Project-specific
-  tenet/skill **layering** (where those layers live, and whether they are *branched*,
-  not just versioned) is a [03](./03-skills-and-tenets.md) decision, not a
-  filesystem concern settled here.
+- `tenets.md` is the project's **tenet document** (kind `tenet`) — Nook-canonical and
+  versioned in this repo. Skills do **not** live here: they are system-level and
+  distributed to the agent's environment, not artifact-repo documents. How tenets are
+  distributed to agents and kept current is settled in
+  [03](./03-skills-and-tenets.md).
 - **Project-level docs** not tied to an epic (a charter, cross-cutting RFCs) are
   **out of scope for v1** — everything is epic- or task-scoped. A `/docs/` area can be
   added later without disturbing this tree.

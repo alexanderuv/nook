@@ -2,16 +2,28 @@
 #
 # STRUCTURE ONLY: document *content* lives in git (the ArtifactStore); these
 # tables hold structure plus a pointer (path + current git version) to each
-# document. Skills and tenets live in the artifact repo, so they have no tables.
+# document. A project's tenets are documents (kind=tenet) whose content is in git;
+# skills are system-level (distributed to the agent), so they have no tables.
+#
+# Enum codes: status/kind/type are stored as SMALLINT. The meaning lives in the
+# application enums, each member carrying an explicit, stable integer (never an
+# ordinal, so reordering the enum can't remap existing rows):
+#   document.kind   1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
+#   release.status  1=planned 2=in_progress 3=released 4=cancelled
+#   epic.status     1=draft 2=in_progress 3=done 4=cancelled
+#   task.status     1=todo 2=in_progress 3=done 4=cancelled
+#   task.type       1=feature 2=bug 3=chore
 #
 # Portability notes:
 #   * The schema is plain standard SQL — tables, plain UNIQUE / PK / FK
 #     constraints, CHECK constraints, and a view. No partial/filtered indexes or
 #     other engine-specific capabilities, so it is not tied to any one database.
 #   * Column types use Liquibase abstract types so each dialect gets its own
-#     (uuid, timestamp, varchar, ...). UUIDs are generated in the application.
-#   * Status/kind domains are VARCHAR + CHECK, not native ENUM types.
-#   * CHECK constraints and the view are emitted as ANSI-portable SQL.
+#     (uuid, timestamp, smallint, ...). UUIDs are generated in the application.
+#   * Enum domains are SMALLINT codes validated by the application enums, not
+#     VARCHAR + CHECK or native ENUM types. The single writer (core service) is
+#     the sole inserter, so domain membership is enforced there.
+#   * The remaining CHECK constraints and the view are emitted as ANSI-portable SQL.
 databaseChangeLog:
 
   # ── project ────────────────────────────────────────────────────────────────
@@ -45,7 +57,7 @@ databaseChangeLog:
               - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
               - column: {name: name, type: varchar(500), constraints: {nullable: false}}
               - column: {name: description, type: clob, defaultValue: ''}
-              - column: {name: status, type: varchar(20), defaultValue: planned, constraints: {nullable: false}}
+              - column: {name: status, type: smallint, defaultValueNumeric: 1, constraints: {nullable: false}}  # 1=planned
               - column: {name: target_date, type: date}
               - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
@@ -60,8 +72,6 @@ databaseChangeLog:
             tableName: release
             columnNames: project_id, id
             constraintName: uq_release_project_id
-        - sql:
-            sql: ALTER TABLE release ADD CONSTRAINT ck_release_status CHECK (status IN ('planned','in_progress','released','cancelled'))
 
   # ── epic ────────────────────────────────────────────────────────────────────
   - changeSet:
@@ -77,7 +87,7 @@ databaseChangeLog:
               - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
               - column: {name: name, type: varchar(500), constraints: {nullable: false}}
               - column: {name: description, type: clob, defaultValue: ''}
-              - column: {name: status, type: varchar(20), defaultValue: draft, constraints: {nullable: false}}
+              - column: {name: status, type: smallint, defaultValueNumeric: 1, constraints: {nullable: false}}  # 1=draft
               - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
@@ -99,8 +109,6 @@ databaseChangeLog:
             referencedColumnNames: project_id, id
             constraintName: fk_epic_release_same_project
             onDelete: SET NULL
-        - sql:
-            sql: ALTER TABLE epic ADD CONSTRAINT ck_epic_status CHECK (status IN ('draft','in_progress','done','cancelled'))
 
   # ── task (belongs to a project; epic is optional) ────────────────────────────
   # A task always has a project_id. epic_id is optional: NULL = a project-level
@@ -117,11 +125,11 @@ databaseChangeLog:
               - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
               - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_task_project, references: project(id), deleteCascade: true}}
               - column: {name: epic_id, type: uuid}   # optional; NULL = project-level task
-              - column: {name: type, type: varchar(20), defaultValue: feature, constraints: {nullable: false}}
+              - column: {name: type, type: smallint, defaultValueNumeric: 1, constraints: {nullable: false}}  # 1=feature
               - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
               - column: {name: name, type: varchar(500), constraints: {nullable: false}}
               - column: {name: description, type: clob, defaultValue: ''}
-              - column: {name: status, type: varchar(20), defaultValue: todo, constraints: {nullable: false}}
+              - column: {name: status, type: smallint, defaultValueNumeric: 1, constraints: {nullable: false}}  # 1=todo
               - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
@@ -142,10 +150,6 @@ databaseChangeLog:
             tableName: task
             columnNames: project_id, slug
             constraintName: uq_task_project_slug
-        - sql:
-            sql: ALTER TABLE task ADD CONSTRAINT ck_task_status CHECK (status IN ('todo','in_progress','done','cancelled'))
-        - sql:
-            sql: ALTER TABLE task ADD CONSTRAINT ck_task_type CHECK (type IN ('feature','bug','chore'))
 
   # ── task_dependency (blocked_by) ────────────────────────────────────────────
   - changeSet:
@@ -183,7 +187,7 @@ databaseChangeLog:
               - column: {name: project_id, type: uuid, constraints: {foreignKeyName: fk_doc_project, references: project(id), deleteCascade: true}}
               - column: {name: epic_id, type: uuid, constraints: {foreignKeyName: fk_doc_epic, references: epic(id), deleteCascade: true}}
               - column: {name: task_id, type: uuid, constraints: {foreignKeyName: fk_doc_task, references: task(id), deleteCascade: true}}
-              - column: {name: kind, type: varchar(20), constraints: {nullable: false}}
+              - column: {name: kind, type: smallint, constraints: {nullable: false}}  # 1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
               - column: {name: name, type: varchar(300), constraints: {nullable: false}}
               - column: {name: title, type: varchar(500)}
               - column: {name: path, type: varchar(1024), constraints: {nullable: false, unique: true, uniqueConstraintName: uq_document_path}}
@@ -192,8 +196,6 @@ databaseChangeLog:
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
               - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
-        - sql:
-            sql: ALTER TABLE document ADD CONSTRAINT ck_document_kind CHECK (kind IN ('manifesto','plan','rfc','design_doc','attachment'))
         # exactly one owner set (portable CASE form of Postgres num_nonnulls):
         - sql:
             sql: >-
@@ -235,8 +237,8 @@ databaseChangeLog:
               - column: {name: status}
 
   # ── ready_task view (backs get_ready_tasks) ─────────────────────────────────
-  # READY = 'todo' and every blocker resolved (done or cancelled — a cancelled
-  # blocker is abandoned work and must not deadlock downstream tasks).
+  # READY = todo(1) and every blocker resolved — done(3) or cancelled(4); a
+  # cancelled blocker is abandoned work and must not deadlock downstream tasks.
   - changeSet:
       id: 0009-create-ready-task-view
       author: nook
@@ -246,11 +248,11 @@ databaseChangeLog:
             selectQuery: >-
               SELECT t.*
               FROM task t
-              WHERE t.status = 'todo'
+              WHERE t.status = 1
                 AND NOT EXISTS (
                   SELECT 1
                   FROM task_dependency d
                   JOIN task b ON b.id = d.depends_on_id
                   WHERE d.task_id = t.id
-                    AND b.status NOT IN ('done','cancelled')
+                    AND b.status NOT IN (3, 4)
                 )

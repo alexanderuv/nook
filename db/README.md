@@ -36,8 +36,12 @@ To stay engine-agnostic while keeping the strong constraints:
 - **Abstract column types.** Liquibase maps `uuid`, `timestamp`, `varchar`, etc. to
   each dialect. **UUIDs are generated in the application**, so there is no
   DB-specific default (`gen_random_uuid()` and friends are avoided).
-- **Status/kind domains are `VARCHAR + CHECK`, not native `ENUM`** — not every
-  engine has an enum type, and varchar+check is easier to evolve.
+- **Enum domains (`status`, `kind`, `type`) are `SMALLINT` codes**, not native
+  `ENUM` and not `VARCHAR + CHECK`. The meaning lives in the application enums, each
+  member carrying an **explicit, stable integer** (never an ordinal, so reordering an
+  enum can't remap existing rows). The single writer (core service) is the sole
+  inserter, so domain membership is enforced there; the code table is in the schema
+  header comment.
 - **Uniqueness is plain, not partial.** Every UNIQUE is a whole-table constraint
   (e.g. task/epic/release slugs are unique per project via `(project_id, slug)`),
   so there is no `WHERE`-filtered index to depend on.
