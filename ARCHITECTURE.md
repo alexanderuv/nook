@@ -513,13 +513,18 @@ rule is to simplify every part rather than skip any.
 - Structural audit history (git already versions documents).
 - Authentication and multi-user (§8).
 
-**Open questions:**
+**Settled since — resolved in the area specs:**
+
+- **Status transitions** are free within the vocabulary in v1 — no enforced state
+  machine, so `done` may reopen and `cancelled` may reactivate; a transition graph is
+  deferred until real policy is known ([docs/04](./docs/04-structure-semantics.md)).
+- **Cycle prevention for `blocked_by`** *is* enforced in v1: `set_item_blocked_by`
+  rejects an edge that would create a cycle ([docs/04](./docs/04-structure-semantics.md)).
+
+**Open — at implementation, not design:**
 
 - Firm MCP tool signatures and resource URIs — the surface shape is settled (§5);
-  exact types land against the schema.
-- Legal status *transitions* — the vocabulary is fixed (§6), but which transitions
-  are permitted is not yet defined.
-- Cycle prevention for `blocked_by` (application-level; deferred).
+  exact types land against the schema at build time.
 
 ---
 
