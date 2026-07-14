@@ -1,43 +1,82 @@
 # 06 — Web UI
 
-**Status:** Outline · **Milestone:** 4
+**Status:** Settled · **Milestone:** 4
 
-The human surface. Deliberately the last and thinnest for v1 — the workflow is
-proven through the API and MCP first (ARCHITECTURE.md §9, "shallow end-to-end").
-Only the stack is settled; the actual UI is undesigned.
+The human surface. Deliberately the last and thinnest slice — the workflow is proven
+through the API and MCP first (ARCHITECTURE.md §9, "shallow end-to-end"). This spec
+settles the **basic workflows** the UI must support and the **capabilities** it exposes
+in v1. Screen-level and visual detail (exact screens, layouts, board styling) is
+development-time product design, not pinned down here — the same stance 07 takes on
+template content.
 
 ## Decided
 
+### Stack & data path
+
 - **React + TypeScript (strict)**, served by the web app. (§7)
-- The UI reads structure from the DB (via the web app's API) and document content
-  and history through the `ArtifactStore`. (§3.4, §7)
-- Because documents are forward-only (no branch skew), the UI simply shows the
-  latest version or any chosen prior version — no branch/merge state to represent.
-  (§3.2)
+- The UI reaches structure and document content/history **only through the web app's
+  RPC API** (which the core service backs with the DB and `ArtifactStore`) — the web
+  app is a thin adapter and opens no store itself. (§3.3, §3.4)
+- Documents are **forward-only** (no branch skew), so the UI shows the latest version
+  or any chosen prior version — no branch/merge state to represent. (§3.2)
 
-## Open decisions
+### The embedded authoring agent
 
-- [ ] **Screen inventory** — the v1 set. Candidates: project list, project overview,
-      epic view, task board/list, document viewer/editor with version history,
-      tenet editor, skill triggers.
-- [ ] **Primary flows** — create epic → author manifesto → split into tasks →
-      generate plan per task, mirrored for a human.
-- [ ] **Document editing in the UI** — read-only viewer with history in v1, or an
-      editor that writes through the same editor-grade API (**02**)?
-- [ ] **Skill triggering from the UI** — sharper now that skills are **agent-side**,
-      not Nook-served tools ([03](./03-skills-and-tenets.md)): the web app is a human
-      surface, not an agent harness, so it can't "run" a skill directly. Options to
-      resolve: the UI only drives the structure/document operations manually (no skill
-      button), or the web app gains its own skill runner, or skills stay agent-only in
-      v1. And how results surface either way.
-- [ ] **Task board semantics** — grouping (by status/release), what "ready" looks
-      like visually, dependency display.
-- [ ] **Auth-less v1 UX** — single-user assumptions in the UI; where the nominal
-      actor comes from.
-- [ ] **Build & serve** — how the React app is built and served by the Ktor web app
-      (static bundle vs. dev proxy).
+- **The web app hosts an embedded authoring agent**, not just manual controls. Because
+  Nook owns this harness, it comes up with the skill/tenet cache **preloaded** — base
+  skills, the operate-Nook skill, project skill layers, and the project's tenets
+  ([03](./03-skills-and-tenets.md)) — so it **runs skills** exactly as any agent does.
+  It persists through the web app's **RPC** operations — the same op set the manual
+  controls use, *not* a second trip out through MCP. So skills are triggerable from the
+  web while the web app stays a thin adapter with no store access; every write lands in
+  the core service (§3.3, §5).
+
+### Basic v1 workflows
+
+The coarse journeys the UI must support (their screen-level realization is development's
+call):
+
+1. **Project** — create a project (fresh repo or clone an existing one,
+   [05](./05-project-and-ops.md)) and select/switch between projects.
+2. **Browse & triage** — a project overview; list epics, releases, and tasks; filter by
+   status and type; the **"what's ready to work on"** list (`get_ready_items`).
+3. **Author a document — free-form, agent-assisted.** The generalized flow is *authoring
+   a document*; a document may be any kind (manifesto, plan, RFC, design doc, tenet). The
+   human either drives the embedded agent to draft it — via the matching skill
+   (`author_manifesto`, `generate_task_plan`, …) — or writes it directly. **No rigid
+   epic → manifesto → split → plan wizard is imposed**; that common sequence is just one
+   path through a free-form capability, and the skills are entry points, not fixed steps.
+4. **Read & hand-edit documents.** Documents *and* tenets are **fully editable in the
+   UI** through [02](./02-document-layer.md)'s editor-grade section ops (not a read-only
+   viewer) — an agent-drafted doc and a human-edited doc are the same artifact (§1).
+   Version history and prior-version viewing are included.
+5. **Structure edits** — create/update/cancel epics and tasks, set blockers, assign
+   epics to releases, and rename, per [04](./04-structure-semantics.md). (Agent skills
+   such as `split_epic` also create structure; the manual controls are the escape hatch.)
+
+Note on documents vs. structure: a **task** is a structure entity (a row); its **plan**
+is a document. Workflow 3 authors *documents*; creating the task itself is a structure op
+(workflow 5, or an agent skill). A single "create" surface may blend the two, but they
+remain distinct operations underneath.
+
+## Out of scope — development-time detail
+
+Considered and deliberately left to the build, not specced here (they carry no
+architectural decision):
+
+- **Screen inventory & layout** — the concrete set of screens and their arrangement.
+- **Task-board semantics** — grouping (by status/release), how "ready" reads visually,
+  dependency display.
+- **Skill-run presentation** — how a run is initiated (per-epic button, chat surface,
+  both), how agent progress/streaming is shown, how results are presented for review.
+- **Auth-less v1 UX** — single-user assumptions; the nominal actor comes from config
+  (§8).
+- **Build & serve** — how the React bundle is built and served by the Ktor web app.
 
 ## Depends on / feeds
 
-- Consumes the HTTP API from **01** and the document layer from **02**.
+- Consumes the HTTP/RPC API from [01](./01-interface-contracts.md), the document layer
+  from [02](./02-document-layer.md), the skills/tenets model from
+  [03](./03-skills-and-tenets.md), and structure semantics from
+  [04](./04-structure-semantics.md).
 - Should stay minimal until Milestones 1–3 prove the workflow.

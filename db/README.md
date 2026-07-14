@@ -45,7 +45,7 @@ To stay engine-agnostic while keeping the strong constraints:
 - **Uniqueness is plain, not partial.** Every UNIQUE is a whole-table constraint
   (e.g. task/epic/release slugs are unique per project via `(project_id, slug)`),
   so there is no `WHERE`-filtered index to depend on.
-- **CHECK constraints and the `ready_task` view** are emitted as ANSI-portable SQL.
+- **The CHECK constraint and the `ready_item` view** are emitted as ANSI-portable SQL.
 
 ## Running migrations
 

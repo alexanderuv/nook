@@ -4,8 +4,8 @@
 
 The editor-grade document API (addressing, edit operations, concurrency, reads), the
 artifact repo's on-disk layout, and the attachment policy. The *contents* of the
-generated documents — what sections a manifesto or plan has — are split into their
-own analysis: [07 — Document templates](./07-document-templates.md). The
+generated documents — what sections a manifesto or plan has — are a development-time
+concern, deferred to build in [07 — Document templates](./07-document-templates.md). The
 storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
 [05](./05-project-and-ops.md); this spec settles the document mechanics.
 
@@ -18,13 +18,15 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
 - Access is **granular and editor-grade** — section reads and edits, not
   read-whole/write-whole. Granularity is a wire concern; git stores whole-file
   snapshots per version.
-- Documents attach to project/epic/task via an **exclusive-arc owner**; kinds are
-  `manifesto`, `plan`, `rfc`, `design_doc`, `attachment`, `tenet`. The schema enforces
-  *structure* (a document has exactly one owner and a valid kind), not *counts* —
-  it does not cap how many manifestos an epic or plans a task may have. A **project's
-  tenets** are `tenet` documents on the project arc — Nook-canonical, versioned
-  markdown ([03](./03-skills-and-tenets.md)); **skills are not documents** (they are
-  system-level, distributed to the agent's environment, not stored here).
+- Every document is **project-scoped** (`project_id` always set) and **optionally
+  attached to one project item** (`item_id`); kinds are `manifesto`, `plan`, `rfc`,
+  `design_doc`, `attachment`, `tenet`. The schema enforces *structure* (a valid kind,
+  and — via a composite FK — that an attached document's item is in the same project),
+  not *counts*: it does not cap how many manifestos an epic or plans a leaf may have. A
+  **project's tenets** are `tenet` documents with **no item** (project-level) —
+  Nook-canonical, versioned markdown ([03](./03-skills-and-tenets.md)); **skills are
+  not documents** (they are system-level, distributed to the agent's environment, not
+  stored here).
 - **Name uniqueness** is enforced by the single global `UNIQUE` on a document's
   **path**. A path is the entity-scoped name (`/epics/<slug>/notes.md`), so the same
   name may repeat freely across different entities in a project; only a same-name
@@ -93,25 +95,26 @@ to that repo's root — no project segment:
 /tenets.md                                     project tenets (kind `tenet`; spec 03)
 /epics/<epic-slug>/manifesto.md                epic guiding doc
 /epics/<epic-slug>/attachments/<name>.md       epic-level attachments
-/epics/<epic-slug>/tasks/<task-slug>/plan.md   task plan (task under an epic)
-/epics/<epic-slug>/tasks/<task-slug>/attachments/<name>.md
-/tasks/<task-slug>/plan.md                     plan for an epic-less task
-/tasks/<task-slug>/attachments/<name>.md
+/epics/<epic-slug>/tasks/<leaf-slug>/plan.md   leaf plan (leaf under an epic)
+/epics/<epic-slug>/tasks/<leaf-slug>/attachments/<name>.md
+/tasks/<leaf-slug>/plan.md                     plan for a project-level leaf
+/tasks/<leaf-slug>/attachments/<name>.md
 ```
 
 - Path segments use **slugs**; rename = `git mv` through the write path (§4.3,
   [04](./04-structure-semantics.md)).
-- **Epic-less tasks** (a bug not tied to an epic — [04](./04-structure-semantics.md))
-  live at the repo root under `/tasks/`; tasks under an epic live beneath it. A task's
-  home is fixed by whether it has an epic parent.
-- `tenets.md` is the project's **tenet document** (kind `tenet`) — Nook-canonical and
-  versioned in this repo. Skills do **not** live here: they are system-level and
-  distributed to the agent's environment, not artifact-repo documents. How tenets are
-  distributed to agents and kept current is settled in
-  [03](./03-skills-and-tenets.md).
-- **Project-level docs** not tied to an epic (a charter, cross-cutting RFCs) are
-  **out of scope for v1** — everything is epic- or task-scoped. A `/docs/` area can be
-  added later without disturbing this tree.
+- **Leaves** (task, bug, or chore) of any type live under `tasks/`: a project-level
+  leaf sits at the repo root under `/tasks/`, a leaf under an epic beneath that epic. A
+  leaf's home is fixed by whether it has an epic parent, not by its type.
+- `tenets.md` is the project's **tenet document** (kind `tenet`), an `item_id`-less
+  project-level document — Nook-canonical and versioned in this repo. Skills do **not**
+  live here: they are system-level and distributed to the agent's environment, not
+  artifact-repo documents. How tenets are distributed to agents and kept current is
+  settled in [03](./03-skills-and-tenets.md).
+- **Project-level docs** beyond tenets (a charter, cross-cutting RFCs) are **out of
+  scope for v1** — every v1 document other than tenets is item-attached. The model
+  already allows them (an `item_id`-less document, exactly as tenets are), so a `/docs/`
+  area can be added later without disturbing this tree.
 
 ### Attachments — markdown only in v1
 
@@ -124,7 +127,7 @@ to that repo's root — no project segment:
 ### Templates — split out
 
 - What sections a **manifesto** or **plan** contains is **not decided here**. It is
-  product-content design and gets its own analysis:
+  development-time product content, deferred to build in
   [07 — Document templates](./07-document-templates.md). This spec fixes only *where*
   those documents live (`manifesto.md`, `plan.md`) and *how* they are edited (above).
 
@@ -139,5 +142,5 @@ to that repo's root — no project segment:
 - Stores documents in the repo provisioned by [05](./05-project-and-ops.md); realizes
   the editor-grade access principle of ARCHITECTURE.md §4.2.
 - Completes the document operations named in [01](./01-interface-contracts.md).
-- Template contents are settled in [07](./07-document-templates.md) and consumed by
-  the skills in [03](./03-skills-and-tenets.md).
+- Template contents are deferred to development ([07](./07-document-templates.md)) and
+  consumed by the skills in [03](./03-skills-and-tenets.md).

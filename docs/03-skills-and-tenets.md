@@ -9,19 +9,22 @@ exact per-skill contracts firm up against [01](./01-interface-contracts.md) and 
 
 ## Decided
 
-**Two worlds — MCP for state, a local cache for skills/tenets.**
+**Two worlds — the operation set for state, a local cache for skills/tenets.**
 - Every stateful interaction with structure (epics/tasks/releases) and documents flows
-  through **MCP tools** (§5). That is the only way state changes.
-- **Skills and tenets are consumed agent-side** from an **ephemeral local cache**
-  materialized into the agent's environment — read locally, **never committed to the
-  code repo, never branched.** The cache is a disposable replica; Nook is the source
-  of truth, so anything that comes from the server is fetched, not committed.
+  through Nook's **operation set** — exposed as **MCP tools** to external agents and as
+  the mirrored **web RPC** to the UI and its embedded authoring agent (§5,
+  [06](./06-web-ui.md)). That is the only way state changes.
+- **Skills and tenets are consumed agent-side** — by any agent, an external MCP client
+  or the web app's embedded agent — from an **ephemeral local cache** materialized into
+  the agent's environment: read locally, **never committed to the code repo, never
+  branched.** The cache is a disposable replica; Nook is the source of truth, so
+  anything that comes from the server is fetched, not committed.
 
 **Nook is the canonical, versioned source of truth.**
 - **Base** tenets and skills are **Nook system-level assets** — shipped with Nook,
   instance-global, one copy serving every project. They are not project artifacts.
 - **Project tenets are project-owned documents** in the git artifact store (document
-  kind `tenet`, project owner arc), reusing document versioning, the
+  kind `tenet`, project-scoped with no item link), reusing document versioning, the
   `(path, current_version)` pointer, the single write path, and the editor-grade API.
   Editing a tenet is a `replace_section`, not a whole-file rewrite. They are markdown,
   so git already gives versioning/diff/history — a separate store would rebuild that.
@@ -35,10 +38,10 @@ exact per-skill contracts firm up against [01](./01-interface-contracts.md) and 
   base + tenets (+ any skill layers) — and reasons over it directly.
 - A skill **returns instructions the agent executes**; it does not itself write.
   Persistence happens when the agent then calls the MCP operation tools
-  (`create_task`, `write_doc`, …). That boundary *is* the two-world split.
+  (`create_item`, `write_doc`, …). That boundary *is* the two-world split.
 - So the three core skills — `split_epic`, `generate_task_plan`, `author_manifesto` —
   are **local skills, not MCP tools.** `split_epic` is a local skill that drives
-  repeated `create_task` calls; it is not itself a Nook-served operation.
+  repeated `create_item` calls; it is not itself a Nook-served operation.
 
 **The operate-Nook skill.**
 - One shipped base skill is the operating manual: how and when to call the MCP server,
@@ -46,10 +49,15 @@ exact per-skill contracts firm up against [01](./01-interface-contracts.md) and 
   The agent's knowledge of *how to use Nook* is itself a layerable, versioned,
   distributed skill — not hardcoded into any client. A project can sharpen even it.
 
-**Distribution — pull, version-stamped.**
-- Nook stamps its current tenet/skill version(s) on tool responses. The operate-Nook
-  rule: if a response reports a version newer than the local cache, pull before
-  continuing.
+**Distribution — two paths to the same cache.**
+- **External agents** (third-party harnesses) receive the cache by **pull**: Nook stamps
+  its current tenet/skill version(s) on operation responses (MCP tool results and RPC
+  responses alike), and the operate-Nook rule is — if a response reports a version newer
+  than the local cache, pull before continuing.
+- **The web app's embedded agent** runs in a **Nook-owned harness**, so Nook **preloads**
+  it with the cache at startup and refreshes it in-process — no reaching into a foreign
+  environment. Same cache contents, same operate-Nook skill; the pull machinery is the
+  external-agent path only.
 - **Skills are checked once, at load (startup).** They are loaded-once by the harness
   and cannot hot-swap, so checking more often than they can be applied is waste; a new
   skill version takes effect on the **next** load.
@@ -57,10 +65,11 @@ exact per-skill contracts firm up against [01](./01-interface-contracts.md) and 
   read content at the moment of action, so a mid-session pull is immediately usable —
   this is what lets a teammate's new project-wide tenet reach a long-running agent
   before its next action.
-- Reads/pulls are exposed as MCP **resources** (`nook://project/tenets`), read-only —
-  not tools.
-- Optional: `resources/updated` notifications for clients that support subscriptions,
-  giving a running agent mid-session push. An enhancement, not relied upon.
+- The external reads/pulls are exposed as MCP **resources** (`nook://project/tenets`),
+  read-only — not tools.
+- Optional: `resources/updated` notifications for external clients that support
+  subscriptions, giving a running agent mid-session push. An enhancement, not relied
+  upon.
 
 **Team & branching.**
 - The whole team converges on Nook's canonical truth; a project-wide tenet reaches
@@ -93,13 +102,14 @@ exact per-skill contracts firm up against [01](./01-interface-contracts.md) and 
   suffices for v1.
 - **Tenet scope beyond project** (release/epic overrides, conflict resolution) —
   deferred; project-level only in v1.
-- **The three skills' output structure** — waits on the templates in
-  [07](./07-document-templates.md).
+- **The three skills' output structure** — the section sets they fill are a
+  development-time concern, not designed here ([07](./07-document-templates.md)).
 - **Server-side inference** and a **tenet gating/validation engine** — designed-for,
   deferred (§9).
 
 ## Depends on / feeds
 
 - Project tenets are documents under [02](./02-document-layer.md)'s store and API.
-- Skills fill the templates settled in [07](./07-document-templates.md).
+- Skills fill the templates, whose section sets are settled in development
+  ([07](./07-document-templates.md)).
 - Distribution and the resource surface ride [01](./01-interface-contracts.md).

@@ -13,38 +13,43 @@ worse than no rule here — rigor is added later when real usage justifies it.
 ## Decided
 
 **Hierarchy & identity** (from §2.1, §4.3, §6, §7)
-- instance → project → (optional release) → epic → task; tasks have a `blocked_by`
-  join edge. Identity is a UUID; slugs are **unique within their project** and used
-  in paths/URLs (tasks, epics, and releases alike — `(project_id, slug)`).
-- A **task always belongs to a project; its epic is optional.** An epic-less task
-  hangs directly off the project (see *Task type*). Its slug is unique **within its
-  project**: identity follows the owning project, so a task keeps its slug when moved
+- instance → project → (optional release) → project item; epics (containers) and
+  task/bug/chore (leaves) are one entity by `type`, and leaves carry a `blocked_by`
+  join edge. Identity is a UUID; slugs are **unique within their project** across all
+  item types (and releases alike — `(project_id, slug)`), used in paths/URLs.
+- A **leaf always belongs to a project; its parent epic is optional.** A project-level
+  leaf hangs directly off the project (see *Item type*). A slug is unique **within its
+  project**: identity follows the owning project, so an item keeps its slug when moved
   between epics.
 
-**Task type — a discriminator, not a new entity.**
-- A task carries a `type`: `feature` (default) / `bug` / `chore`. A **bug is just a
-  task with `type=bug`**, reusing the plan, status, and `blocked_by` machinery — no
-  separate Bug entity. Bugs are the motivating case for **epic-less tasks**: a bug
-  reported against the product need not belong to any epic.
-- `type` is free to change like status (no transition rules). `list_tasks` may filter
-  by it.
+**Item type — a discriminator, not a new entity.**
+- A project item carries a `type`: `epic` (a container) or `task` (default leaf) /
+  `bug` / `chore`. A **bug is a project item of `type=bug`**, reusing the plan, status,
+  and `blocked_by` machinery — no separate Bug entity. Bugs are the motivating case for
+  **project-level leaves**: a bug reported against the product need not belong to any
+  epic.
+- Containment follows from type and is enforced in the write path: an **epic** parents
+  leaves and is never itself parented; a **leaf** never nests. `type` changes freely
+  **within** the leaf categories (task↔bug↔chore); crossing the container/leaf line is
+  refused when it would break containment (an epic with children, or a leaf with a
+  parent). `list_items` may filter by type.
 
 **Status transitions — free within the vocabulary.**
-- Any status may move to any other *valid* status for its entity; the write path
-  validates only that the target is in the vocabulary (epic
-  `draft/in_progress/done/cancelled`; task `todo/in_progress/done/cancelled`;
-  release `planned/in_progress/released/cancelled`).
+- Any status may move to any other *valid* status; the write path validates only that
+  the target is in the vocabulary (project items share one set —
+  `todo/in_progress/done/cancelled`; releases
+  `planned/in_progress/released/cancelled`).
 - No transition graph is enforced in v1 — `done` may reopen, `cancelled` may
   reactivate. A state machine is deferred until real policy is known.
-- "Blocked" remains derived (the `ready_task` view), never a stored status.
+- "Blocked" remains derived (the `ready_item` view), never a stored status.
 
 **Transition side effects — none.**
-- Status changes are independent. An epic may be `done` while tasks are still open
+- Status changes are independent. An epic may be `done` while its leaves are still open
   (the UI surfaces this; it is not blocked). Cancelling an epic does **not**
-  auto-change its tasks. No cascades, no guards — explicit over surprising.
+  auto-change its leaves. No cascades, no guards — explicit over surprising.
 
 **Deletion — cancel, not delete.**
-- Epics and tasks are retired by setting `cancelled`, never hard-deleted in v1.
+- Project items are retired by setting `cancelled`, never hard-deleted in v1.
   This preserves history and, critically, avoids **orphaning their git documents**:
   git is not part of the DB's `ON DELETE CASCADE`, so a DB delete would leave
   documents no row points at. Hard delete + coordinated git cleanup is a deferred,
@@ -52,21 +57,22 @@ worse than no rule here — rigor is added later when real usage justifies it.
 
 **Slugs — auto-generated, overridable.**
 - Default slug is derived from the name: lowercased, non-`[a-z0-9-]` collapsed to
-  hyphens, trimmed. Per-project uniqueness is ensured by appending a numeric suffix
-  (`-2`, `-3`, …) on collision. The caller may supply an explicit slug instead.
+  hyphens, trimmed. Per-project uniqueness (across all item types) is ensured by
+  appending a numeric suffix (`-2`, `-3`, …) on collision. The caller may supply an
+  explicit slug instead.
 - Rename is allowed: it updates the slug in the DB **and** performs a `git mv` of
   the document path through the single write path (§4.3), so both stores move
   together.
 
 **Queries — minimal.**
-- `list_tasks` filters by status (and the existing `ready` notion via
-  `get_ready_tasks`); `list_epics` by status and release. Default sort is
-  newest-first (`created_at` desc). Free-text search is deferred.
+- `list_items` filters by type, status, and parent (and, for epics, release); the
+  `ready` notion is `get_ready_items` (leaves only). Default sort is newest-first
+  (`created_at` desc). Free-text search is deferred.
 
 **`blocked_by` integrity.**
-- Blockers must be in the **same project** (cross-epic within a project is allowed;
+- Blockers are **leaves in the same project** (cross-epic within a project is allowed;
   cross-project is not). Self-block is already barred by the schema `CHECK`.
-- Cycles are prevented at the application level: `set_task_blocked_by` rejects an
+- Cycles are prevented at the application level: `set_item_blocked_by` rejects an
   edge that would create a cycle.
 
 **Releases — loose buckets.**

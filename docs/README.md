@@ -24,8 +24,8 @@ finish the requirements first.
 | [03](./03-skills-and-tenets.md) | Skills & tenets | Skills/tenets storage, distribution & invocation; the operate-Nook skill; tenet scope | **Settled** |
 | [04](./04-structure-semantics.md) | Structure semantics | Status transitions, slug rules, query/filter model, cycle prevention | **Settled** |
 | [05](./05-project-and-ops.md) | Project bootstrapping & ops | Artifact-repo provisioning, config & deployment, write-lock & reconciliation | **Settled** |
-| [06](./06-web-ui.md) | Web UI | Screens and flows for the human surface | Outline |
-| [07](./07-document-templates.md) | Document templates | Manifesto & plan section structure, regeneration semantics | Outline |
+| [06](./06-web-ui.md) | Web UI | Basic human-surface workflows & v1 capabilities (screen detail is dev-time) | **Settled** |
+| [07](./07-document-templates.md) | Document templates | Why template content is a development-time concern; mechanism rides 02 + 03 | **Deferred** |
 
 ## Build order — what we're aiming for first
 
@@ -39,11 +39,12 @@ sequence is by milestone, smallest-provable-loop first:
   the `ArtifactStore` and the editor-grade API. Requires **05** (repo
   provisioning) and **02** (document layer).
 - **Milestone 3 — Workflow.** Skills (`split_epic`, `generate_task_plan`) and
-  tenets on top of documents. Requires **03** and the document templates in **07**.
+  tenets on top of documents. Requires **03**; template *content* (**07**) is settled
+  in development, not designed up front.
 - **Milestone 4 — Human surface.** The web UI. Requires **06**.
 
 So the design order that unblocks the most, soonest:
-**04 → 01 → 05 → 02 → 03 → 07 → 06**.
+**04 → 01 → 05 → 02 → 03 → 06** (07 is deferred to development).
 The product's real value lives in **02** and **03**; they come after the foundation
 they stand on, but they are where the effort should ultimately concentrate.
 

@@ -62,13 +62,14 @@ not deferred features, but boundaries of what Nook is:
 - **Nook is not a CI/CD, build, or test runner.** It never compiles, tests, or
   deploys anything. Tenets such as "use Swift Testing" are guidance the agent
   honors, not checks Nook executes.
-- **Nook is not an agent runtime, and it does not do the work.** It structures the
-  work and drafts the documents; the connected agent (and the human) carry the plan
-  out and write the product's code. Nook is the workshop and the record, not the
-  builder.
+- **Nook is not the runtime that does the product work.** It structures the work and
+  drafts the documents — and to that end the web app may run an embedded *authoring*
+  agent (§6, Appendix A) — but it never carries the plan out: the connected agent (and
+  the human) build, test, and write the product's code elsewhere. Nook is the workshop
+  and the record, not the builder.
 - **Nook is not a general-purpose wiki or knowledge base.** Every document is
-  anchored to a project, epic, or task in the hierarchy; there is no free-floating
-  document space competing with Confluence or Notion.
+  anchored to a project — and optionally to a project item within it; there is no
+  free-floating document space competing with Confluence or Notion.
 - **Nook is not a people- or resource-management tool.** It has no estimates,
   sprints, burndown, velocity, or workload assignment. It models the *structure* of
   work and its *readiness*, not the coordination of a team.
@@ -79,39 +80,46 @@ not deferred features, but boundaries of what Nook is:
 
 ### 2.1 Hierarchy
 
-Work is organized in a shallow, deliberate hierarchy:
+Work is organized in a shallow, deliberate hierarchy. Epics, tasks, bugs, and chores
+are one entity — a **project item** — told apart by a `type`: an epic is a container,
+and a task, bug, or chore is a leaf.
 
 ```
-Nook instance          a single deployment
-└─ Project             the top-level unit of work; one instance manages many
-   ├─ Release          an OPTIONAL grouping of epics — a milestone bucket
-   └─ Epic             a body of work in a project; may be assigned to a release
-      └─ Task          an atomic, vertical unit of work (epic is OPTIONAL)
+Nook instance             a single deployment
+└─ Project                the top-level unit of work; one instance manages many
+   ├─ Release             an OPTIONAL grouping of epics — a milestone bucket
+   └─ Project item
+      ├─ Epic             a container: a body of work; may be assigned to a release
+      └─ Task/Bug/Chore   a leaf: an atomic, vertical unit of work (parent epic is OPTIONAL)
 ```
 
-A **project** is the top level; a single Nook instance manages many of them. An
-**epic** is a coherent body of work within a project. A **release** is an optional
-grouping of epics — a milestone view, not a rigid parent, so an epic can exist
-without belonging to any release. A **task** is an atomic, vertical slice of work;
-tasks are intended to be small enough to finish in one focused session, which is why
-the hierarchy stops here and there are no subtasks. A task usually belongs to an
-epic, but its epic is **optional**: it always belongs to a project and may hang
-directly off it. A task also carries a **type** (`feature` / `bug` / `chore`) — a
-**bug is just a task with `type=bug`**, which is the case epic-less tasks exist for
-(a bug reported against the product need not sit inside any epic).
+A **project** is the top level; a single Nook instance manages many of them. A
+**project item** is one unit of work carrying a **type** — `epic`, `task`, `bug`, or
+`chore`. An **epic** is a coherent body of work that contains leaves. A **task**,
+**bug**, or **chore** is an atomic, vertical slice, small enough to finish in one
+focused session — which is why containment stops at one level: a leaf never holds
+another leaf, so there are no subtasks. A leaf usually sits under an epic, but its
+parent is **optional**: it always belongs to a project and may hang directly off it.
+The type is the whole classification — a **bug is a project item of type `bug`**,
+reusing the same plan, status, and dependency machinery as any other leaf, which is
+what lets a bug live outside any epic. A **release** is an optional grouping of epics —
+a milestone view, not a rigid parent, so an epic can exist without belonging to any
+release.
 
-Tasks may declare that they are **blocked by** other tasks. This is the one
+Leaves may declare that they are **blocked by** other leaves. This is the one
 relationship modelled beyond containment, and it exists because "what is ready to
-work on?" — a headline query — is meaningless without it. A task is *ready* when it
-is open and every task blocking it has been resolved.
+work on?" — a headline query — is meaningless without it. A leaf is *ready* when it
+is open and every item blocking it has been resolved.
 
 ### 2.2 Documents
 
-Every epic and task can carry documents. Some are structural and expected — an
-epic's **manifesto**, a task's **implementation plan** (its analysis, background,
-high-level approach, caveats, and test plan). Others are **attachments** of any
-kind: RFCs, design docs, notes. Documents are prose, they are versioned, and they
-are the real output of working in Nook.
+Every project item can carry documents. Some are structural and expected — an epic's
+**manifesto**, a leaf's **implementation plan** (its analysis, background, high-level
+approach, caveats, and test plan). Others are **attachments** of any kind: RFCs,
+design docs, notes. A document is always project-scoped and may additionally attach
+to one item; a project's tenets and README are project-level documents with no item.
+Documents are prose, they are versioned, and they are the real output of working in
+Nook.
 
 Crucially, document *content* is never stored in the project-management database.
 It lives in git (see §3). The database holds only a pointer to each document.
@@ -129,10 +137,12 @@ flowing).
 
 Skills are **system-level, not project artifacts**: Nook holds and versions them,
 and **distributes** them into the agent's environment as a local cache the agent
-runs. They are **agent-first** — the connected agent's own model does the reasoning
-over the composed instructions and calls Nook's operation tools to persist results.
-Nook needs no model of its own to function, though the design leaves room for
-optional server-side inference later (§9). One shipped base skill is the
+runs. They are **agent-first** — an agent's own model does the reasoning over the composed
+instructions and calls Nook's operations to persist results, whether that agent is an
+external one connected over MCP or the agent embedded in the web app's authoring UI
+(§6), whose Nook-owned harness comes up with the skill cache preloaded. Nook needs no
+model of its own to function, though the design leaves room for optional server-side
+inference later (§9). One shipped base skill is the
 **operate-Nook** skill: the operating manual for how and when to call the MCP
 server, including reading the project's tenets at startup. Because it is itself a
 distributed skill, *how the agent uses Nook* is versioned and updatable, not baked
@@ -211,10 +221,12 @@ draft-versus-merged lifecycle to track.
 A Nook instance spans many projects and is delivered as a **core service** with two
 **thin adapter apps** in front of it. The **core service** owns everything that
 touches state — Postgres, the git document store, and the single write path — and
-exposes an **internal RPC API** (localhost in v1). The **web app** (human surface:
-an RPC API and the UI) and the **MCP server** (agent surface) are separate
-deployables that **translate their protocol into core-service calls and hold no
-store access of their own**. Because one instance serves many projects, "which
+exposes an **internal RPC API** (localhost in v1). The **web app** (the human surface
+— an RPC API and the UI — which also hosts an embedded authoring agent, §6) and the
+**MCP server** (the external-agent surface) are separate deployables that **translate
+their protocol into core-service calls and hold no store access of their own** — the
+web app's embedded agent persists through those same calls, so it is a client of the
+core service, not a second store owner. Because one instance serves many projects, "which
 project am I acting on?" is answered by **configuration on the connection**, not by
 the agent's working directory.
 
@@ -245,7 +257,7 @@ cloned from an existing source** — details in [`docs/05`](./docs/05-project-an
 ### 3.4 How the pieces fit
 
 ```
-   Human ─▶  :web-app  (RPC API + UI)          :mcp-server (Kotlin MCP SDK)  ◀─ Agent
+   Human ─▶  :web-app  (RPC API + UI + agent)  :mcp-server (Kotlin MCP SDK)  ◀─ Agent
                     │                                   │
                     │  internal RPC (localhost)         │  internal RPC
                     └────────────────┬──────────────────┘
@@ -326,16 +338,16 @@ that the agent sends a small patch rather than a full rewrite.
 
 Every entity has a **UUID** as its stored, permanent identity — it never changes and
 survives renames — plus a mutable, human-readable **slug** used in paths, URLs, and
-display. Slugs are unique within their parent (a project slug within the instance,
-an epic slug within its project, a task slug within its epic — or within its project
-when the task is epic-less), which lets paths nest cleanly without a global slug
-namespace.
+display. Slugs are unique within their scope — a project slug within the instance, and
+an **item slug within its project** across all item types — so a slug reference
+resolves to exactly one item and paths nest cleanly without a global slug namespace.
 
 Because the artifact repository is meant to be browsed by humans on GitHub or
 GitLab, git paths are **slug-based and readable**. Each project is its own repo
 (§3.3, [docs/05](docs/05-project-and-ops.md)), so paths are relative to that repo's
-root: `epics/<slug>/tasks/<slug>/…` for a task under an epic, `tasks/<slug>/…` for an
-epic-less one. The full on-disk layout is [docs/02](docs/02-document-layer.md)'s job.
+root: `epics/<slug>/tasks/<slug>/…` for a leaf under an epic, `tasks/<slug>/…` for a
+project-level leaf (leaves of any type live under `tasks/`). The full on-disk layout
+is [docs/02](docs/02-document-layer.md)'s job.
 The trade-off is that renaming an entity rewrites its path; this is handled as a
 `git mv` through the single write path, and git follows the rename so history is
 preserved.
@@ -359,18 +371,21 @@ agent-side (§2.3) and *call* this surface:
 Skills are **not** an MCP capability Nook serves. They are distributed into the
 agent's environment (§2.3) and executed by the agent's harness; a skill returns
 instructions the agent then carries out by calling the tools above. To keep the
-agent's caches current, Nook **stamps its tenet/skill version on tool responses**;
-the operate-Nook skill's rule is to pull a newer version when it sees one — tenets at
-the moment of action, skills at the next load. The project is bound at the connection
-level, so tools take epic and task references relative to the current project rather
-than repeating a project id on every call.
+agent's caches current, Nook **stamps its tenet/skill version on operation responses**
+(MCP tool results, and RPC responses for the web-embedded agent); the operate-Nook
+skill's rule is to pull a newer version when it sees one — tenets at the moment of
+action, skills at the next load. (The web app's own harness, being Nook-owned, is
+preloaded and refreshed directly; §6.) The project is bound at the connection
+level, so tools take item and release references relative to the current project
+rather than repeating a project id on every call.
 
 The initial surface (signatures firm up against the schema):
 
-- **Structure tools** — `create_epic`, `update_epic`, `create_task`, `update_task`,
-  `set_task_blocked_by`, `create_release`, `assign_epic_to_release`, `get_epic`,
-  `get_task`, `list_epics`, `list_tasks(filter)`, and `get_ready_tasks()` (open and
-  unblocked — the "what is ready to work on" query).
+- **Structure tools** — `create_item(type, …)`, `update_item`, `set_item_blocked_by`,
+  `create_release`, `assign_epic_to_release`, `get_item`, `list_items(filter)`, and
+  `get_ready_items()` (leaves that are open and unblocked — the "what is ready to work
+  on" query), plus the instance-level `create_project` / `get_project` /
+  `list_projects`.
 - **Document tools** — `read_doc(ref, {section?})`, `doc_outline`, `write_doc`
   (whole replace / regenerate), `replace_section`, `prepend_to_section`,
   `append_to_section`, `apply_patch`, `doc_history`. Full contracts in
@@ -379,7 +394,7 @@ The initial surface (signatures firm up against the schema):
   per-entity documents.
 
 The core skills (`split_epic`, `generate_task_plan`, `author_manifesto`) are local
-skills, not tools; `split_epic`, for instance, drives repeated `create_task` calls.
+skills, not tools; `split_epic`, for instance, drives repeated `create_item` calls.
 See [docs/03](docs/03-skills-and-tenets.md).
 
 ---
@@ -391,40 +406,46 @@ Structure is defined as a **Liquibase changelog** under
 full rationale. The model reflects the concepts above and encodes several
 invariants directly in the schema:
 
-- **Documents use an exclusive-arc owner** (exactly one of project / epic / task),
-  which preserves real foreign-key integrity — something a polymorphic
-  `(entity_type, entity_id)` pair cannot give. Project-scoped documents ride the
-  project arc — including a project's **tenets** (kind `tenet`), which are versioned
-  markdown like any other document; skills are system-level, not documents (§2.3,
-  [docs/03](./docs/03-skills-and-tenets.md)).
+- **Every document is project-scoped** — it always carries `project_id` — and an
+  optional `item_id` attaches it to one project item, composite-FK'd to the same
+  project. This keeps real foreign-key integrity (something a polymorphic
+  `(entity_type, entity_id)` pair cannot) and makes "all documents in a project" a
+  direct query. A project's **tenets** (kind `tenet`) and its README are project-level
+  documents with `item_id` NULL; a manifesto or plan carries its item. Skills are
+  system-level, not documents (§2.3, [docs/03](./docs/03-skills-and-tenets.md)).
 - **Release membership is enforced structurally**: a composite foreign key ties an
-  epic's release to the epic's own project, so an epic literally cannot be assigned
-  to another project's release.
-- **A task is owned by its project; its epic is optional.** The task carries
-  `project_id` directly (so an epic-less task still has a project) and a nullable
-  `epic_id`; a composite foreign key ties the epic to the task's own project, same as
-  releases. The `project → task` cascade is the single delete path (the `task → epic`
-  link is integrity-only), so there is one clean cascade path on every engine. A task's
-  `type` (`feature` / `bug` / `chore`) distinguishes a bug without a separate entity.
-- **`blocked_by` is a join table**, allowing a task several blockers (including
-  cross-epic) while keeping the edge type minimal.
+  item's `release_id` to its own project, so an epic literally cannot be assigned to
+  another project's release.
+- **Every item is owned by its project; its parent is optional.** The item carries
+  `project_id` directly (so a project-level leaf still has a project) and a nullable
+  `parent_id` (a self-reference); a composite foreign key ties the parent to the item's
+  own project, same as releases. The `project → item` cascade is the single delete path
+  (the parent link is integrity-only, `NO ACTION`), so there is one clean cascade path
+  on every engine. The `type` (`epic` / `task` / `bug` / `chore`) is the whole
+  classification — a bug is an item of type `bug`, not a separate entity — and
+  containment (only epics parent; leaves never nest) is enforced by the single-writer
+  core service.
+- **`item_dependency` is a join table**, allowing a leaf several blockers (including
+  cross-epic) while keeping the edge type minimal; blockers are leaves in the same
+  project (write path).
 - **The document pointer is `(path, current_version)`** — the current git commit
   only. History lives in git and is read through the `ArtifactStore`, never
   duplicated in the database.
-- **Readiness is derived, not stored.** A `ready_task` view computes it from
-  dependencies, so a task's readiness can never drift from its actual blockers.
+- **Readiness is derived, not stored.** A `ready_item` view computes it from
+  dependencies (leaf items only), so readiness can never drift from actual blockers.
 
 The schema is **plain standard SQL** — tables, plain unique / foreign-key / check
 constraints, and a view, with no partial/filtered indexes or other engine-specific
 features — so it is not tied to a particular database. **PostgreSQL** is the primary
 target and **SQLite** backs tests and embedded use; slugs are unique **per project**
-(`(project_id, slug)` for tasks, epics, and releases alike), which needs only an
-ordinary UNIQUE constraint. Any standard-SQL engine can host it.
+(`(project_id, slug)` for items and releases alike), which needs only an ordinary
+UNIQUE constraint. Any standard-SQL engine can host it.
 
-**Status vocabulary.** Epics are `draft → in_progress → done` (or `cancelled`);
-tasks are `todo → in_progress → done` (or `cancelled`); releases are
-`planned → in_progress → released` (or `cancelled`). "Blocked" is intentionally
-*not* a stored task status — it is derived (see above).
+**Status vocabulary.** Project items share one status set:
+`todo → in_progress → done` (or `cancelled`) — an epic's initial `todo` is what a UI
+may show as "Draft." Releases have their own: `planned → in_progress → released` (or
+`cancelled`). "Blocked" is intentionally *not* a stored status — it is derived (see
+above).
 
 ---
 
@@ -500,13 +521,15 @@ them, for traceability. The body above explains the resulting design; this is th
 | Consistency | Single authorized write path + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |
 | Identity | UUID identity + per-project slug; slug-based readable git paths, rename = `git mv` (§4.3). | *UUID-only paths* — unreadable, defeats browsability. *Slug-as-identity* — breaks on rename. |
-| Hierarchy | Instance → Project → (Release) → Epic → Task, plus `blocked_by` (§2.1). | *Epic→task only* — leaves "what's ready" unanswerable. *Adding subtasks* — contradicts atomic-task framing. |
-| Bugs & epic-less tasks | A bug is a task with `type` (`feature`/`bug`/`chore`); a task's epic is optional, so a bug can hang off the project directly (§2.1, §6). | *A separate Bug entity* — duplicates the task's plan/status/blocked-by machinery. *Forcing every bug under an epic* — needs a catch-all "Bugs" epic, an artificial parent. |
+| Hierarchy | Instance → Project → (Release) → Project item, with `blocked_by` between leaves (§2.1). | *Epic→task only* — leaves "what's ready" unanswerable. *Adding subtasks* — contradicts atomic-task framing. |
+| Item model | Epic, task, bug, and chore are one typed `project_item` (single `type` axis; containment in the write path). A document is project-scoped with an optional `item_id` link, not an exclusive project/epic/task arc (§2.1, §6). | *Separate epic and task tables* — duplicate operations and a three-way document owner arc. *Two axes (level + category)* — the type already carries container-vs-leaf; a second column is redundant. *Dynamic / EAV properties (stored property definitions + data types)* — discards the typed columns, FK integrity, and cheap queries §3.1 is built on, to make a fixed, known type set "flexible" it doesn't need to be. |
+| Bugs & parent-less leaves | A bug is a project item of `type=bug`; a leaf's parent epic is optional, so a bug can hang off the project directly (§2.1, §6). | *A separate Bug entity* — duplicates the leaf's plan/status/blocked-by machinery. *Forcing every bug under an epic* — needs a catch-all "Bugs" epic, an artificial parent. |
 | Skills | System-level, Nook-canonical and versioned; distributed into the agent's environment as a local cache, layered append-only (shipped base + project overlays), agent-first (§2.3, [docs/03](./docs/03-skills-and-tenets.md)). | *Override/replace base* — lets projects drift from upstream. *Skills as project artifacts in the artifact repo* — skills are general operating instructions, not per-project content. *Server-side-only inference* — makes Nook own model keys and become an inference product prematurely. |
 | Skill invocation | Local skills the agent runs; a skill returns instructions the agent executes by calling Nook's operation tools (§5, [docs/03](./docs/03-skills-and-tenets.md)). | *Skills as Nook-served MCP tools/prompts* — first chosen, then reversed: a skill whose definition is distributed and agent-run can't also be a server-served tool without Nook reading it back at runtime; the operation tools it calls carry the state. *Server-side composition engine* — unnecessary once composition is agent-side. |
-| Tenets storage & distribution | Nook-canonical, versioned; project tenets are project-owned `tenet` documents in the git artifact store; agents read an ephemeral local copy, pulled (never committed, never branched), refreshed via a version stamp on tool responses (§2.4, [docs/03](./docs/03-skills-and-tenets.md)). | *Tenets in the code repo, branched with source* — reversed for one canonical set per project and guaranteed team reach over per-branch variance. *Dedicated DB-backed tenet store* — rebuilds git's versioning for markdown. |
+| Web agent surface | The web app hosts an embedded authoring agent whose Nook-owned harness is preloaded with the skill/tenet cache; it runs skills and persists through the web RPC operations, so skills are triggerable from the UI without a second store owner (§3.3, §5, [docs/06](./docs/06-web-ui.md)). | *Web app is human-only, skills agent-only in v1* — would bar authoring-agent flows (author manifesto, split epic) from the human surface. *Web agent as its own MCP client* — a needless hop for an agent co-located with the web app that can call the core directly. |
+| Tenets storage & distribution | Nook-canonical, versioned; project tenets are project-owned `tenet` documents in the git artifact store; agents read an ephemeral local copy, pulled (never committed, never branched) or preloaded for the web-embedded agent, refreshed via a version stamp on operation responses (§2.4, §6, [docs/03](./docs/03-skills-and-tenets.md)). | *Tenets in the code repo, branched with source* — reversed for one canonical set per project and guaranteed team reach over per-branch variance. *Dedicated DB-backed tenet store* — rebuilds git's versioning for markdown. |
 | Tenets | Advisory in v1, structured for later enforcement (§2.4). | *Gating engine now* — needs a checkable tenet DSL; too much for v1. |
-| Database support | Plain standard SQL, engine-agnostic — structural rules (per-project slug uniqueness, exclusive-arc owner) are ordinary UNIQUE/FK/CHECK, and enum domains (status/kind/type) are SMALLINT codes validated by the application enums, so nothing needs an engine-specific feature (§6). | *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. *Native `ENUM` types* — not portable (SQLite has none) and awkward to evolve. |
+| Database support | Plain standard SQL, engine-agnostic — structural rules (per-project slug uniqueness, same-project parent/release/document links via composite FKs) are ordinary UNIQUE/FK, and enum domains (type/status/kind) are SMALLINT codes validated by the application enums, so nothing needs an engine-specific feature (§6). | *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. *Native `ENUM` types* — not portable (SQLite has none) and awkward to evolve. |
 | Schema tooling | Liquibase changelog (§6, [`db/README.md`](./db/README.md)). | *Per-dialect hand-written SQL* — a variant to maintain per database. |
 | Auth | None in v1, nominal actor carried (§8). | *Full multi-user now* — heavy, no v1 workflow value. |
 | Stack | Ktor + Postgres + React/TS (§7). | *All-Kotlin UI (Compose-for-Web / Kotlin-JS)* — too immature for a browser UI. |

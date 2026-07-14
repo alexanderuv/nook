@@ -5,14 +5,22 @@
 # document. A project's tenets are documents (kind=tenet) whose content is in git;
 # skills are system-level (distributed to the agent), so they have no tables.
 #
-# Enum codes: status/kind/type are stored as SMALLINT. The meaning lives in the
+# Work items are one entity, project_item, discriminated by `type`. An epic is a
+# container; a task, bug, and chore are leaves. Containment — only an epic parents,
+# and leaves never nest — is enforced by the single-writer core service, since the
+# type carries that meaning.
+#
+# A document is project-scoped: it always carries project_id, and an optional
+# item_id attaches it to one project item (a composite FK keeps that item in the
+# same project). Project-level documents (tenets, README) leave item_id NULL.
+#
+# Enum codes: type/status/kind are stored as SMALLINT. The meaning lives in the
 # application enums, each member carrying an explicit, stable integer (never an
 # ordinal, so reordering the enum can't remap existing rows):
-#   document.kind   1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
-#   release.status  1=planned 2=in_progress 3=released 4=cancelled
-#   epic.status     1=draft 2=in_progress 3=done 4=cancelled
-#   task.status     1=todo 2=in_progress 3=done 4=cancelled
-#   task.type       1=feature 2=bug 3=chore
+#   project_item.type    1=epic 2=task 3=bug 4=chore
+#   project_item.status  1=todo 2=in_progress 3=done 4=cancelled
+#   release.status       1=planned 2=in_progress 3=released 4=cancelled
+#   document.kind        1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
 #
 # Portability notes:
 #   * The schema is plain standard SQL — tables, plain UNIQUE / PK / FK
@@ -23,7 +31,7 @@
 #   * Enum domains are SMALLINT codes validated by the application enums, not
 #     VARCHAR + CHECK or native ENUM types. The single writer (core service) is
 #     the sole inserter, so domain membership is enforced there.
-#   * The remaining CHECK constraints and the view are emitted as ANSI-portable SQL.
+#   * The remaining CHECK constraint and the view are emitted as ANSI-portable SQL.
 databaseChangeLog:
 
   # ── project ────────────────────────────────────────────────────────────────
@@ -67,65 +75,30 @@ databaseChangeLog:
             tableName: release
             columnNames: project_id, slug
             constraintName: uq_release_project_slug
-        # referenced by epic's composite FK (enforces same-project membership):
+        # referenced by project_item's composite FK (enforces same-project membership):
         - addUniqueConstraint:
             tableName: release
             columnNames: project_id, id
             constraintName: uq_release_project_id
 
-  # ── epic ────────────────────────────────────────────────────────────────────
+  # ── project_item (epic / task / bug / chore) ─────────────────────────────────
+  # One entity for all work items, discriminated by `type`. Every item belongs to a
+  # project (project_id — the sole delete cascade). parent_id (self-reference) places
+  # a leaf under an epic; it is NULL for epics and for project-level leaves. release_id
+  # applies to epics. The rules "only an epic parents" and "leaves never nest" live in
+  # the core service — the type carries the meaning, so no container/leaf column.
   - changeSet:
-      id: 0003-create-epic
+      id: 0003-create-project-item
       author: nook
       changes:
         - createTable:
-            tableName: epic
+            tableName: project_item
             columns:
               - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
-              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_epic_project, references: project(id), deleteCascade: true}}
-              - column: {name: release_id, type: uuid}
-              - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
-              - column: {name: name, type: varchar(500), constraints: {nullable: false}}
-              - column: {name: description, type: clob, defaultValue: ''}
-              - column: {name: status, type: smallint, defaultValueNumeric: 1, constraints: {nullable: false}}  # 1=draft
-              - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
-              - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
-              - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
-              - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
-        - addUniqueConstraint:
-            tableName: epic
-            columnNames: project_id, slug
-            constraintName: uq_epic_project_slug
-        # referenced by task's composite FK (enforces same-project membership):
-        - addUniqueConstraint:
-            tableName: epic
-            columnNames: project_id, id
-            constraintName: uq_epic_project_id
-        # composite FK: an epic's release must be in the SAME project:
-        - addForeignKeyConstraint:
-            baseTableName: epic
-            baseColumnNames: project_id, release_id
-            referencedTableName: release
-            referencedColumnNames: project_id, id
-            constraintName: fk_epic_release_same_project
-            onDelete: SET NULL
-
-  # ── task (belongs to a project; epic is optional) ────────────────────────────
-  # A task always has a project_id. epic_id is optional: NULL = a project-level
-  # task (e.g. a bug not born inside an epic). The authoritative delete cascade is
-  # project → task; the task → epic link is same-project integrity only (NO ACTION),
-  # which also avoids multiple cascade paths (some engines forbid them).
-  - changeSet:
-      id: 0004-create-task
-      author: nook
-      changes:
-        - createTable:
-            tableName: task
-            columns:
-              - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
-              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_task_project, references: project(id), deleteCascade: true}}
-              - column: {name: epic_id, type: uuid}   # optional; NULL = project-level task
-              - column: {name: type, type: smallint, defaultValueNumeric: 1, constraints: {nullable: false}}  # 1=feature
+              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_item_project, references: project(id), deleteCascade: true}}
+              - column: {name: parent_id, type: uuid}    # self-ref; NULL = top-level epic or project-level leaf
+              - column: {name: release_id, type: uuid}   # epics only (enforced in the write path)
+              - column: {name: type, type: smallint, constraints: {nullable: false}}  # 1=epic 2=task 3=bug 4=chore
               - column: {name: slug, type: varchar(200), constraints: {nullable: false}}
               - column: {name: name, type: varchar(500), constraints: {nullable: false}}
               - column: {name: description, type: clob, defaultValue: ''}
@@ -134,59 +107,71 @@ databaseChangeLog:
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
               - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
-        # composite FK: a task's epic (when set) must be in the SAME project.
-        # NO ACTION (not CASCADE) keeps project → task the only cascade path.
-        - addForeignKeyConstraint:
-            baseTableName: task
-            baseColumnNames: project_id, epic_id
-            referencedTableName: epic
-            referencedColumnNames: project_id, id
-            constraintName: fk_task_epic_same_project
-            onDelete: NO ACTION
-        # slug unique per project — consistent with epic and release. A task's
-        # identity follows its owning project, not the optional epic link, so no
-        # per-epic or partial-index scoping is needed (project_id is never NULL).
+        # slug unique per project across ALL item types — a slug reference must
+        # resolve to exactly one item.
         - addUniqueConstraint:
-            tableName: task
+            tableName: project_item
             columnNames: project_id, slug
-            constraintName: uq_task_project_slug
+            constraintName: uq_item_project_slug
+        # referenced by the self parent FK and by document's composite item FK:
+        - addUniqueConstraint:
+            tableName: project_item
+            columnNames: project_id, id
+            constraintName: uq_item_project_id
+        # composite self-FK: a leaf's parent (an epic) must be in the SAME project.
+        # NO ACTION keeps project → project_item the only cascade path.
+        - addForeignKeyConstraint:
+            baseTableName: project_item
+            baseColumnNames: project_id, parent_id
+            referencedTableName: project_item
+            referencedColumnNames: project_id, id
+            constraintName: fk_item_parent_same_project
+            onDelete: NO ACTION
+        # composite FK: an epic's release must be in the SAME project.
+        - addForeignKeyConstraint:
+            baseTableName: project_item
+            baseColumnNames: project_id, release_id
+            referencedTableName: release
+            referencedColumnNames: project_id, id
+            constraintName: fk_item_release_same_project
+            onDelete: SET NULL
 
-  # ── task_dependency (blocked_by) ────────────────────────────────────────────
+  # ── item_dependency (blocked_by, between leaves) ─────────────────────────────
   - changeSet:
-      id: 0005-create-task-dependency
+      id: 0004-create-item-dependency
       author: nook
       changes:
         - createTable:
-            tableName: task_dependency
+            tableName: item_dependency
             columns:
-              - column: {name: task_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_dep_task, references: task(id), deleteCascade: true}}
-              - column: {name: depends_on_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_dep_blocker, references: task(id), deleteCascade: true}}
+              - column: {name: item_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_dep_item, references: project_item(id), deleteCascade: true}}
+              - column: {name: depends_on_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_dep_blocker, references: project_item(id), deleteCascade: true}}
               - column: {name: created_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
         - addPrimaryKey:
-            tableName: task_dependency
-            columnNames: task_id, depends_on_id
-            constraintName: pk_task_dependency
+            tableName: item_dependency
+            columnNames: item_id, depends_on_id
+            constraintName: pk_item_dependency
         - createIndex:
-            tableName: task_dependency
+            tableName: item_dependency
             indexName: ix_dep_depends_on
             columns:
               - column: {name: depends_on_id}
+        # same-project and leaves-only are write-path rules; self-block is structural:
         - sql:
-            sql: ALTER TABLE task_dependency ADD CONSTRAINT ck_dep_no_self_block CHECK (task_id <> depends_on_id)
+            sql: ALTER TABLE item_dependency ADD CONSTRAINT ck_dep_no_self_block CHECK (item_id <> depends_on_id)
 
   # ── document (pointer; content is in git) ───────────────────────────────────
   - changeSet:
-      id: 0006-create-document
+      id: 0005-create-document
       author: nook
       changes:
         - createTable:
             tableName: document
             columns:
               - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
-              # exclusive-arc owner: exactly one of the three is set (see CHECK below).
-              - column: {name: project_id, type: uuid, constraints: {foreignKeyName: fk_doc_project, references: project(id), deleteCascade: true}}
-              - column: {name: epic_id, type: uuid, constraints: {foreignKeyName: fk_doc_epic, references: epic(id), deleteCascade: true}}
-              - column: {name: task_id, type: uuid, constraints: {foreignKeyName: fk_doc_task, references: task(id), deleteCascade: true}}
+              # every document is project-scoped; item_id optionally attaches it to one item.
+              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_doc_project, references: project(id), deleteCascade: true}}
+              - column: {name: item_id, type: uuid}   # NULL = project-level document (tenets, README)
               - column: {name: kind, type: smallint, constraints: {nullable: false}}  # 1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
               - column: {name: name, type: varchar(300), constraints: {nullable: false}}
               - column: {name: title, type: varchar(500)}
@@ -196,63 +181,63 @@ databaseChangeLog:
               - column: {name: updated_at, type: timestamp, defaultValueComputed: CURRENT_TIMESTAMP, constraints: {nullable: false}}
               - column: {name: created_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
               - column: {name: updated_by, type: varchar(200), defaultValue: system, constraints: {nullable: false}}
-        # exactly one owner set (portable CASE form of Postgres num_nonnulls):
-        - sql:
-            sql: >-
-              ALTER TABLE document ADD CONSTRAINT ck_document_single_owner CHECK (
-                (CASE WHEN project_id IS NULL THEN 0 ELSE 1 END)
-              + (CASE WHEN epic_id    IS NULL THEN 0 ELSE 1 END)
-              + (CASE WHEN task_id    IS NULL THEN 0 ELSE 1 END) = 1)
+        # item attachment: when item_id is set, (project_id, item_id) must be a real
+        # same-project item. NO ACTION so project → document stays the single cascade
+        # path (no multiple-cascade-path trouble on strict engines).
+        - addForeignKeyConstraint:
+            baseTableName: document
+            baseColumnNames: project_id, item_id
+            referencedTableName: project_item
+            referencedColumnNames: project_id, id
+            constraintName: fk_doc_item_same_project
+            onDelete: NO ACTION
 
   # Document name uniqueness is carried entirely by the global UNIQUE on
-  # `document.path` (uq_document_path, changeSet 0006). A path is the
-  # entity-scoped name (e.g. /epics/<slug>/notes.md), so two documents with the
-  # same name under the same entity collide on path and are rejected, while the
-  # same name may repeat across different entities in a project. No per-owner or
-  # per-kind uniqueness is enforced here — that would be domain policy, not
-  # structure, and belongs in the write path if ever needed.
+  # `document.path` (uq_document_path, changeSet 0005). A path is the entity-scoped
+  # name (e.g. /epics/<slug>/notes.md), so two documents with the same name under
+  # the same item collide on path and are rejected, while the same name may repeat
+  # across different items in a project. No per-item or per-kind uniqueness is
+  # enforced here — that would be domain policy, not structure, and belongs in the
+  # write path if ever needed.
 
   # ── query support indexes ────────────────────────────────────────────────────
   - changeSet:
-      id: 0008-query-indexes
+      id: 0006-query-indexes
       author: nook
       changes:
         - createIndex:
-            tableName: epic
-            indexName: ix_epic_project_status
+            tableName: project_item
+            indexName: ix_item_project_type_status
             columns:
               - column: {name: project_id}
+              - column: {name: type}
               - column: {name: status}
         - createIndex:
-            tableName: task
-            indexName: ix_task_project_status
+            tableName: project_item
+            indexName: ix_item_parent_status
             columns:
-              - column: {name: project_id}
-              - column: {name: status}
-        - createIndex:
-            tableName: task
-            indexName: ix_task_epic_status
-            columns:
-              - column: {name: epic_id}
+              - column: {name: parent_id}
               - column: {name: status}
 
-  # ── ready_task view (backs get_ready_tasks) ─────────────────────────────────
-  # READY = todo(1) and every blocker resolved — done(3) or cancelled(4); a
-  # cancelled blocker is abandoned work and must not deadlock downstream tasks.
+  # ── ready_item view (backs get_ready_items) ─────────────────────────────────
+  # READY = a leaf (type task/bug/chore, not an epic) that is todo(1) with every
+  # blocker resolved — done(3) or cancelled(4); a cancelled blocker is abandoned
+  # work and must not deadlock downstream items.
   - changeSet:
-      id: 0009-create-ready-task-view
+      id: 0007-create-ready-item-view
       author: nook
       changes:
         - createView:
-            viewName: ready_task
+            viewName: ready_item
             selectQuery: >-
-              SELECT t.*
-              FROM task t
-              WHERE t.status = 1
+              SELECT i.*
+              FROM project_item i
+              WHERE i.type IN (2, 3, 4)
+                AND i.status = 1
                 AND NOT EXISTS (
                   SELECT 1
-                  FROM task_dependency d
-                  JOIN task b ON b.id = d.depends_on_id
-                  WHERE d.task_id = t.id
+                  FROM item_dependency d
+                  JOIN project_item b ON b.id = d.depends_on_id
+                  WHERE d.item_id = i.id
                     AND b.status NOT IN (3, 4)
                 )

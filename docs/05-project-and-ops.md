@@ -35,8 +35,9 @@ mechanics.
 - Either way, configuring a hosted **remote for sync** is a **separate step
   afterward** (deferred in v1 — see credentials below).
 - On creation, an **initial commit** establishes a minimal self-describing scaffold
-  (a README plus placeholders for tenets and skills); the exact on-disk layout is
-  [02](./02-document-layer.md)'s job.
+  (a README plus a placeholder for the project's tenets — skills are system-level
+  and never live in the repo, [03](./03-skills-and-tenets.md)); the exact on-disk
+  layout is [02](./02-document-layer.md)'s job.
 
 ### Consistency & recovery — the DB pointer is the authority
 
