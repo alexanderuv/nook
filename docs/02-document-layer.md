@@ -20,7 +20,9 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   snapshots per version.
 - Every document is **project-scoped** (`project_id` always set) and **optionally
   attached to one project item** (`item_id`); kinds are `manifesto`, `plan`, `rfc`,
-  `design_doc`, `attachment`, `tenet`. The schema enforces *structure* (a valid kind,
+  `design_doc`, `attachment`, `tenet`, `prd`, `adr`, `research`, `test_plan`,
+  `retro`, `spec`. Which kinds are templated, and the catalog principle behind the list, is
+  [07](./07-document-templates.md). The schema enforces *structure* (a valid kind,
   and — via a composite FK — that an attached document's item is in the same project),
   not *counts*: it does not cap how many manifestos an epic or plans a leaf may have. A
   **project's tenets** are `tenet` documents with **no item** (project-level) —
@@ -28,7 +30,7 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   not documents** (they are system-level, distributed to the agent's environment, not
   stored here).
 - **Name uniqueness** is enforced by the single global `UNIQUE` on a document's
-  **path**. A path is the entity-scoped name (`/epics/<slug>/notes.md`), so the same
+  **path**. A path is the entity-scoped name (`/epics/<slug>/attachments/notes.md`), so the same
   name may repeat freely across different entities in a project; only a same-name
   clash **within the same entity** (a path collision) is rejected.
 
@@ -94,13 +96,23 @@ to that repo's root — no project segment:
 /README.md                                     self-describing scaffold
 /tenets.md                                     project tenets (kind `tenet`; spec 03)
 /epics/<epic-slug>/manifesto.md                epic guiding doc
-/epics/<epic-slug>/attachments/<name>.md       epic-level attachments
+/epics/<epic-slug>/docs/<name>.md              other catalog kinds (PRD, RFC, ADR, …)
+/epics/<epic-slug>/attachments/<name>.md       epic-level freeform attachments
 /epics/<epic-slug>/tasks/<leaf-slug>/plan.md   leaf plan (leaf under an epic)
+/epics/<epic-slug>/tasks/<leaf-slug>/docs/<name>.md
 /epics/<epic-slug>/tasks/<leaf-slug>/attachments/<name>.md
 /tasks/<leaf-slug>/plan.md                     plan for a project-level leaf
+/tasks/<leaf-slug>/docs/<name>.md
 /tasks/<leaf-slug>/attachments/<name>.md
 ```
 
+- **No per-kind paths.** Beyond the pre-existing fixed-name docs (`manifesto.md`,
+  `plan.md`), the catalog kinds from [07](./07-document-templates.md) get no
+  dedicated directories or filenames: they are slug-named markdown docs under the
+  item's `docs/` area, distinguished by their DB `kind`, not their location.
+  `attachments/` is reserved for freeform material — and, later, binary media
+  (images, video). (Template *assets* — the shipped skeletons — are not in this
+  repo at all; they are Nook system assets, [07]/[03].)
 - Path segments use **slugs**; rename = `git mv` through the write path (§4.3,
   [04](./04-structure-semantics.md)).
 - **Leaves** (task, bug, or chore) of any type live under `tasks/`: a project-level
@@ -118,18 +130,20 @@ to that repo's root — no project segment:
 
 ### Attachments — markdown only in v1
 
-- Attachments are **markdown/text** documents, first-class under the doc API
-  (addressable, editable, versioned) — e.g. RFCs and design docs.
+- Attachments are **freeform markdown/text** documents, first-class under the doc
+  API (addressable, editable, versioned) — notes, scratch material, anything
+  without a catalog role. (Catalog kinds — RFCs, design docs, … — live under the
+  item's `docs/` area, above.)
 - **Binary attachments (images, PDFs) are deferred.** Images are anticipated later
   (UI sketches, bug evidence) and will need a store-whole / serve-as-is path outside
   the editor-grade API.
 
 ### Templates — split out
 
-- What sections a **manifesto** or **plan** contains is **not decided here**. It is
-  development-time product content, deferred to build in
-  [07 — Document templates](./07-document-templates.md). This spec fixes only *where*
-  those documents live (`manifesto.md`, `plan.md`) and *how* they are edited (above).
+- *Which* artifact types exist (the catalog: manifesto, PRD, RFC, design doc, plan)
+  is settled in [07 — Document templates](./07-document-templates.md); what sections
+  each contains is development-time product content, deferred to build there. This
+  spec fixes only *where* documents live (the tree above) and *how* they are edited.
 
 ## Deferred (not open — intentionally later)
 

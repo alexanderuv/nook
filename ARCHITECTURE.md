@@ -115,8 +115,11 @@ is open and every item blocking it has been resolved.
 
 Every project item can carry documents. Some are structural and expected — an epic's
 **manifesto**, a leaf's **implementation plan** (its analysis, background, high-level
-approach, caveats, and test plan). Others are **attachments** of any kind: RFCs,
-design docs, notes. A document is always project-scoped and may additionally attach
+approach, caveats, and test plan). The rest come from a small **catalog of templated
+types** — PRDs, specs, RFCs, ADRs, design docs, research reports, test plans,
+retrospectives — that a project adopts to fit its methodology
+([docs/07](./docs/07-document-templates.md)), plus freeform **attachments**: notes,
+scratch material, anything. A document is always project-scoped and may additionally attach
 to one item; a project's tenets and README are project-level documents with no item.
 Documents are prose, they are versioned, and they are the real output of working in
 Nook.

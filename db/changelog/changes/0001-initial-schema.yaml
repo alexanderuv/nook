@@ -29,6 +29,7 @@
 #   project_item.status  1=todo 2=in_progress 3=done 4=cancelled
 #   release.status       1=planned 2=in_progress 3=released 4=cancelled
 #   document.kind        1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
+#                        7=prd 8=adr 9=research 10=test_plan 11=retro 12=spec
 #
 # Portability notes:
 #   * The schema is plain standard SQL — tables, plain UNIQUE / PK / FK
@@ -184,7 +185,7 @@ databaseChangeLog:
               # every document is project-scoped; item_id optionally attaches it to one item.
               - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_doc_project, references: project(id), deleteCascade: true}}
               - column: {name: item_id, type: uuid}   # NULL = project-level document (tenets, README)
-              - column: {name: kind, type: smallint, constraints: {nullable: false}}  # 1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
+              - column: {name: kind, type: smallint, constraints: {nullable: false}}  # 1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet 7=prd 8=adr 9=research 10=test_plan 11=retro 12=spec
               - column: {name: name, type: varchar(300), constraints: {nullable: false}}
               - column: {name: title, type: varchar(500)}
               - column: {name: path, type: varchar(1024), constraints: {nullable: false, unique: true, uniqueConstraintName: uq_document_path}}
