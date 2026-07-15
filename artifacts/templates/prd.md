@@ -12,15 +12,15 @@ structure constructs (releases, statuses, dependency edges) for projects that wa
 timeline/status tracking, and git already keeps document history.
 -->
 
-# {Title} — PRD
+# {Title} — PRD-{seq}
 
 ## Overview
 
 <!--
 One short paragraph: what this is, who it is for, and why now. A reader should be
 able to stop here and correctly summarize the initiative. Link the docs this frames
-against — the manifesto it serves, research that motivated it — rather than
-restating them.
+against — the manifesto it serves, discovery reports that motivated it — rather
+than restating them.
 -->
 
 ## Problem
@@ -28,8 +28,8 @@ restating them.
 <!--
 The single most important section. State the user/business problem in one or two
 sentences — the problem, not the absence of your solution ("users can't X", never
-"we lack feature Y"). Then the evidence: data, support themes, research findings,
-links to the research docs. Close with why now — what makes this worth solving in
+"we lack feature Y"). Then the evidence: data, support themes, discovery findings,
+links to the discovery reports. Close with why now — what makes this worth solving in
 this cycle. If this section can't be written convincingly, the PRD isn't ready.
 -->
 
@@ -41,6 +41,9 @@ there are several. Express what they're trying to get done as jobs/job stories
 ("When …, I want to …, so I can …") rather than feature wishes. Cover the main
 scenarios of use in context — enough that requirements below can be checked against
 a real situation.
+Format: `- **<persona>** — when <situation>, I want to <motivation>, so I can
+<outcome>.` Mark the primary persona `**<persona> (primary)**`; several job
+stories may share a persona.
 -->
 
 ## Goals & success metrics
@@ -52,6 +55,9 @@ months of launch"). Prefer one north-star outcome plus supporting/guardrail metr
 (what must not regress). Name where each metric is observed — the event, dashboard,
 or query — so success is checkable, not arguable. Qualitative signals are fine as a
 supplement, never the only measure.
+Format: `- **GOAL1** — <metric>: <baseline> → <target> by <when>; observed in
+<event/dashboard/query>.` Mark the north star `**GOAL1 (north star)**`; guardrails
+as `<metric>: must not regress below <threshold>`.
 -->
 
 ## Requirements
@@ -61,11 +67,13 @@ What the product must do, as a prioritized list. Each requirement: a priority
 (P0 = must ship / P1 = should / P2 = nice-to-have), a concrete capability stated in
 plain language, and a one-line rationale tying it to a goal or job above — anything
 that traces to no goal gets cut. Be specific enough that an implementer can tell
-done from not-done, but keep exhaustive edge cases and acceptance tests out: those
-belong in a `spec` on the child items. Non-functional needs (performance, security,
+done from not-done, but keep exhaustive edge cases and acceptance tests out: that
+is `spec`-altitude detail, too fine for a framing doc. Non-functional needs (performance, security,
 reliability, accessibility) go here too when they're real constraints — always with
 thresholds, never adjectives. Link mockups or prototypes inline where a picture
 specifies better than prose.
+Format: `- **REQ1 · P0** — <capability>. *Why:* <the goal (GOAL#) or job it
+serves>.` Order by priority, P0s first.
 -->
 
 ## Non-goals
@@ -76,6 +84,8 @@ because…"). This is the scope-creep firewall and the second most load-bearing
 section after Problem: it records the temptations already considered and declined,
 so they don't get relitigated item by item. An empty non-goals list usually means
 the scope hasn't actually been decided.
+Format: `- **<the thing not being done>** — <why: conflicts with a goal, or
+deferred to a later phase>.`
 -->
 
 ## Milestones
@@ -83,11 +93,13 @@ the scope hasn't actually been decided.
 <!--
 Optional — drop for single-phase work. How the scope slices into phases, and why
 that order: what the first slice must prove before the next is worth building
-(e.g. "MVP: requirements 1–4, validates the core job; fast-follow: 5–6; GA adds
+(e.g. "MVP: REQ1–REQ4, validates the core job; fast-follow: REQ5–REQ6; GA adds
 P1s"). Each phase names the requirements it covers and its exit condition. This
 section carries the phasing *judgment* only. Dates and progress don't belong here
 regardless: if the project tracks phases at all, Nook's release/item constructs do
 that live, and a prose copy only goes stale.
+Format: `- **<phase name>** — covers <REQ#s>; proves: <what this slice must
+demonstrate>; exit: <condition>.` In build order.
 -->
 
 ## Risks & assumptions
@@ -99,6 +111,8 @@ feasibility (can we build it), viability (does it work for the business). For ea
 the risk or assumption, its severity, and how it will be validated or mitigated.
 External dependencies (third-party APIs, compliance, other teams) belong here;
 dependencies on other Nook items are structure-store edges, not prose.
+Format: `- **<value|usability|feasibility|viability|dependency>** — <risk or
+assumption>; severity: <high|medium|low>; <how it's validated or mitigated>.`
 -->
 
 ## Open questions
@@ -108,4 +122,5 @@ Optional — drop if none. Unresolved questions that block or shape the work, ea
 with who owns the answer. When one is settled, move the decision into the section
 it affects and delete it here; a question that lingers across reviews is a risk and
 should be promoted to the section above.
+Format: `- **Q1** — <question>; owner: <who>.`
 -->
