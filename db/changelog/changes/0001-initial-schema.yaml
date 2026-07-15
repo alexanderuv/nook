@@ -12,7 +12,19 @@
 #
 # A document is project-scoped: it always carries project_id, and an optional
 # item_id attaches it to one project item (a composite FK keeps that item in the
-# same project). Project-level documents (tenets, README) leave item_id NULL.
+# same project). Project-level documents (tenets, README, ADRs, the architecture
+# overview) leave item_id NULL. Three kinds carry a level rule, enforced in the
+# write path like every per-kind rule (see docs/02): kind=adr requires item_id
+# NULL (one decision stream per project, never per epic); kind=architecture
+# requires item_id NULL and is a per-project SINGLETON (one living map per
+# project); kind=plan requires item_id set (a plan is the route for building one
+# item; it cannot float at project level).
+#
+# Documents of docs/-area kinds (rfc, design_doc, prd, adr, discovery, test_plan,
+# retro, spec) carry `seq`, a per-(project, kind) citation number ("RFC-3")
+# allocated by the write path from document_sequence; NULL for manifesto, plan,
+# attachment, tenet. Numbers are never reused — the counter only increases, so a
+# deleted RFC-3 stays retired. See docs/02.
 #
 # Tenancy & actor shape: project.owner_subject is the tenancy root — the subject
 # that owns a project. Every audit column (created_by / updated_by) and owner_subject
@@ -29,7 +41,8 @@
 #   project_item.status  1=todo 2=in_progress 3=done 4=cancelled
 #   release.status       1=planned 2=in_progress 3=released 4=cancelled
 #   document.kind        1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet
-#                        7=prd 8=adr 9=research 10=test_plan 11=retro 12=spec
+#                        7=prd 8=adr 9=discovery 10=test_plan 11=retro 12=spec
+#                        13=architecture
 #
 # Portability notes:
 #   * The schema is plain standard SQL — tables, plain UNIQUE / PK / FK
@@ -184,8 +197,15 @@ databaseChangeLog:
               - column: {name: id, type: uuid, constraints: {primaryKey: true, nullable: false}}
               # every document is project-scoped; item_id optionally attaches it to one item.
               - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_doc_project, references: project(id), deleteCascade: true}}
-              - column: {name: item_id, type: uuid}   # NULL = project-level document (tenets, README)
-              - column: {name: kind, type: smallint, constraints: {nullable: false}}  # 1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet 7=prd 8=adr 9=research 10=test_plan 11=retro 12=spec
+              - column: {name: item_id, type: uuid}   # NULL = project-level document (tenets, README, ADRs, architecture). Write-path rules: adr requires NULL; architecture requires NULL + one per project; plan requires NOT NULL
+              - column: {name: kind, type: smallint, constraints: {nullable: false}}  # 1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet 7=prd 8=adr 9=discovery 10=test_plan 11=retro 12=spec 13=architecture
+              # per-(project, kind) citation number for docs/-area kinds ("RFC-3");
+              # NULL for manifesto/plan/attachment/tenet. Allocated by the write
+              # path from document_sequence, never reused. Uniqueness is write-path
+              # policy, not a constraint: a UNIQUE over a nullable column is not
+              # portable (engines disagree on multi-NULL semantics), and the single
+              # writer is the sole allocator anyway.
+              - column: {name: seq, type: int}
               - column: {name: name, type: varchar(300), constraints: {nullable: false}}
               - column: {name: title, type: varchar(500)}
               - column: {name: path, type: varchar(1024), constraints: {nullable: false, unique: true, uniqueConstraintName: uq_document_path}}
@@ -204,6 +224,27 @@ databaseChangeLog:
             referencedColumnNames: project_id, id
             constraintName: fk_doc_item_same_project
             onDelete: NO ACTION
+
+  # ── document_sequence (per-project, per-kind seq allocator) ─────────────────
+  # High-water counter behind document.seq. A row per (project, kind), created
+  # lazily on first numbered document; next_seq only increases, so numbers are
+  # never reused even after the newest document of a kind is deleted (MAX(seq)+1
+  # could not guarantee that). Read-assign-increment happens in the single
+  # writer's creating transaction.
+  - changeSet:
+      id: 0008-create-document-sequence
+      author: nook
+      changes:
+        - createTable:
+            tableName: document_sequence
+            columns:
+              - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_docseq_project, references: project(id), deleteCascade: true}}
+              - column: {name: kind, type: smallint, constraints: {nullable: false}}
+              - column: {name: next_seq, type: int, defaultValueNumeric: 1, constraints: {nullable: false}}
+        - addPrimaryKey:
+            tableName: document_sequence
+            columnNames: project_id, kind
+            constraintName: pk_document_sequence
 
   # Document name uniqueness is carried entirely by the global UNIQUE on
   # `document.path` (uq_document_path, changeSet 0005). A path is the entity-scoped

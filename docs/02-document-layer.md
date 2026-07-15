@@ -20,9 +20,21 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   snapshots per version.
 - Every document is **project-scoped** (`project_id` always set) and **optionally
   attached to one project item** (`item_id`); kinds are `manifesto`, `plan`, `rfc`,
-  `design_doc`, `attachment`, `tenet`, `prd`, `adr`, `research`, `test_plan`,
-  `retro`, `spec`. Which kinds are templated, and the catalog principle behind the list, is
-  [07](./07-document-templates.md). The schema enforces *structure* (a valid kind,
+  `design_doc`, `attachment`, `tenet`, `prd`, `adr`, `discovery`, `test_plan`,
+  `retro`, `spec`, `architecture`. Which kinds are templated, and the catalog principle behind the list, is
+  [07](./07-document-templates.md). **ADRs are project-level by rule**: kind `adr`
+  requires `item_id` NULL — a project keeps **one decision stream** (ADR-1,
+  ADR-2, …), never a log per epic. A decision constrains the whole project, and
+  supersession must work across epics; prior art is unanimous (Nygard, adr-tools,
+  MADR all keep a single sequential decision log per repo). **The architecture
+  overview is a project-level singleton**: kind `architecture` requires `item_id`
+  NULL and **at most one per project** — the project's living map of how the
+  system hangs together, fixed-named `/architecture.md` beside `tenets.md`,
+  updated in place as reality changes (the ADR stream keeps the why-history).
+  **Plans are item-attached by rule**, the mirror constraint: kind `plan` requires
+  `item_id` set — a plan is the route for building one item (typically a leaf)
+  and has no meaning floating at project level. All three rules are enforced in
+  the write path, like every per-kind rule. The schema enforces *structure* (a valid kind,
   and — via a composite FK — that an attached document's item is in the same project),
   not *counts*: it does not cap how many manifestos an epic or plans a leaf may have. A
   **project's tenets** are `tenet` documents with **no item** (project-level) —
@@ -33,6 +45,34 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   **path**. A path is the entity-scoped name (`/epics/<slug>/attachments/notes.md`), so the same
   name may repeat freely across different entities in a project; only a same-name
   clash **within the same entity** (a path collision) is rejected.
+
+### Per-project sequence numbers
+
+- Every document of a **`docs/`-area kind** (`prd`, `rfc`, `adr`, `spec`,
+  `discovery`, `design_doc`, `test_plan`, `retro`) carries a **sequence number**,
+  unique per **(project, kind)**: the third RFC anywhere in a project is `RFC-3`,
+  regardless of which item it attaches to. The fixed-name docs (`manifesto`,
+  `plan`, `architecture`) and the non-catalog kinds (`attachment`, `tenet`) are
+  unnumbered — cited by their item, or (for the project singletons) as "the
+  architecture", "the tenets"; never as a series.
+- The number is a **citation handle**, nothing more: a stable, short way to
+  reference a document from other documents, commit messages, and conversation
+  ("per RFC-3", "supersedes ADR-2"). It carries no ordering or workflow meaning.
+- **Allocated by the core service** (single writer) when the document row is
+  created, from a per-(project, kind) counter (`document_sequence`) that only
+  increases: numbers are **never reused** — deleting RFC-3 retires the number, and
+  the next RFC is RFC-4. Same retire-don't-renumber rule the templates apply to
+  in-document item IDs ([07](./07-document-templates.md)).
+- Stored on the document row (`document.seq`, NULL for unnumbered kinds) and
+  returned on the full document entity ([01](./01-interface-contracts.md)'s
+  convention). Uniqueness is a **write-path guarantee**, not a DB constraint — the
+  schema's portable-SQL policy (engines disagree on multi-NULL UNIQUE semantics)
+  and the single-writer rule make the allocator the right owner.
+- The number appears in the **document title** (`# {Title} — RFC-3`; templates
+  carry a `{seq}` placeholder the skills stamp at instantiation — call choreography
+  is development-time). It is **not part of the path**: paths stay slug-named (the
+  layout below); the DB value is authoritative, the title is display. No zero
+  padding: `RFC-3`, never `RFC-003`.
 
 ### Addressing — heading paths, no line numbers
 
@@ -95,8 +135,12 @@ to that repo's root — no project segment:
 ```
 /README.md                                     self-describing scaffold
 /tenets.md                                     project tenets (kind `tenet`; spec 03)
+/architecture.md                               architecture overview (kind
+                                               `architecture`; per-project singleton)
+/docs/<name>.md                                project decision stream (ADRs — the
+                                               only v1 project-level docs area)
 /epics/<epic-slug>/manifesto.md                epic guiding doc
-/epics/<epic-slug>/docs/<name>.md              other catalog kinds (PRD, RFC, ADR, …)
+/epics/<epic-slug>/docs/<name>.md              other catalog kinds (PRD, RFC, spec, …)
 /epics/<epic-slug>/attachments/<name>.md       epic-level freeform attachments
 /epics/<epic-slug>/tasks/<leaf-slug>/plan.md   leaf plan (leaf under an epic)
 /epics/<epic-slug>/tasks/<leaf-slug>/docs/<name>.md
@@ -123,10 +167,11 @@ to that repo's root — no project segment:
   live here: they are system-level and distributed to the agent's environment, not
   artifact-repo documents. How tenets are distributed to agents and kept current is
   settled in [03](./03-skills-and-tenets.md).
-- **Project-level docs** beyond tenets (a charter, cross-cutting RFCs) are **out of
-  scope for v1** — every v1 document other than tenets is item-attached. The model
-  already allows them (an `item_id`-less document, exactly as tenets are), so a `/docs/`
-  area can be added later without disturbing this tree.
+- **Project-level docs** beyond tenets, the architecture overview, and ADRs (a
+  charter, cross-cutting RFCs) are **out of scope for v1** — every other v1
+  document is item-attached. ADRs materialize the root `/docs/` area (the
+  project's decision stream, above); other project-level kinds can join it later
+  without disturbing this tree.
 
 ### Attachments — markdown only in v1
 
@@ -148,7 +193,8 @@ to that repo's root — no project segment:
 ## Deferred (not open — intentionally later)
 
 - Binary/image attachments (store-whole + serve).
-- A project-level `/docs/` area for epic-independent documents.
+- Further project-level kinds in the root `/docs/` area (charter, cross-cutting
+  RFCs) — the area itself now exists, carrying the ADR stream.
 - Rich diff/merge across versions beyond `doc_history`.
 
 ## Depends on / feeds

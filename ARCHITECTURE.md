@@ -116,8 +116,9 @@ is open and every item blocking it has been resolved.
 Every project item can carry documents. Some are structural and expected — an epic's
 **manifesto**, a leaf's **implementation plan** (its analysis, background, high-level
 approach, caveats, and test plan). The rest come from a small **catalog of templated
-types** — PRDs, specs, RFCs, ADRs, design docs, research reports, test plans,
-retrospectives — that a project adopts to fit its methodology
+types** — PRDs, specs, RFCs, ADRs, design docs, discovery reports, test plans,
+retrospectives, and a per-project **architecture overview** (the living map of how
+the system hangs together) — that a project adopts to fit its methodology
 ([docs/07](./docs/07-document-templates.md)), plus freeform **attachments**: notes,
 scratch material, anything. A document is always project-scoped and may additionally attach
 to one item; a project's tenets and README are project-level documents with no item.
@@ -413,8 +414,13 @@ invariants directly in the schema:
   optional `item_id` attaches it to one project item, composite-FK'd to the same
   project. This keeps real foreign-key integrity (something a polymorphic
   `(entity_type, entity_id)` pair cannot) and makes "all documents in a project" a
-  direct query. A project's **tenets** (kind `tenet`) and its README are project-level
-  documents with `item_id` NULL; a manifesto or plan carries its item. Skills are
+  direct query. A project's **tenets** (kind `tenet`), its README, its **ADR
+  stream**, and its **architecture overview** are project-level documents with
+  `item_id` NULL (ADRs and the overview are constrained to project level — one
+  decision log and one living map per project, enforced in the write path;
+  [docs/02](./docs/02-document-layer.md)); a manifesto or plan carries its item —
+  for `plan` that is a rule, not a habit (a plan must attach to an item; same
+  write-path enforcement). Skills are
   system-level, not documents (§2.3, [docs/03](./docs/03-skills-and-tenets.md)).
 - **Release membership is enforced structurally**: a composite foreign key ties an
   item's `release_id` to its own project, so an epic literally cannot be assigned to
