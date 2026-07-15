@@ -49,6 +49,10 @@ there are three surfaces over one contract:
   it as a slug. Slugs are unique per project across all item types, so a slug resolves
   to exactly one item. (Slugs are lowercase-hyphen and never collide with the UUID
   form.)
+- A **document reference** (`docRef`) accepts **either a UUID or the document's
+  path** — the path is unique per project, and it carries the item scope and (for
+  fixed-name docs) the kind; creation semantics in
+  [02](./02-document-layer.md).
 
 ### Payloads
 
@@ -67,6 +71,11 @@ there are three surfaces over one contract:
 - `createdBy` / `updatedBy` (and `ownerSubject`) are **subject** strings — a stable
   sign-in identity (an OIDC `sub` behind the edge gate, or the local default) — not
   display names; §8.
+- A **document** serializes with `id`, `kind`, `seq?` (the per-project citation
+  number, numbered kinds only — [02](./02-document-layer.md)), `name`, `title?`,
+  `path`, `itemId?` (null for project-level docs), `currentVersion?`, and the
+  audit fields. Document *content* is never embedded in the entity — it travels
+  through the document operations.
 - create / update / get return the **full entity**; `list_*` return arrays of the
   same, **newest-first**, **no pagination** in v1 (added as a cursor later).
 
@@ -83,9 +92,10 @@ there are three surfaces over one contract:
   `assign_epic_to_release(epicRef, releaseRef?)`, `get_item(ref)`,
   `list_items(filter)`, `get_ready_items()`. Filter grammar and containment/status
   rules per [04](./04-structure-semantics.md).
-- **Documents:** `read_doc`, `doc_outline`, `write_doc`, `replace_section`,
-  `prepend_to_section`, `append_to_section`, `apply_patch`, `doc_history` — full
-  contracts in [02](./02-document-layer.md).
+- **Documents:** `read_doc`, `doc_outline`, `write_doc` (takes `kind` when
+  creating a `docs/`-area document), `replace_section`, `prepend_to_section`,
+  `append_to_section`, `apply_patch`, `doc_history` — full contracts in
+  [02](./02-document-layer.md).
 - **Skills** are **not** operations in this catalog. `split_epic`,
   `generate_task_plan`, and `author_manifesto` are local skills an agent runs — an
   external MCP client, or the web app's embedded authoring agent

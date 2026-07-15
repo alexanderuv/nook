@@ -98,12 +98,27 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
 All are addressed by heading path, go through the core service's single write path,
 and each produces a new forward-only document version (§3.2).
 
+A **`docRef`** is the document's **path or UUID** (mirroring item refs,
+[01](./01-interface-contracts.md)). The path carries the *scope*: where it sits
+fixes the item attachment (`/epics/<slug>/…` → that epic, `…/tasks/<slug>/…` →
+that leaf, root paths → project-level) — there is no separate itemRef argument.
+**Kind is set at creation and immutable** (a re-kinded document is a new
+document). Fixed-name paths imply it (`manifesto.md`, `plan.md`, `tenets.md`,
+`architecture.md`; anything under `attachments/` is `attachment`); for
+`docs/`-area paths the kind is deliberately *not* inferable from location (no
+per-kind paths), so **`write_doc` takes a `kind` argument** — required when
+creating a `docs/`-area document, and validated for agreement when supplied
+otherwise. The creating write validates the per-kind level rules, allocates the
+sequence number for numbered kinds, and returns the **full document entity**
+(including `seq` — how skills stamp `{seq}` into the title rides this response).
+`title` is maintained by the write path from the document's H1.
+
 - `read_doc(docRef, section?)` — raw markdown: the whole document, or the block at
   `section`.
 - `doc_outline(docRef)` — the heading tree (path, level, ordinal) for navigation,
   without bodies.
-- `write_doc(docRef, content)` — create or replace the entire document. For initial
-  authoring and import.
+- `write_doc(docRef, content, kind?)` — create or replace the entire document. For
+  initial authoring and import; `kind` per the creation rules above.
 - `replace_section(docRef, section, content)` — replace the block at `section`.
 - `prepend_to_section(docRef, section, content)` — insert at the **start** of the
   section's body (after the heading, before existing content and subsections).
