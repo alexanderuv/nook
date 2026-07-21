@@ -13,6 +13,12 @@ repo is design docs and schema only; no application code exists yet.
   **Open**; a spec is not done until its Open list is empty.
 - `db/changelog/` — Liquibase changelog for the structure store (Postgres). Enum
   code↔name maps are documented at the top of `0001-initial-schema.yaml`.
+- `execution/` — build planning: one folder per milestone, each anchored by its
+  PRD (`prd-<seq>.md`, authored from `artifacts/templates/prd.md`) from which
+  that milestone's epics are derived.
+- `artifacts/tenets.md` — the shipped base tenet set: common conventions for any
+  project (timeless code comments, right fix over quick fix, verify don't trust,
+  …). Honor these in every session; project tenets layer on top.
 
 ## Conventions
 

@@ -60,7 +60,7 @@ rationale behind each decision.
 | Layer            | Choice                                             |
 | ---------------- | -------------------------------------------------- |
 | Backend          | Kotlin + Ktor                                      |
-| Agent interface  | Official Kotlin MCP SDK (network endpoint)         |
+| Agent interface  | Official Java MCP SDK (network endpoint)           |
 | Structure store  | PostgreSQL                                          |
 | Document store   | Git (hosted remote), behind an `ArtifactStore` seam |
 | Web UI           | React + TypeScript (strict)                         |

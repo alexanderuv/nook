@@ -50,9 +50,9 @@ there are three surfaces over one contract:
   to exactly one item. (Slugs are lowercase-hyphen and never collide with the UUID
   form.)
 - A **document reference** (`docRef`) accepts **either a UUID or the document's
-  path** — the path is unique per project, and it carries the item scope and (for
-  fixed-name docs) the kind; creation semantics in
-  [02](./02-document-layer.md).
+  path** — the path is unique per project, and it carries the item scope and the
+  kind (filenames are kind-named: `plan.md`, `discovery.md`, `rfc-3.md`);
+  creation semantics in [02](./02-document-layer.md).
 
 ### Payloads
 
@@ -92,10 +92,10 @@ there are three surfaces over one contract:
   `assign_epic_to_release(epicRef, releaseRef?)`, `get_item(ref)`,
   `list_items(filter)`, `get_ready_items()`. Filter grammar and containment/status
   rules per [04](./04-structure-semantics.md).
-- **Documents:** `read_doc`, `doc_outline`, `write_doc` (takes `kind` when
-  creating a `docs/`-area document), `replace_section`, `prepend_to_section`,
-  `append_to_section`, `apply_patch`, `doc_history` — full contracts in
-  [02](./02-document-layer.md).
+- **Documents:** `read_doc`, `doc_outline`, `write_doc` (creates by scope +
+  kind — document paths are derived, never chosen; replaces by `docRef`),
+  `replace_section`, `prepend_to_section`, `append_to_section`, `apply_patch`,
+  `doc_history` — full contracts in [02](./02-document-layer.md).
 - **Skills** are **not** operations in this catalog. `split_epic`,
   `generate_task_plan`, and `author_manifesto` are local skills an agent runs — an
   external MCP client, or the web app's embedded authoring agent

@@ -39,11 +39,13 @@ cannot float at project level):
 - `tenet` and `attachment` complete the kind enum but are **not templated
   artifacts**: tenets have their own lifecycle
   ([03](./03-skills-and-tenets.md)); attachments are deliberately freeform.
-- Documents of the `docs/`-area kinds carry a **per-project, per-kind sequence
-  number** ("RFC-3", "PRD-2") — a stable citation handle allocated by the
-  structure store and stamped into the title; mechanism in
-  [02](./02-document-layer.md). The fixed-name docs (`manifesto`, `plan`,
-  `architecture`) are unnumbered — cited by their item, or as "the architecture".
+- The numbered kinds (`prd`, `rfc`, `adr`, `spec`, `design_doc`, `test_plan`,
+  `retro`) carry a **per-project, per-kind sequence number** ("RFC-3",
+  "PRD-2") — a stable citation handle allocated by the structure store and
+  stamped into the title; mechanism in [02](./02-document-layer.md). The
+  fixed-name docs (`manifesto`, `plan`, `architecture`) and `discovery` are
+  unnumbered — cited by their item (an investigation belongs to the item whose
+  uncertainty it reduced, like a plan), or as "the architecture".
 - The **architecture overview** is the map the **ADR stream** explains: the
   overview holds the integrated current state and is updated in place as reality
   changes; each ADR records one delta and its why. The overview cites ADR#s (its

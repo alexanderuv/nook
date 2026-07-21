@@ -48,13 +48,17 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
 
 ### Per-project sequence numbers
 
-- Every document of a **`docs/`-area kind** (`prd`, `rfc`, `adr`, `spec`,
-  `discovery`, `design_doc`, `test_plan`, `retro`) carries a **sequence number**,
-  unique per **(project, kind)**: the third RFC anywhere in a project is `RFC-3`,
+- Every document of a **numbered kind** (`prd`, `rfc`, `adr`, `spec`,
+  `design_doc`, `test_plan`, `retro`) carries a **sequence number**, unique per
+  **(project, kind)**: the third RFC anywhere in a project is `RFC-3`,
   regardless of which item it attaches to. The fixed-name docs (`manifesto`,
-  `plan`, `architecture`) and the non-catalog kinds (`attachment`, `tenet`) are
+  `plan`, `architecture`), `discovery` (an investigation belongs to the item
+  whose uncertainty it reduced, like a plan — cited by its item, never as a
+  project-wide series), and the non-catalog kinds (`attachment`, `tenet`) are
   unnumbered — cited by their item, or (for the project singletons) as "the
-  architecture", "the tenets"; never as a series.
+  architecture", "the tenets". Numbered kinds are a subset of the `docs/`-area
+  kinds (the path area below): `discovery` lives in the `docs/` area too, just
+  without a number.
 - The number is a **citation handle**, nothing more: a stable, short way to
   reference a document from other documents, commit messages, and conversation
   ("per RFC-3", "supersedes ADR-2"). It carries no ordering or workflow meaning.
@@ -70,9 +74,10 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   and the single-writer rule make the allocator the right owner.
 - The number appears in the **document title** (`# {Title} — RFC-3`; templates
   carry a `{seq}` placeholder the skills stamp at instantiation — call choreography
-  is development-time). It is **not part of the path**: paths stay slug-named (the
-  layout below); the DB value is authoritative, the title is display. No zero
-  padding: `RFC-3`, never `RFC-003`.
+  is development-time) **and in the filename**: a numbered kind is stored as
+  `<kind>-<seq>.md` (`rfc-3.md`; the layout below), so the citation handle and
+  the on-disk name always agree. The DB value stays authoritative, the title is
+  display. No zero padding: `RFC-3`, never `RFC-003`.
 
 ### Addressing — heading paths, no line numbers
 
@@ -101,24 +106,36 @@ and each produces a new forward-only document version (§3.2).
 A **`docRef`** is the document's **path or UUID** (mirroring item refs,
 [01](./01-interface-contracts.md)). The path carries the *scope*: where it sits
 fixes the item attachment (`/epics/<slug>/…` → that epic, `…/tasks/<slug>/…` →
-that leaf, root paths → project-level) — there is no separate itemRef argument.
+that leaf, root paths → project-level) — so operations on an existing document
+need no separate itemRef argument. (Creation is the reverse: no document exists
+yet to point at, so it takes the scope directly — below.)
 **Kind is set at creation and immutable** (a re-kinded document is a new
-document). Fixed-name paths imply it (`manifesto.md`, `plan.md`, `tenets.md`,
-`architecture.md`; anything under `attachments/` is `attachment`); for
-`docs/`-area paths the kind is deliberately *not* inferable from location (no
-per-kind paths), so **`write_doc` takes a `kind` argument** — required when
-creating a `docs/`-area document, and validated for agreement when supplied
-otherwise. The creating write validates the per-kind level rules, allocates the
-sequence number for numbered kinds, and returns the **full document entity**
-(including `seq` — how skills stamp `{seq}` into the title rides this response).
-`title` is maintained by the write path from the document's H1.
+document). **Every path implies it**: filenames are kind-named (`manifesto.md`,
+`plan.md`, `tenets.md`, `architecture.md`, `discovery.md`; `rfc-3.md` for
+numbered kinds; anything under `attachments/` is `attachment`), so on an
+existing document the kind is read from the path, and a `kind` argument is
+only ever validated for agreement. **Creation takes no path**: document paths
+are derived, never chosen — the caller can't know a numbered filename before
+the number is allocated, and every other filename is fixed by its kind — so a
+document is created by **scope + kind** (an item ref, or project level), and
+the write path derives the path (`plan.md` at the item root,
+`docs/discovery.md`, `docs/rfc-<seq>.md` with the freshly allocated number)
+and returns it. The one exception is `attachment`, freeform by design: its
+creation supplies the filename under `attachments/`. The creating write
+validates the per-kind level rules and returns the **full document entity**
+(including `seq` and the derived `path` — how skills stamp `{seq}` into the
+title rides this response). `title` is maintained by the write path from the
+document's H1.
 
 - `read_doc(docRef, section?)` — raw markdown: the whole document, or the block at
   `section`.
 - `doc_outline(docRef)` — the heading tree (path, level, ordinal) for navigation,
   without bodies.
-- `write_doc(docRef, content, kind?)` — create or replace the entire document. For
-  initial authoring and import; `kind` per the creation rules above.
+- `write_doc(target, content)` — create or replace the entire document. Replace
+  addresses an existing document by `docRef`; create addresses **scope + kind**
+  (an item ref or project level; plus a filename only for attachments) — paths
+  are derived, never chosen (creation rules above). For initial authoring and
+  import.
 - `replace_section(docRef, section, content)` — replace the block at `section`.
 - `prepend_to_section(docRef, section, content)` — insert at the **start** of the
   section's body (after the heading, before existing content and subsections).
@@ -152,26 +169,30 @@ to that repo's root — no project segment:
 /tenets.md                                     project tenets (kind `tenet`; spec 03)
 /architecture.md                               architecture overview (kind
                                                `architecture`; per-project singleton)
-/docs/<name>.md                                project decision stream (ADRs — the
+/docs/adr-<seq>.md                             project decision stream (ADRs — the
                                                only v1 project-level docs area)
 /epics/<epic-slug>/manifesto.md                epic guiding doc
-/epics/<epic-slug>/docs/<name>.md              other catalog kinds (PRD, RFC, spec, …)
+/epics/<epic-slug>/docs/<kind>[-<seq>].md      other catalog kinds (prd-1.md,
+                                               rfc-3.md, discovery.md, …)
 /epics/<epic-slug>/attachments/<name>.md       epic-level freeform attachments
 /epics/<epic-slug>/tasks/<leaf-slug>/plan.md   leaf plan (leaf under an epic)
-/epics/<epic-slug>/tasks/<leaf-slug>/docs/<name>.md
+/epics/<epic-slug>/tasks/<leaf-slug>/docs/<kind>[-<seq>].md
 /epics/<epic-slug>/tasks/<leaf-slug>/attachments/<name>.md
 /tasks/<leaf-slug>/plan.md                     plan for a project-level leaf
-/tasks/<leaf-slug>/docs/<name>.md
+/tasks/<leaf-slug>/docs/<kind>[-<seq>].md
 /tasks/<leaf-slug>/attachments/<name>.md
 ```
 
-- **No per-kind paths.** Beyond the pre-existing fixed-name docs (`manifesto.md`,
-  `plan.md`), the catalog kinds from [07](./07-document-templates.md) get no
-  dedicated directories or filenames: they are slug-named markdown docs under the
-  item's `docs/` area, distinguished by their DB `kind`, not their location.
-  `attachments/` is reserved for freeform material — and, later, binary media
-  (images, video). (Template *assets* — the shipped skeletons — are not in this
-  repo at all; they are Nook system assets, [07]/[03].)
+- **Kind-named files.** Every catalog document is named after its kind, exactly
+  like the pre-existing fixed-name docs (`manifesto.md`, `plan.md`): an
+  unnumbered kind is `<kind>.md` (`discovery.md` — at most one per item; a
+  second is a path collision), a numbered kind is `<kind>-<seq>.md` (`rfc-3.md`,
+  `adr-2.md` — the series never collides). What a file *is* reads straight off
+  the tree, and the DB `kind` always agrees with the name. `attachments/` stays
+  freeform — its files carry any name — reserved for scratch material and,
+  later, binary media (images, video). (Template *assets* — the shipped
+  skeletons — are not in this repo at all; they are Nook system assets,
+  [07]/[03].)
 - Path segments use **slugs**; rename = `git mv` through the write path (§4.3,
   [04](./04-structure-semantics.md)).
 - **Leaves** (task, bug, or chore) of any type live under `tasks/`: a project-level

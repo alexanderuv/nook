@@ -20,11 +20,11 @@
 # project); kind=plan requires item_id set (a plan is the route for building one
 # item; it cannot float at project level).
 #
-# Documents of docs/-area kinds (rfc, design_doc, prd, adr, discovery, test_plan,
-# retro, spec) carry `seq`, a per-(project, kind) citation number ("RFC-3")
-# allocated by the write path from document_sequence; NULL for manifesto, plan,
-# attachment, tenet. Numbers are never reused — the counter only increases, so a
-# deleted RFC-3 stays retired. See docs/02.
+# Documents of numbered kinds (rfc, design_doc, prd, adr, test_plan, retro,
+# spec) carry `seq`, a per-(project, kind) citation number ("RFC-3") allocated
+# by the write path from document_sequence; NULL for manifesto, plan, discovery,
+# attachment, tenet, architecture. Numbers are never reused — the counter only
+# increases, so a deleted RFC-3 stays retired. See docs/02.
 #
 # Tenancy & actor shape: project.owner_subject is the tenancy root — the subject
 # that owns a project. Every audit column (created_by / updated_by) and owner_subject
@@ -199,8 +199,9 @@ databaseChangeLog:
               - column: {name: project_id, type: uuid, constraints: {nullable: false, foreignKeyName: fk_doc_project, references: project(id), deleteCascade: true}}
               - column: {name: item_id, type: uuid}   # NULL = project-level document (tenets, README, ADRs, architecture). Write-path rules: adr requires NULL; architecture requires NULL + one per project; plan requires NOT NULL
               - column: {name: kind, type: smallint, constraints: {nullable: false}}  # 1=manifesto 2=plan 3=rfc 4=design_doc 5=attachment 6=tenet 7=prd 8=adr 9=discovery 10=test_plan 11=retro 12=spec 13=architecture
-              # per-(project, kind) citation number for docs/-area kinds ("RFC-3");
-              # NULL for manifesto/plan/attachment/tenet. Allocated by the write
+              # per-(project, kind) citation number for numbered kinds ("RFC-3");
+              # NULL for manifesto/plan/discovery/attachment/tenet/architecture.
+              # Allocated by the write
               # path from document_sequence, never reused. Uniqueness is write-path
               # policy, not a constraint: a UNIQUE over a nullable column is not
               # portable (engines disagree on multi-NULL semantics), and the single

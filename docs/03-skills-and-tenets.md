@@ -23,6 +23,9 @@ exact per-skill contracts firm up against [01](./01-interface-contracts.md) and 
 **Nook is the canonical, versioned source of truth.**
 - **Base** tenets and skills are **Nook system-level assets** — shipped with Nook,
   instance-global, one copy serving every project. They are not project artifacts.
+  The shipped base tenet set lives at [`artifacts/tenets.md`](../artifacts/tenets.md):
+  common conventions applicable to any project, which project tenets layer on top of
+  (project wins on collision).
 - **Project tenets are project-owned documents** in the git artifact store (document
   kind `tenet`, project-scoped with no item link), reusing document versioning, the
   `(path, current_version)` pointer, the single write path, and the editor-grade API.

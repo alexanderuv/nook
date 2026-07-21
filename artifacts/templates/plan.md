@@ -8,15 +8,20 @@ document before code: written just before the work, executed — often by an age
 literally, step by step, without the conversation that produced it. That sets the
 bar: every step must be executable by a reader with no context beyond this plan and
 the repo, and every ambiguity left in it will be resolved by a guess at build time,
-in code. Whole-system architecture is `design_doc`-altitude and required behavior
+in code. One rule binds the code a plan produces: never write artifact IDs (STEP3,
+REQ1, GOAL4) or references to markdown documents into code or its comments. A code
+comment becomes authoritative the moment it is written and must stand on its own,
+timeless; artifacts drift, archive, and renumber — a comment that leans on one
+decays with it. Whole-system architecture is `design_doc`-altitude and required behavior
 is `spec`-altitude (markers, not prerequisites — this may be the only doc the leaf
 has); this plan is the route for one change. Keep it proportional: a page of plan
-for an afternoon of work inverts the value. The plan describes the route, never the
-position on it — no checkboxes, no progress marks, no per-step status: the leaf's
-status and git history track execution. When reality diverges mid-build, update the
-plan in place (git keeps the old route). This document never tracks state in prose:
-Nook has structure constructs (releases, statuses, dependency edges) for projects
-that want timeline/status tracking, and git already keeps document history.
+for an afternoon of work inverts the value. Steps carry checkboxes, ticked as
+execution proceeds — the one place this document tracks position on the route;
+coarser status lives on the leaf's status and in git. When reality diverges
+mid-build, update the plan in place (git keeps the old route). Beyond the step
+checkboxes, this document never tracks state in prose: Nook has structure
+constructs (releases, statuses, dependency edges) for projects that want
+timeline/status tracking, and git already keeps document history.
 -->
 
 # {Title} — Plan
@@ -55,9 +60,11 @@ execute without interpretation (name the file, the function, the command), with 
 verification — how the builder knows the step worked before moving on. A step that
 can't be verified until three steps later is too big; split it. Order by risk,
 not convenience: the step most likely to invalidate the approach comes first.
-Steps are numbered for citation, not ticked for progress — execution state lives
-on the leaf's status and in git, never here.
-Format: `- **STEP1** — <action>; verify: <the observable check>.` In execution
+Steps are numbered for citation and carry a checkbox, ticked as each step lands —
+the plan's only progress mark; all other execution state lives on the leaf's
+status and in git. Step IDs are for citing between artifacts only — they never
+appear in code or code comments (see the header rule).
+Format: `- [ ] **STEP1** — <action>; verify: <the observable check>.` In execution
 order, riskiest-first where dependencies allow.
 -->
 
@@ -83,7 +90,21 @@ the cases most likely to break (boundaries, failures, the bug's own repro for a
 bug fix — the test that fails before the fix and passes after), and what existing
 behavior must not regress. Name the level of each check (unit, integration,
 manual) and keep it runnable by whoever executes the plan. Whole-epic verification
-strategy is `test_plan`-altitude; this section verifies this leaf. Close with the
+strategy is `test_plan`-altitude; this section verifies this leaf. Two standing
+checks close every plan's verification, after the change-specific tests. The
+comment-hygiene check: sweep the change's code for artifact IDs and
+markdown-document references (e.g. grep the diff for STEP/REQ/GOAL/FIND/PRD/epic
+tokens and `.md` paths); expect zero hits — the header rule, verified, not
+trusted. The conformance sweep: re-read this plan against the final diff — every
+step ticked with its verify observed, the blast radius respected (nothing touched
+that Approach says stays untouched, nothing changed that the plan never named),
+every caveat honored, and any mid-build divergence already folded back into the
+plan text. After execution the plan must read as an accurate description of what
+was built; where it doesn't, either the code or the plan is wrong — fix whichever
+is. Run both standing checks through a separate agent where possible — one handed
+only this plan and the final diff, none of the builder's conversation: the builder
+reads its own intent into the diff, while a fresh reader sees only what's there —
+the same no-context bar this plan was written against. Close with the
 finish line for the whole leaf — the observable state that means done, so the
 builder stops when it's reached, not when they run out of ideas.
 Format: `- **TEST1** — <level>: <the check and its expected result>.` Close with

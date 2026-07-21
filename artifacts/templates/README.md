@@ -2,7 +2,8 @@
 
 Shipped skeletons for the eleven authored artifact types ([docs/07](../../docs/07-document-templates.md)).
 The authoring skills ([docs/03](../../docs/03-skills-and-tenets.md)) consume these when
-instantiating a document in a tenant project's artifact repo.
+instantiating a document in a tenant project's artifact repo. Not sure which kind
+fits? See [GUIDE.md](./GUIDE.md) — when to use which, and what each covers.
 
 ## Conventions
 
@@ -25,15 +26,17 @@ instantiating a document in a tenant project's artifact repo.
   the same across every epic and task and can be cited by ID from other sections
   and documents ("AC3 verifies REQ2", "per the manifesto's CRIT1"). IDs are stable
   once assigned: deleting an item retires its ID rather than renumbering the rest.
-- **Numbered kinds carry their sequence number in the title.** Documents of the
-  `docs/`-area kinds get a per-project, per-kind sequence number from the structure
-  store ([docs/02](../../docs/02-document-layer.md)): `RFC-3` is the third RFC in
+- **Numbered kinds carry their sequence number in the title.** The numbered kinds
+  (`prd`, `rfc`, `adr`, `spec`, `design_doc`, `test_plan`, `retro`) get a
+  per-project, per-kind sequence number from the structure store
+  ([docs/02](../../docs/02-document-layer.md)): `RFC-3` is the third RFC in
   the project, and numbers are never reused. Template titles carry a `{seq}`
   placeholder (`# {Title} — RFC-{seq}`) that skills stamp with the allocated number
   at instantiation. The number is the document's citation handle from other
   documents and commits ("per RFC-3", "supersedes ADR-2"). `manifesto`, `plan`,
-  and `architecture` are unnumbered — cited by their item, or as "the
-  architecture" (a per-project singleton).
+  `architecture`, and `discovery` are unnumbered — cited by their item (a
+  discovery belongs to the item whose uncertainty it reduced, like a plan), or
+  as "the architecture" (a per-project singleton).
 - **Every template stands alone; overlap between kinds is expected and accepted**
   ([docs/07](../../docs/07-document-templates.md): the catalog is a menu, not a
   pipeline — each project picks the kinds that fit its methodology). Guidance may

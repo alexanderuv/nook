@@ -8,7 +8,14 @@ together. It is written to be read top to bottom by someone new to the project �
 concepts first, mechanics second.
 
 It is a living document and describes the **intended** architecture; the codebase
-is still being stood up. Where a shape has a concrete counterpart already in the
+is still being stood up. Its authority is layered. The **design** — the topology,
+data ownership, flows, and principles below — is settled: work doesn't stray from
+it, and changing it means changing the owning spec first. The **technology stack**
+(§7) is **directional, not mandated**: named libraries and SDKs are the best
+current picks, recorded so work has a default, and each is validated — possibly
+replaced — by discovery work during execution ([`execution/`](./execution/))
+before code commits to it; a reversed pick updates §7 and is recorded in
+Appendix A. Where a shape has a concrete counterpart already in the
 repo, this document links to it (notably the database schema, which lives as a
 Liquibase changelog under [`db/`](./db/)). The **detailed design specs** — one per
 area, turning this architecture into buildable requirements, each tracking its own
@@ -261,7 +268,7 @@ cloned from an existing source** — details in [`docs/05`](./docs/05-project-an
 ### 3.4 How the pieces fit
 
 ```
-   Human ─▶  :web-app  (RPC API + UI + agent)  :mcp-server (Kotlin MCP SDK)  ◀─ Agent
+   Human ─▶  :web-app  (RPC API + UI + agent)  :mcp-server (Java MCP SDK)   ◀─ Agent
                     │                                   │
                     │  internal RPC (localhost)         │  internal RPC
                     └────────────────┬──────────────────┘
@@ -464,12 +471,19 @@ above).
 
 ## 7. Technology stack
 
+**Directional, not mandated** (see "About this document"): this table records
+the current best picks so work has a default, at implementation altitude. A
+pick is validated by discovery during execution before code commits to it, and
+a reversal updates this table and lands in Appendix A — the MCP SDK row is the
+precedent (Kotlin SDK → Java SDK, milestone-1 discovery). The **Modules** row
+is the exception: it restates settled design (§3.3), not a library pick.
+
 | Layer            | Choice                                     | Notes |
 | ---------------- | ------------------------------------------ | ----- |
 | Modules          | core service + `:web-app` + `:mcp-server` (+ shared contract) | The **core service** owns the stores and the single write path and exposes an internal RPC API; the web app and MCP server are **thin adapter apps** that call it and hold no store access. A shared contract library carries the DTOs. |
 | Backend          | Kotlin + Ktor                              | Statically typed; plays to the team's strengths. Serves both the core service's internal RPC API and the web app. |
 | Data access      | JetBrains **Exposed** (core service only)  | Apache-2.0, Kotlin-native, and needs no code-generation build step; guard schema drift against Liquibase with a startup/test check. (jOOQ was considered but adds a codegen step for little gain at this scale.) |
-| Agent interface  | Official Kotlin MCP SDK (`:mcp-server`)    | Project selected by configuration, not working directory. |
+| Agent interface  | Official **Java** MCP SDK (`:mcp-server`)  | Consumed from Kotlin; chosen over the pre-1.0 Kotlin SDK for its GA, conformance-tested streamable-HTTP server. Project selected by configuration, not working directory. |
 | Structure store  | SQL — **PostgreSQL** primary               | Schema managed by **Liquibase** in plain standard SQL, so it is engine-agnostic (PostgreSQL primary, SQLite for tests). See [`db/README.md`](./db/README.md). |
 | Document store   | Git behind `ArtifactStore`, over a pluggable `RepoBackend` | Git-backed; `RepoBackend` is local filesystem in v1 (S3/others later). Syncing to a hosted remote (GitHub/GitLab) is configurable. |
 | Web UI           | React + TypeScript (strict)                | TypeScript in strict mode is statically typed — not the dynamic-language behavior being avoided. An all-Kotlin UI (Compose-for-Web / Kotlin-JS) was judged too immature for a browser UI. |
@@ -563,5 +577,6 @@ them, for traceability. The body above explains the resulting design; this is th
 | Tenets | Advisory in v1, structured for later enforcement (§2.4). | *Gating engine now* — needs a checkable tenet DSL; too much for v1. |
 | Database support | Plain standard SQL, engine-agnostic — structural rules (per-project slug uniqueness, same-project parent/release/document links via composite FKs) are ordinary UNIQUE/FK, and enum domains (type/status/kind) are SMALLINT codes validated by the application enums, so nothing needs an engine-specific feature (§6). | *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. *Native `ENUM` types* — not portable (SQLite has none) and awkward to evolve. |
 | Schema tooling | Liquibase changelog (§6, [`db/README.md`](./db/README.md)). | *Per-dialect hand-written SQL* — a variant to maintain per database. |
+| MCP SDK | Official **Java** MCP SDK, consumed from Kotlin in `:mcp-server` (§7). | *Kotlin MCP SDK* — first chosen, then reversed (milestone-1 discovery): still pre-1.0 with breaking minors and open streamable-HTTP conformance bugs, while the Java SDK is GA against the current spec with conformance tests in CI. |
 | Auth | None in v1, nominal actor carried (§8). | *Full multi-user now* — heavy, no v1 workflow value. |
 | Stack | Ktor + Postgres + React/TS (§7). | *All-Kotlin UI (Compose-for-Web / Kotlin-JS)* — too immature for a browser UI. |

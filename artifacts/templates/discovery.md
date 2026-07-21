@@ -23,7 +23,7 @@ statuses, dependency edges) for projects that want timeline/status tracking, and
 already keeps document history.
 -->
 
-# {Title} — Discovery-{seq}
+# {Title}
 
 ## Summary
 
