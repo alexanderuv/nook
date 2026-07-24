@@ -149,12 +149,16 @@ convention plugins' existing behavior, `docs/`.
   changelog's header comment (PostgreSQL only, per ADR-1); leave `org.xerial`
   in the boundary check's banned set; verify: `./gradlew check` green and
   `:core-service:dependencies` shows no `org.xerial` coordinate.
-- [ ] **STEP8** — Add `.github/workflows/ci.yaml`: one job, Linux runner,
+- [x] **STEP8** — Add `.github/workflows/ci.yaml`: one job, Linux runner,
   JDK 25, `./gradlew check`; verify: the workflow runs green on GitHub with
   the embedded-Postgres tests visibly executed, not skipped — this closes
-  discovery Q6. Divergence: the workflow is written and YAML-validated, but
-  the repo has no GitHub remote yet, so the green run (and Q6) waits on the
-  repo being pushed.
+  discovery Q6. Observed: first run on `ubuntu-latest` green in 2m21s with
+  `:core-service:test` executed fresh (not up-to-date), answering Q6's Linux
+  half; the arm64-native half stays answered by STEP3's observation (the
+  binary runs under Rosetta on Apple silicon — works, just not native).
+  Divergence: the run happened one session after the code — the repo had no
+  GitHub remote when the workflow was written, so the verify waited on the
+  push.
 
 ## Caveats & rabbit holes
 
