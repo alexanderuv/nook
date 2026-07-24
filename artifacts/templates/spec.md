@@ -11,7 +11,7 @@ numbers with units, never adjectives ("completes in <2s on a 10k-row file", neve
 discovered while writing is marked as an open question, never papered over with a
 plausible-sounding sentence — a wrong guess reads exactly like a decision. SRS and
 use-case documents are house variants of this role. This document never tracks
-state in prose: Nook has structure constructs (releases, statuses, dependency
+state in prose: the project tracker offers structure constructs (releases, statuses, dependency
 edges) for projects that want timeline/status tracking, and git already keeps
 document history.
 -->

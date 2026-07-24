@@ -79,7 +79,7 @@ to an item.
   design doc; an experiment report or spike writeup is a discovery report; an
   incident report is a retro. Pick the kind by the *question the document
   answers*, not its topic.
-- **None of these track state.** Statuses, releases, and dependencies are Nook
+- **None of these track state.** Statuses, releases, and dependencies are tracker
   structure constructs (offered, never required); document history is git's job.
   If a section's job would be tracking progress, it doesn't belong in any of
   these documents.

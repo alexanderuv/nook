@@ -9,7 +9,7 @@ requirements, testable behavior, and technical approach are other kinds' questio
 be its only framing doc; write it to stand alone either way. Concrete beats
 inspiring: a vivid, checkable picture of the future outlives a slogan. House styles
 like the Shape Up pitch, Amazon PR/FAQ, or a one-pager are variants of this role. This document never tracks state in prose:
-Nook has structure constructs (releases, statuses, dependency edges) for projects
+the project tracker offers structure constructs (releases, statuses, dependency edges) for projects
 that want timeline/status tracking, and git already keeps document history.
 -->
 

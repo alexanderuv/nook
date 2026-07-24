@@ -1,37 +1,33 @@
 # Database
 
-Structure lives here (Postgres and other standard-SQL engines). Document
+Structure lives here (PostgreSQL). Document
 **content** does not — it lives in git behind the `ArtifactStore`; these tables
 only hold structure plus a pointer (`path` + `current_version`) to each document.
 See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) §2, §7, §8, §13.
 
 ## Schema management: Liquibase
 
-The schema is defined as a **Liquibase** changelog, not hand-written per-dialect
-SQL, so it targets several SQL databases from one source of truth.
+The schema is defined as a **Liquibase** changelog — one ordered source of
+truth, applied identically in production and tests.
 
 - Master changelog: [`changelog/db.changelog-master.yaml`](./changelog/db.changelog-master.yaml)
 - Changes: [`changelog/changes/`](./changelog/changes/) (applied in order; each
   changeSet is immutable once released — evolve the schema by **adding** changeSets).
 
-## Supported databases
+## Supported database
 
-The schema is **plain standard SQL** — tables, plain UNIQUE / PK / FK constraints,
-CHECK constraints, and a view. It does **not** rely on partial/filtered indexes or
-any other engine-specific capability, so it is not tied to a particular database.
+**PostgreSQL only** ([ADR-1](../architecture/adrs/adr-1.md)): production,
+development, and tests all run it — the test suite starts real PostgreSQL from
+embedded binaries, so no Docker or local install is needed. No other engine is
+promised or tested; the committed changelog does not even validate on SQLite
+(its post-create constraint additions are unsupported there).
 
-| Database       | Role                    | Notes                                |
-| -------------- | ----------------------- | ------------------------------------ |
-| **PostgreSQL** | Primary (production)    | The reference engine.                |
-| **SQLite**     | Tests / embedded / dev  | Zero-setup; used by the test suite.  |
+## Plain-SQL choices
 
-Only these two are actively exercised. Because the DDL is standard SQL, other
-engines (SQL Server, MySQL 8+, MariaDB, Oracle) are not excluded by design — they
-are simply not part of the tested matrix today.
-
-## Portability choices
-
-To stay engine-agnostic while keeping the strong constraints:
+The schema sticks to plain standard SQL — tables, plain UNIQUE / PK / FK
+constraints, CHECK constraints, and a view, with no partial/filtered indexes or
+other engine-specific capabilities. That is discipline, not a promise of
+portability; it keeps the DDL simple and the constraints strong:
 
 - **Abstract column types.** Liquibase maps `uuid`, `timestamp`, `varchar`, etc. to
   each dialect. **UUIDs are generated in the application**, so there is no
@@ -58,5 +54,6 @@ liquibase \
   update
 ```
 
-For tests, point the same changelog at an in-memory SQLite/H2 URL. Production
-deployments run `update` on startup or via CI before the app boots.
+Tests apply the same changelog to an embedded PostgreSQL through Liquibase's
+in-process Java API — no CLI involved. Production deployments run `update` on
+startup or via CI before the app boots.

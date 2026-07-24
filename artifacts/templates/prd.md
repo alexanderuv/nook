@@ -7,7 +7,7 @@ a `spec`) or the technical approach (that is a `design_doc`). Spend more time on
 Problem than feels comfortable — a PRD whose Problem section is thin is a solution
 looking for a justification. Keep it lean: every requirement must trace to a goal,
 and agents will read this literally, so prefer numbers over adjectives ("p95 <
-500 ms", never "fast"). This document never tracks state in prose: Nook has
+500 ms", never "fast"). This document never tracks state in prose: the project tracker offers
 structure constructs (releases, statuses, dependency edges) for projects that want
 timeline/status tracking, and git already keeps document history.
 -->
@@ -96,7 +96,7 @@ that order: what the first slice must prove before the next is worth building
 (e.g. "MVP: REQ1–REQ4, validates the core job; fast-follow: REQ5–REQ6; GA adds
 P1s"). Each phase names the requirements it covers and its exit condition. This
 section carries the phasing *judgment* only. Dates and progress don't belong here
-regardless: if the project tracks phases at all, Nook's release/item constructs do
+regardless: if the project tracks phases at all, the tracker's release/item constructs do
 that live, and a prose copy only goes stale.
 Format: `- **<phase name>** — covers <REQ#s>; proves: <what this slice must
 demonstrate>; exit: <condition>.` In build order.
@@ -110,7 +110,7 @@ lenses where relevant: value (will they want it), usability (can they use it),
 feasibility (can we build it), viability (does it work for the business). For each:
 the risk or assumption, its severity, and how it will be validated or mitigated.
 External dependencies (third-party APIs, compliance, other teams) belong here;
-dependencies on other Nook items are structure-store edges, not prose.
+dependencies on other tracked items are structure-store edges, not prose.
 Format: `- **<value|usability|feasibility|viability|dependency>** — <risk or
 assumption>; severity: <high|medium|low>; <how it's validated or mitigated>.`
 -->

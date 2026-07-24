@@ -14,8 +14,8 @@ of relearning the expensive way, so lessons must be stated as checkable guidance
 not sentiment ("spike unfamiliar APIs before committing the approach", never "be
 more careful"). Follow-up actions are *named* here but *live* as project items —
 that is where owners and completion are tracked; a lesson every future effort
-should obey is tenet material. This document never tracks state in prose: Nook
-has structure constructs (releases, statuses, dependency edges) for projects that
+should obey is tenet material. This document never tracks state in prose: the project
+tracker offers structure constructs (releases, statuses, dependency edges) for projects that
 want timeline/status tracking, and git already keeps document history.
 -->
 

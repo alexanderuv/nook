@@ -14,7 +14,7 @@ pipeline — read every section's label through your project's domain, and drop
 what genuinely has no referent rather than forcing a web-app shape onto a system
 that isn't one. It is a **map, not a pitch**: no roadmap, no aspirations, no
 selling — what should exist someday belongs in frame-stage docs; what exists
-belongs here. This document never tracks state in prose: Nook has structure
+belongs here. This document never tracks state in prose: the project tracker offers structure
 constructs (releases, statuses, dependency edges) for projects that want
 timeline/status tracking, and git already keeps document history.
 -->

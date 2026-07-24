@@ -1,10 +1,15 @@
 # Base tenets
 
-Nook's shipped, instance-global tenet set ([docs/03](../docs/03-skills-and-tenets.md)):
-common conventions applicable to any project, honored by every agent that acts
-through Nook. Projects layer their own project tenets on top; where the two collide,
-the project tenet wins. Advisory in v1 — injected into context and honored, not
-mechanically enforced — so each tenet names its own check where one exists.
+Working principles for any agent contributing to this project. Each tenet is a
+**principle: non-negotiable**. Nothing enforces a tenet mechanically — each names
+its own check where one exists — but the absence of a gate is not permission: a
+principle holds because it is a principle, not because something blocks the
+alternative. Convenience, deadline pressure, or "just this once" are never
+grounds to set one aside. The project may layer its own tenets on top of this
+base set; where the two collide, the project tenet wins — revising the set is
+the project's prerogative, never a working agent's.
+
+## Principles
 
 - **Code comments stand alone.** Never write planning-artifact IDs (step,
   requirement, goal, or finding numbers) or references to markdown documents into
@@ -35,3 +40,10 @@ mechanically enforced — so each tenet names its own check where one exists.
   sequence begin at 01, never 00 — the first item of a series is the first, and
   zero-based numbering in human-facing series reads as a programmer reflex, not a
   convention.
+
+- **Plain words over jargon.** Questions, explanations, and documents use everyday
+  language — no unexplained trade terms, no compressed shorthand. Where a technical
+  term is unavoidable, say what it means in plain words at first use ("a spike — a
+  small throwaway experiment built only to answer a question"). A concrete example
+  the reader can picture beats a category name. Check: if a reader outside the
+  specialty would have to ask what a sentence means, rewrite the sentence.

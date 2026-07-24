@@ -1,4 +1,4 @@
-# Pins re-checked against Maven Central 2026-07-21.
+# Pins re-checked against Maven Central 2026-07-22.
 # Gradle itself is pinned in gradle/wrapper/gradle-wrapper.properties (9.5.x line:
 # Kotlin 2.4.10's fully-supported window ends there).
 
@@ -9,8 +9,10 @@ ktor = "3.5.1"
 exposed = "1.3.1"
 liquibase = "5.0.3"
 postgresql = "42.7.13"
-sqliteJdbc = "3.53.2.1"
 mcpSdk = "2.0.0"
+zonkyPostgres = "2.2.2"
+# PostgreSQL version for the embedded test binaries (latest 17.x line).
+zonkyPostgresBinaries = "17.10.0"
 
 [libraries]
 # Consumed by build-logic only, to put the Kotlin Gradle plugin on the convention-plugin classpath.
@@ -19,10 +21,17 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
 exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
+exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
+exposed-migration-jdbc = { module = "org.jetbrains.exposed:exposed-migration-jdbc", version.ref = "exposed" }
 liquibase-core = { module = "org.liquibase:liquibase-core", version.ref = "liquibase" }
 postgresql-jdbc = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
-sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqliteJdbc" }
 mcp-sdk = { module = "io.modelcontextprotocol.sdk:mcp", version.ref = "mcpSdk" }
+zonky-embedded-postgres = { module = "io.zonky.test:embedded-postgres", version.ref = "zonkyPostgres" }
+# Aligns every embedded-postgres-binaries-* artifact (including Zonky's default
+# platform set) to the pinned PostgreSQL version; import as a platform.
+zonky-postgres-binaries-bom = { module = "io.zonky.test.postgres:embedded-postgres-binaries-bom", version.ref = "zonkyPostgresBinaries" }
+# Apple-silicon binaries; not in Zonky's default platform set. Version comes from the BOM.
+zonky-postgres-binaries-darwin-arm64v8 = { module = "io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8" }
 
 [plugins]
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

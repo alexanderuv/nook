@@ -61,9 +61,10 @@ every other milestone stacks on this layer.
   `:web-app`, and a shared contract library carrying the DTOs. *Why:* GOAL4 —
   the thin-adapter topology is enforced by module boundaries.
 - **REQ2 · P0** — Database bring-up: Liquibase applies the existing changelog
-  to Postgres; SQLite backs tests; a startup/test check guards data-access
-  definitions against drift from the changelog. *Why:* GOAL3 — tested rules
-  need a real, migration-managed schema.
+  to Postgres — in production and, via embedded PostgreSQL binaries, in tests
+  (ADR-1); a startup/test check guards data-access definitions against drift
+  from the changelog. *Why:* GOAL3 — tested rules need a real,
+  migration-managed schema.
 - **REQ3 · P0** — The single write path in the core service, enforcing spec
   04's semantics: containment by type, free status movement within the
   vocabulary, slug derivation/uniqueness/override, cancel-not-delete,
@@ -109,9 +110,10 @@ every other milestone stacks on this layer.
   Kotlin (epic 01 discovery); the residual risk is hosting its servlet-based
   transport alongside a Ktor backend; severity: low; build the MCP adapter as
   the first vertical slice so it fails early if it fails at all.
-- **assumption** — the plain-SQL schema behaves identically on SQLite (tests)
-  and Postgres (runtime); severity: low; the end-to-end loop (GOAL1) runs
-  against Postgres, never only the test engine.
+- **assumption** — the embedded-PostgreSQL test path (ADR-1) holds beyond the
+  one developer machine it was proven on; severity: low; run the epic 02
+  discovery's probe suite in Linux CI during bring-up, before the test suite
+  grows on top of it.
 - **value** — milestone 1 alone doesn't demonstrate Nook's differentiating
   value, which is agent-driven documents organizing and executing the work
   (milestones 2–3); severity: low; accepted by the build order and mitigated by

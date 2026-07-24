@@ -74,6 +74,26 @@ template order regardless of interview order.
 
 For each question:
 
+- **Open with the decision and its stakes.** Before any options, one or two
+  plain sentences naming what the user is deciding and what hangs on the
+  answer — what it unblocks, changes, or costs ("this settles whether I
+  actually run the tool and report what happens, or the doc can only repeat
+  what its manual claims"). The test: if you can't state in one
+  line why this is the *user's* call rather than yours, it isn't an interview
+  question — make the judgment call yourself and declare it at the pre-write
+  gate. A question whose intent the user has to reverse-engineer reads as
+  random, however well-phrased its options are.
+- **A changed plan is announced, not implied.** When the user's answer rules
+  out every option as presented — they lack the tool, reject the premise, or
+  name a constraint no option accounted for — whatever you substitute is a
+  *new decision*, not a detail of the old one: before acting on it, state
+  plainly — as its own visible statement,
+  not a clause in passing — what you will now do instead, why it still honors
+  their answer, and what it involves that they might not expect (downloads,
+  processes run, services touched). The user must never discover after the
+  fact which path was actually taken; if the substitute is more invasive than
+  anything the original options described, it goes back to them as a question,
+  not forward as a judgment call.
 - **1–2 recommendations**, one-sentence rationale each, default marked when
   one is clearly stronger. Ground them in the project's own corpus first (its
   specs, design docs, existing documents); research outward only when the
@@ -116,8 +136,9 @@ You are a colleague asking a question, not a process reporting status.
 - **Plain words means approachable words.** No unexplained jargon, no
   compressed shorthand ("strict whole-graph form", "off-matrix pairing") —
   say what a thing does in everyday language. For a technical choice, show
-  one concrete example of what happens under each option ("someone adds the
-  Postgres driver to the web app → the build goes red") rather than naming
+  one concrete example of what happens under each option ("with option A, a
+  typo in the config file stops the program at startup with an error; with
+  option B, the program runs anyway on default values") rather than naming
   categories; a consequence the user can picture beats a taxonomy. If the
   user has to ask what a question means, the question was asked wrong.
 - Quote the template only when pushing back, and only the one relevant line.

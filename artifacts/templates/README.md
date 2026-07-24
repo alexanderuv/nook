@@ -55,8 +55,8 @@ fits? See [GUIDE.md](./GUIDE.md) — when to use which, and what each covers.
   drain. `adr` has none by design: a load-bearing open question means the decision
   isn't made yet.
 - **No status, changelog, or schedule-tracking sections.** Templates never bake in
-  prose whose job is tracking state. Nook *offers* structure constructs — releases,
+  prose whose job is tracking state. the project tracker *offers* structure constructs — releases,
   statuses, dependency edges — for projects that want that tracking (offers, not
-  mandates: nothing in Nook requires using them), and git already keeps document
+  mandates: nothing requires using them), and git already keeps document
   history; a prose copy of either only goes stale. Sections may carry the *judgment*
   behind such state (e.g. a PRD's phasing rationale in Milestones) but never track it.

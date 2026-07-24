@@ -14,8 +14,8 @@ surface is either listed with its why or it is a hole; untested-by-decision and
 untested-by-omission must be distinguishable on the page. Eval specs (for model or
 agent behavior) are house variants of this role. Test *results* never live here —
 runs, dashboards, and CI own them; this plan says what must be proven and how,
-never how it's currently going. This document never tracks state in prose: Nook
-has structure constructs (releases, statuses, dependency edges) for projects that
+never how it's currently going. This document never tracks state in prose: the project
+tracker offers structure constructs (releases, statuses, dependency edges) for projects that
 want timeline/status tracking, and git already keeps document history.
 -->
 

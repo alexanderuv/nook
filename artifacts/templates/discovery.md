@@ -18,7 +18,7 @@ agent — will treat an unqualified claim as fact and carry it into requirements
 plans, so the confidence label on a finding is what keeps a weak signal from
 hardening into a constraint two documents later. It informs a decision; ratifying the decision is a different act (an `rfc`,
 `adr`, or `design_doc`) — this doc may recommend, but it doesn't close the choice.
-This document never tracks state in prose: Nook has structure constructs (releases,
+This document never tracks state in prose: the project tracker offers structure constructs (releases,
 statuses, dependency edges) for projects that want timeline/status tracking, and git
 already keeps document history.
 -->
@@ -119,10 +119,24 @@ raise confidence: <the additional evidence>.`
 <!--
 Optional — drop if none. What this investigation surfaced but didn't answer: new
 questions raised by the findings, and the original questions the method or
-time-box couldn't reach. For each, why it matters and what kind of investigation
-would answer it. This section is the seed of the next discovery item — keep entries
-sharp enough to be picked up as one.
-Format: `- **Q<#>** — <question>; matters because: <why>; would take: <the kind of
-investigation>.` Continue the numbering from Questions above — one Q-series per
-document.
+time-box couldn't reach. Two categories, kept as two labeled lists so a reader
+can tell at a glance what stands in the way and what doesn't:
+
+- **Needs action** — open items someone must actively settle: an unmade
+  decision, a missing prerequisite, evidence that has to exist before the work
+  this discovery informs can safely start. The next stage's documents wait on
+  these.
+- **Follow-ups** — questions the coming work (or simply time) will answer on
+  its own: a verification to run along the way, a "does it still hold at full
+  scale" check. Not vital to starting anything; recorded so they become steps
+  or checks in the work that answers them instead of being forgotten.
+
+For each entry, why it matters and what would answer it — sharp enough to be
+picked up as a follow-on investigation of its own. Continue the numbering from
+Questions above — one Q-series per document.
+Format: under a `**Needs action:**` lead-in — `- **Q<#>** — <question>;
+blocks: <the decision or work that waits on it>; would take: <what settles
+it>.` Under a `**Follow-ups:**` lead-in — `- **Q<#>** — <question>; matters
+because: <why>; would take: <the kind of investigation>.` Drop whichever list
+is empty, keeping the other's lead-in.
 -->

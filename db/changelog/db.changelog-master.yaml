@@ -1,8 +1,8 @@
 # Nook — Liquibase master changelog.
 #
 # The schema is plain standard SQL (no partial indexes or other DB-specific
-# features), so it is engine-agnostic. Primary target: PostgreSQL. Tests and
-# embedded use: SQLite. See db/README.md and ARCHITECTURE.md §2, §7, §8, §13.
+# features). PostgreSQL is the sole supported engine — production, development,
+# and tests (embedded binaries) all run it.
 databaseChangeLog:
   - includeAll:
       path: changes

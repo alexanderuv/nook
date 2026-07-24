@@ -456,10 +456,11 @@ invariants directly in the schema:
 
 The schema is **plain standard SQL** — tables, plain unique / foreign-key / check
 constraints, and a view, with no partial/filtered indexes or other engine-specific
-features — so it is not tied to a particular database. **PostgreSQL** is the primary
-target and **SQLite** backs tests and embedded use; slugs are unique **per project**
-(`(project_id, slug)` for items and releases alike), which needs only an ordinary
-UNIQUE constraint. Any standard-SQL engine can host it.
+features — kept as discipline, not as a promise of portability. **PostgreSQL** is
+the sole supported engine ([ADR-1](./architecture/adrs/adr-1.md)): production,
+development, and tests all run it, tests via embedded PostgreSQL binaries rather
+than SQLite. Slugs are unique **per project** (`(project_id, slug)` for items and
+releases alike), which needs only an ordinary UNIQUE constraint.
 
 **Status vocabulary.** Project items share one status set:
 `todo → in_progress → done` (or `cancelled`) — an epic's initial `todo` is what a UI
@@ -484,7 +485,7 @@ is the exception: it restates settled design (§3.3), not a library pick.
 | Backend          | Kotlin + Ktor                              | Statically typed; plays to the team's strengths. Serves both the core service's internal RPC API and the web app. |
 | Data access      | JetBrains **Exposed** (core service only)  | Apache-2.0, Kotlin-native, and needs no code-generation build step; guard schema drift against Liquibase with a startup/test check. (jOOQ was considered but adds a codegen step for little gain at this scale.) |
 | Agent interface  | Official **Java** MCP SDK (`:mcp-server`)  | Consumed from Kotlin; chosen over the pre-1.0 Kotlin SDK for its GA, conformance-tested streamable-HTTP server. Project selected by configuration, not working directory. |
-| Structure store  | SQL — **PostgreSQL** primary               | Schema managed by **Liquibase** in plain standard SQL, so it is engine-agnostic (PostgreSQL primary, SQLite for tests). See [`db/README.md`](./db/README.md). |
+| Structure store  | SQL — **PostgreSQL** only                  | Schema managed by **Liquibase** in plain standard SQL; PostgreSQL is the sole supported engine, tests included — the test suite runs embedded PostgreSQL binaries ([ADR-1](./architecture/adrs/adr-1.md)). See [`db/README.md`](./db/README.md). |
 | Document store   | Git behind `ArtifactStore`, over a pluggable `RepoBackend` | Git-backed; `RepoBackend` is local filesystem in v1 (S3/others later). Syncing to a hosted remote (GitHub/GitLab) is configurable. |
 | Web UI           | React + TypeScript (strict)                | TypeScript in strict mode is statically typed — not the dynamic-language behavior being avoided. An all-Kotlin UI (Compose-for-Web / Kotlin-JS) was judged too immature for a browser UI. |
 
@@ -575,7 +576,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | Web agent surface | The web app hosts an embedded authoring agent whose Nook-owned harness is preloaded with the skill/tenet cache; it runs skills and persists through the web RPC operations, so skills are triggerable from the UI without a second store owner (§3.3, §5, [docs/06](./docs/06-web-ui.md)). | *Web app is human-only, skills agent-only in v1* — would bar authoring-agent flows (author manifesto, split epic) from the human surface. *Web agent as its own MCP client* — a needless hop for an agent co-located with the web app that can call the core directly. |
 | Tenets storage & distribution | Nook-canonical, versioned; project tenets are project-owned `tenet` documents in the git artifact store; agents read an ephemeral local copy, pulled (never committed, never branched) or preloaded for the web-embedded agent, refreshed via a version stamp on operation responses (§2.4, §6, [docs/03](./docs/03-skills-and-tenets.md)). | *Tenets in the code repo, branched with source* — reversed for one canonical set per project and guaranteed team reach over per-branch variance. *Dedicated DB-backed tenet store* — rebuilds git's versioning for markdown. |
 | Tenets | Advisory in v1, structured for later enforcement (§2.4). | *Gating engine now* — needs a checkable tenet DSL; too much for v1. |
-| Database support | Plain standard SQL, engine-agnostic — structural rules (per-project slug uniqueness, same-project parent/release/document links via composite FKs) are ordinary UNIQUE/FK, and enum domains (type/status/kind) are SMALLINT codes validated by the application enums, so nothing needs an engine-specific feature (§6). | *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. *Native `ENUM` types* — not portable (SQLite has none) and awkward to evolve. |
+| Database support | **PostgreSQL only** ([ADR-1](./architecture/adrs/adr-1.md)), the schema staying plain standard SQL as discipline — structural rules (per-project slug uniqueness, same-project parent/release/document links via composite FKs) are ordinary UNIQUE/FK, and enum domains (type/status/kind) are SMALLINT codes validated by the application enums (§6). | *SQLite for tests/embedded* — first chosen, then reversed (ADR-1): the changelog cannot even apply on SQLite, and buying it back forfeits the composite FKs and the self-block CHECK (epic 02 discovery). *Whitelisting engines by capability (partial/filtered indexes)* — an earlier choice, dropped once the rules no longer needed partial indexes. *Native `ENUM` types* — not portable and awkward to evolve. |
 | Schema tooling | Liquibase changelog (§6, [`db/README.md`](./db/README.md)). | *Per-dialect hand-written SQL* — a variant to maintain per database. |
 | MCP SDK | Official **Java** MCP SDK, consumed from Kotlin in `:mcp-server` (§7). | *Kotlin MCP SDK* — first chosen, then reversed (milestone-1 discovery): still pre-1.0 with breaking minors and open streamable-HTTP conformance bugs, while the Java SDK is GA against the current spec with conformance tests in CI. |
 | Auth | None in v1, nominal actor carried (§8). | *Full multi-user now* — heavy, no v1 workflow value. |

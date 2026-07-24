@@ -16,7 +16,7 @@ reads as a decision, and a sketch offered as "something like this" becomes the
 interface built. Scale length to ambiguity — a page for a contained change, more
 for a system — and when reality diverges during the build, update the doc in place
 (git keeps the old version); a stale design doc sends every future reader
-spelunking. This document never tracks state in prose: Nook has structure
+spelunking. This document never tracks state in prose: the project tracker offers structure
 constructs (releases, statuses, dependency edges) for projects that want
 timeline/status tracking, and git already keeps document history.
 -->

@@ -20,7 +20,7 @@ under its title, `> Superseded by ADR-9.` — so a reader landing on it can't
 mistake a dead decision for a live one. There is no Status field beyond that, and
 no open-questions section by design: if a load-bearing question is still open, the
 decision isn't made, and this document isn't ready to write. This document never
-tracks state in prose: Nook has structure constructs (releases, statuses,
+tracks state in prose: the project tracker offers structure constructs (releases, statuses,
 dependency edges) for projects that want timeline/status tracking, and git already
 keeps document history.
 -->

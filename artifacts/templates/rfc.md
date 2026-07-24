@@ -14,8 +14,8 @@ the proposal treats unstated costs as absent, so list what a hostile reviewer wo
 find — an RFC with no drawbacks section filled in honestly is advertising, not
 engineering. Numbers over adjectives throughout ("adds ~2ms per request", never
 "minimal overhead"). Adoption is not recorded here: industry RFC templates carry a
-Status: Draft/Approved header, but in Nook that is the item's status construct —
-this document never tracks state in prose: Nook has structure constructs (releases,
+Status: Draft/Approved header, but that is the tracked item’s status construct —
+this document never tracks state in prose: the project tracker offers structure constructs (releases,
 statuses, dependency edges) for projects that want timeline/status tracking, and
 git already keeps document history.
 -->
