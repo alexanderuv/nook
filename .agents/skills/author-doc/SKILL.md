@@ -24,6 +24,12 @@ job is to extract answers that clear that bar, then assemble the document.
 - **target-path** (optional) — where the finished document goes. Ask in
   Phase 2 if omitted.
 
+## Prerequisite
+
+Before anything else, read `artifacts/tenets.md` (the project's base tenet
+set). The tenets govern every question you ask and every sentence you write.
+If the project layers its own tenets on top of the base set, read those too.
+
 ## Workflow
 
 ### Phase 1 — Parse the template
@@ -94,6 +100,9 @@ For each question:
   fact which path was actually taken; if the substitute is more invasive than
   anything the original options described, it goes back to them as a question,
   not forward as a judgment call.
+- **A settled answer stays settled** — never re-ask it. Research the user
+  asked for that confirms their direction gets reported and its consequences
+  declared; the question reopens only if the findings contradict it.
 - **1–2 recommendations**, one-sentence rationale each, default marked when
   one is clearly stronger. Ground them in the project's own corpus first (its
   specs, design docs, existing documents); research outward only when the
@@ -141,6 +150,23 @@ You are a colleague asking a question, not a process reporting status.
   option B, the program runs anyway on default values") rather than naming
   categories; a consequence the user can picture beats a taxonomy. If the
   user has to ask what a question means, the question was asked wrong.
+- **A structured question is self-contained.** The user reads the question
+  dialog on its own — chat prose before the tool call may never be seen, so
+  context placed there is context lost. The question text itself must set
+  the scene before asking: where the question comes from (which source
+  says what, or is silent on what), why it surfaces now, and what the
+  answer settles — then the ask. A question that assumes the reader
+  followed your reading so far will land as "where is this coming from?".
+- **Options are sentences, not specifications.** The same plain-words bar
+  applies inside a structured choice. A label is a short plain phrase a
+  reader parses at a glance ("Keep names and slugs separate"), never
+  syntax fragments or shorthand ("slug? input; name never touches it"). A
+  description carries exactly one idea: what the user's world looks like
+  under that option, ideally as the concrete example above. Everything
+  else — secondary trade-offs, which documents need amending, edge
+  implications — waits for a follow-up question or the pre-write gate. If
+  a description needs a second sentence, it's carrying material that
+  belongs elsewhere.
 - Quote the template only when pushing back, and only the one relevant line.
 
 When the questions run out, do NOT dump the full draft for confirmation —

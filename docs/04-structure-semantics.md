@@ -32,7 +32,9 @@ worse than no rule here — rigor is added later when real usage justifies it.
   leaves and is never itself parented; a **leaf** never nests. `type` changes freely
   **within** the leaf categories (task↔bug↔chore); crossing the container/leaf line is
   refused when it would break containment (an epic with children, or a leaf with a
-  parent). `list_items` may filter by type.
+  parent) or silently orphan an attachment (a leaf touching any dependency edge, an
+  epic assigned to a release) — the caller clears the attachment first, explicitly.
+  `list_items` may filter by type.
 
 **Status transitions — free within the vocabulary.**
 - Any status may move to any other *valid* status; the write path validates only that
@@ -59,10 +61,12 @@ worse than no rule here — rigor is added later when real usage justifies it.
 - Default slug is derived from the name: lowercased, non-`[a-z0-9-]` collapsed to
   hyphens, trimmed. Per-project uniqueness (across all item types) is ensured by
   appending a numeric suffix (`-2`, `-3`, …) on collision. The caller may supply an
-  explicit slug instead.
-- Rename is allowed: it updates the slug in the DB **and** performs a `git mv` of
-  the document path through the single write path (§4.3), so both stores move
-  together.
+  explicit slug instead — a colliding explicit slug is refused (`conflict`), never
+  suffixed.
+- Rename is allowed: it is an **explicit slug change** through `update_item` (a
+  name edit alone never re-derives the slug — references stay stable), and it
+  updates the slug in the DB **and** performs a `git mv` of the document path
+  through the single write path (§4.3), so both stores move together.
 
 **Queries — minimal.**
 - `list_items` filters by type, status, and parent (and, for epics, release); the

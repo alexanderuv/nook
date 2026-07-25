@@ -82,13 +82,15 @@ there are three surfaces over one contract:
 ### Operation catalog (mirrored across MCP tools and RPC)
 
 - **Instance-level:** `create_project`, `get_project`, `list_projects`.
-- **Structure (project-scoped):** `create_item(type, name, description?, parentRef?, releaseRef?)`
+- **Structure (project-scoped):** `create_item(type, name, slug?, description?, parentRef?, releaseRef?)`
   — `type` is `epic`/`task`/`bug`/`chore`; for a leaf, an omitted `parentRef` makes a
   project-level item, and `releaseRef` applies to epics,
-  `update_item(ref, {name?, description?, status?, type?, parentRef?, releaseRef?})` —
-  setting/clearing `parentRef` reparents a leaf,
+  `update_item(ref, {name?, slug?, description?, status?, type?, parentRef?, releaseRef?})` —
+  setting/clearing `parentRef` reparents a leaf; supplying `slug` is the rename
+  (a name change alone never re-derives the slug),
   `set_item_blocked_by(itemRef, blockerRefs[])` — **replaces** the item's blocker set
-  (not incremental add/remove), `create_release(name, …)`,
+  (not incremental add/remove), `create_release(name, slug?, description?, targetDate?)`,
+  `update_release(ref, {name?, slug?, description?, status?, targetDate?})`,
   `assign_epic_to_release(epicRef, releaseRef?)`, `get_item(ref)`,
   `list_items(filter)`, `get_ready_items()`. Filter grammar and containment/status
   rules per [04](./04-structure-semantics.md).

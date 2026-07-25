@@ -44,8 +44,8 @@ every other milestone stacks on this layer.
   unblocked leaves from `get_ready_items` — the loop exercises all four item
   types and both parented and project-level leaves; observed in an end-to-end
   script run against local Postgres, passing 100% unattended.
-- **GOAL2** — surface parity: 11 of 11 catalog operations (3 instance-level +
-  8 structure, per spec 01) behave identically over MCP and the web API — same
+- **GOAL2** — surface parity: 12 of 12 catalog operations (3 instance-level +
+  9 structure, per spec 01) behave identically over MCP and the web API — same
   DTOs, same error codes; observed in a contract test suite run against both
   surfaces.
 - **GOAL3** — rule coverage: 100% of the Decided bullets in specs 04 and 01
