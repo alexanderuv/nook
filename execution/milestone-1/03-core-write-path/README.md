@@ -4,4 +4,70 @@
 spec 04's semantics: containment, status vocabulary, slugs,
 cancel-not-delete, cycle-rejecting `blocked_by`, releases as loose buckets).
 
-Placeholder — to be expanded in a later document.
+Documents, in the order they were produced:
+
+- [discovery.md](./discovery.md) — the concurrency and error-surface probes:
+  proved the per-project advisory lock closes the cycle and slug races, and
+  that constraint violations surface with their constraint names.
+- [spec-1.md](./spec-1.md) — the behavior contract for the seven mutations:
+  requirements, edge cases, and acceptance criteria.
+- [plan.md](./plan.md) — the build route, steps ticked as execution proceeds.
+
+## Results
+
+The write path landed as planned: `:contract` holds the shared enums (each
+member pinned to its stored integer), the three entity data classes, and the
+structured-error surface; `:core-service` gained `io.nook.core.write` — the
+slug and cycle rules as pure functions, the reference resolver, the
+constraint-name error translator, and one `WriteService` class whose public
+surface is exactly the seven mutations. Every write runs in a fresh
+transaction with retries disabled and takes the per-project advisory lock (or
+the instance-wide lock for project creation) before touching anything. Both
+concurrency stress tests held at 100 repetitions each.
+
+Deviations from the plan, all folded into its text: entity ids are Kotlin's
+`Uuid` (the database layer's own type); the PostgreSQL driver became
+compile-visible in `:core-service` so the translator can read constraint
+names off the driver's exception; the translator-coverage enumeration needs a
+live transaction; AC9's tests live with the update tests.
+
+### Rule-to-test mapping
+
+Every acceptance criterion of [spec-1](./spec-1.md), as the named test that
+executes it (tests carry no criterion numbers by design — code never cites
+planning artifacts):
+
+| Criterion | Test |
+| --- | --- |
+| AC1 | `WriteServiceSurfaceTest` — the public surface is exactly the seven mutations |
+| AC2 | `WriteServiceCreateTest` — create_project derives the slug, returns the full entity, and suffixes a name collision; a new release starts planned and a new item starts todo |
+| AC3 | `WriteServiceCreateTest` — create_project derives the slug, returns the full entity, and suffixes a name collision |
+| AC4 | `WriteServiceCreateTest` — an unknown item type is rejected |
+| AC5 | `WriteServiceCreateTest` — a leaf parents under an epic and a parentless leaf sits at project level |
+| AC6 | `WriteServiceCreateTest` — a leaf cannot parent, an epic cannot be parented, and a leaf cannot join a release |
+| AC7 | `WriteServiceCreateTest` — derived slugs take suffixes in sequence |
+| AC8 | `WriteServiceCreateTest` — derivation skips over an explicitly claimed suffix to the first free one |
+| AC9 | `WriteServiceUpdateTest` — a taken explicit slug conflicts on create, and supplying an item's own slug is a no-op |
+| AC10 | `WriteServiceCreateTest` — unusable names and slugs are rejected, and an explicit slug saves an unusable name |
+| AC11 | `WriteServiceUpdateTest` — renaming changes the name but never the slug, by slug or by id |
+| AC12 | `WriteServiceUpdateTest` — an explicit slug change moves resolution to the new slug and retires the old |
+| AC13 | `WriteServiceUpdateTest` — statuses move freely in the vocabulary, cascade to nothing, and reject outside values |
+| AC14 | `WriteServiceUpdateTest` — a done task reopens and its row never ceases to exist |
+| AC15 | `WriteServiceUpdateTest` — leaf types interchange freely but an edge-holding leaf cannot become an epic until cleared |
+| AC16 | `WriteServiceUpdateTest` — an epic with children or a release assignment cannot become a leaf until detached |
+| AC17 | `WriteServiceUpdateTest` — reparenting keeps the slug and blockers, clearing goes project-level, and same-parent is accepted |
+| AC18 | `WriteServiceBlockerTest` — the supplied set replaces the whole set, deduplicated, and empty clears it |
+| AC19 | `WriteServiceBlockerTest` — blockers must be same-project leaves that exist |
+| AC20 | `WriteServiceBlockerTest` — a chain-closing set is rejected as a cycle and stores nothing |
+| AC21 | `WriteServiceReleaseTest` — a past target date is accepted, updates follow the vocabulary, and outside values are rejected |
+| AC22 | `WriteServiceReleaseTest` — assignment applies to epics only and no status locks it |
+| AC23 | `WriteServiceCycleRaceTest` — of two simultaneous half-loop writers, exactly one succeeds and no loop is ever stored |
+| AC24 | `WriteServiceSlugRaceTest` — two simultaneous creators of the same name always both succeed with distinct slugs |
+| AC25 | `WriteServiceUpdateTest` — a failed update is one structured error and changes nothing |
+
+The supporting units: `SlugsTest` (derivation, explicit-slug validation,
+suffix allocation), `CycleDetectionTest` (the walk on the chain, diamond, and
+safe-edge shapes), `ConstraintTranslationTest` (translator coverage of every
+declared constraint), `EnumCodesTest` in `:contract` (codes against the
+changelog map), `AdvisoryLockTest` (the lock provably serializes), and
+`ReferenceResolutionTest` (id-first, slug-second, project-scoped).

@@ -13,13 +13,15 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.java.time)
     implementation(libs.liquibase.core)
-    runtimeOnly(libs.postgresql.jdbc)
+    // Compile-visible, not just runtime: the write path reads the violated
+    // constraint's name off the driver's exception type to translate database
+    // rejections into structured errors.
+    implementation(libs.postgresql.jdbc)
 
     testImplementation(libs.zonky.embedded.postgres)
     testImplementation(platform(libs.zonky.postgres.binaries.bom))
     testRuntimeOnly(libs.zonky.postgres.binaries.darwin.arm64v8)
     testImplementation(libs.exposed.migration.jdbc)
-    testImplementation(libs.postgresql.jdbc)
 }
 
 // The Liquibase changelog lives at db/changelog (one source of truth, shared with
