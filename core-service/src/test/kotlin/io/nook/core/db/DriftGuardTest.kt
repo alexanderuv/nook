@@ -1,10 +1,14 @@
 package io.nook.core.db
 
+import java.sql.Connection
+import java.sql.DriverManager
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.migration.jdbc.MigrationUtils
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -40,6 +44,48 @@ class DriftGuardTest {
             statements.any { it.contains("color", ignoreCase = true) },
             "expected the undeclared column to be flagged, got:\n${statements.joinToString("\n")}",
         )
+    }
+
+    /**
+     * What the guard above cannot do. It compares which rules exist, not which
+     * rows they cover, so a handle index rebuilt without its live-only condition
+     * leaves it green. Building the schema from the declarations onto an empty
+     * database and reading both results back out of PostgreSQL compares the
+     * whole index definition, condition included.
+     */
+    @Test
+    fun `the indexes the declarations build match the migrated schema's`() {
+        val declared = EmbeddedPostgresSupport.freshEmptyDatabase()
+        transaction(Database.connect(declared)) {
+            SchemaUtils.create(tables = allStructureTables, inBatch = false)
+        }
+
+        val fromDeclarations = indexDefinitions(declared)
+        val fromChangelog = indexDefinitions(EmbeddedPostgresSupport.freshMigratedDatabase())
+
+        assertEquals(fromChangelog, fromDeclarations)
+        assertTrue(
+            fromDeclarations.keys.containsAll(
+                listOf("uq_project_slug", "uq_release_project_slug", "uq_item_project_slug"),
+            ),
+            "expected the three handle rules among ${fromDeclarations.keys}",
+        )
+    }
+
+    /** Every index PostgreSQL holds for the structure tables, by name, as it renders them. */
+    private fun indexDefinitions(jdbcUrl: String): Map<String, String> {
+        val tableNames = allStructureTables.joinToString { "'${it.tableName}'" }
+        return DriverManager.getConnection(jdbcUrl).use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery(
+                    "SELECT indexname, indexdef FROM pg_indexes WHERE tablename IN ($tableNames)",
+                ).use { rows ->
+                    buildMap {
+                        while (rows.next()) put(rows.getString(1), rows.getString(2))
+                    }
+                }
+            }
+        }
     }
 
     // The comparison re-emits computed defaults verbatim even when the database

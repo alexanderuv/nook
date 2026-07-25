@@ -18,11 +18,22 @@ import io.nook.core.db.ItemDependencyTable
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
+import io.nook.core.store.blockerSetsOf
+import io.nook.core.store.blockersOf
+import io.nook.core.store.notFound
+import io.nook.core.store.resolveItem
+import io.nook.core.store.resolveProject
+import io.nook.core.store.resolveRelease
+import io.nook.core.store.toProject
+import io.nook.core.store.toProjectItem
+import io.nook.core.store.toRelease
+import io.nook.core.store.validationFailed
 import java.time.Instant
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -35,19 +46,25 @@ import org.jetbrains.exposed.v1.jdbc.update
 
 /**
  * The single write path: every mutation of the structure store goes through
- * one of the seven public operations below. Each takes the references that
+ * one of the nine public operations below. Each takes the references that
  * address its target as parameters and the payload as a command data class
- * from the contract. No operation deletes a project, item, or release;
- * blocker edges change only by whole-set replacement, never through any
- * public delete.
+ * from the contract. Blocker edges change only by whole-set replacement, never
+ * through any public delete.
  *
  * Every operation runs as one fresh transaction that takes an advisory lock
- * first — the project's own lock, or the instance-wide lock for project
- * creation, whose slug scope is the whole instance — so writers in one scope
- * take turns. Validation happens inside that lock; the schema's constraints
- * stay on underneath as a backstop, translated to structured errors if ever
- * hit. A failure throws [io.nook.contract.StructuredErrorException] and rolls
- * the transaction back, leaving no partial effect.
+ * first — the project's own lock, or the instance-wide lock where the scope at
+ * stake is the whole instance — so writers in one scope take turns. Validation
+ * happens inside that lock; the schema's constraints stay on underneath as a
+ * backstop, translated to structured errors if ever hit. A failure throws
+ * [io.nook.contract.StructuredErrorException] and rolls the transaction back,
+ * leaving no partial effect.
+ *
+ * Deleting marks rather than removes: the row stays in the store and leaves
+ * every caller's reach at once. There is no way back through this service — no
+ * operation clears a mark, and none reads a marked row — so every query here
+ * considers live rows only. That is not cosmetic: a rule enforced against a row
+ * the caller cannot see would refuse work for a reason they could never
+ * diagnose.
  *
  * References: a string in UUID form resolves as an id, anything else as a
  * slug in the target project. Enum-valued inputs (item type, statuses) arrive
@@ -143,18 +160,14 @@ class WriteService(private val db: Database) {
                 validationFailed("an epic never has a parent")
             }
             if (targetType == ItemType.EPIC && currentType.isLeaf) {
-                val inAnyEdge = ItemDependencyTable.selectAll()
-                    .where { (ItemDependencyTable.itemId eq itemId) or (ItemDependencyTable.dependsOnId eq itemId) }
-                    .any()
+                val liveEdges = projectBlockerEdges(projectId)
+                val inAnyEdge = itemId in liveEdges || liveEdges.values.any { itemId in it }
                 if (inAnyEdge) {
                     validationFailed("an item in any dependency edge cannot become an epic; clear the edges first")
                 }
             }
             if (currentType == ItemType.EPIC && targetType.isLeaf) {
-                val hasChildren = ProjectItemTable.selectAll()
-                    .where { ProjectItemTable.parentId eq itemId }
-                    .any()
-                if (hasChildren) {
+                if (liveChildIds(itemId).isNotEmpty()) {
                     validationFailed("an epic with child items cannot become a leaf; reparent the children first")
                 }
                 if (row[ProjectItemTable.releaseId] != null) {
@@ -274,12 +287,80 @@ class WriteService(private val db: Database) {
             loadItem(row[ProjectItemTable.id])
         }
 
+    /**
+     * Marks an item deleted, and an epic's children with it — nothing may
+     * survive a deletion above it and stay visible. Nothing is returned: the
+     * item is gone to every caller the moment this commits, so there is no
+     * entity left to hand back.
+     *
+     * Deleting an item already deleted is [io.nook.contract.ErrorCode.NOT_FOUND]
+     * rather than a quiet success, because a deleted row is not addressable at
+     * all; the caller is naming something that, as far as this service is
+     * concerned, does not exist.
+     */
+    fun deleteItem(projectRef: String, itemRef: String): Unit = writeTransaction(db) {
+        val projectId = lockedProjectId(projectRef)
+        val row = resolveItem(projectId, itemRef)
+        val itemId = row[ProjectItemTable.id]
+        val condemned = if (row[ProjectItemTable.type] == ItemType.EPIC.code) {
+            listOf(itemId) + liveChildIds(itemId)
+        } else {
+            listOf(itemId)
+        }
+        ProjectItemTable.update({ ProjectItemTable.id inList condemned }) {
+            it[ProjectItemTable.deletedAt] = Instant.now()
+        }
+    }
+
+    /**
+     * Marks a project deleted together with every release and item in it, in
+     * one transaction, so nothing inside it stays visible.
+     *
+     * Two locks, in this order. The instance-wide one because a project's
+     * handle is unique across the instance, and freeing one must not race a
+     * creation scanning those handles. The project's own one because a writer
+     * already inside it would otherwise add an item to a project being
+     * deleted, leaving a live row under a deleted parent. No other operation
+     * holds both, so the pair cannot deadlock against anything.
+     */
+    fun deleteProject(projectRef: String): Unit = writeTransaction(db) {
+        takeInstanceLock()
+        val projectId = resolveProject(projectRef)[ProjectTable.id]
+        takeProjectLock(projectId)
+        val departure = Instant.now()
+        ProjectItemTable.update({
+            (ProjectItemTable.projectId eq projectId) and ProjectItemTable.deletedAt.isNull()
+        }) {
+            it[ProjectItemTable.deletedAt] = departure
+        }
+        ReleaseTable.update({
+            (ReleaseTable.projectId eq projectId) and ReleaseTable.deletedAt.isNull()
+        }) {
+            it[ReleaseTable.deletedAt] = departure
+        }
+        ProjectTable.update({ ProjectTable.id eq projectId }) {
+            it[ProjectTable.deletedAt] = departure
+        }
+    }
+
     // ── shared internals ─────────────────────────────────────────────────────
 
-    /** Resolves the project reference, takes its lock, and returns its id. */
+    /**
+     * Resolves the project reference, takes its lock, and returns its id.
+     *
+     * The project is read twice on purpose. The first read is what the lock key
+     * is derived from, and it necessarily happens before the lock is held — so
+     * the project can be deleted in the gap, and a writer that trusted it would
+     * add a live row to a project already gone. The second read is inside the
+     * lock, which is the only place an answer about the project holds still.
+     */
     private fun JdbcTransaction.lockedProjectId(projectRef: String): Uuid {
         val projectId = resolveProject(projectRef)[ProjectTable.id]
         takeProjectLock(projectId)
+        val stillLive = ProjectTable.selectAll()
+            .where { (ProjectTable.id eq projectId) and ProjectTable.deletedAt.isNull() }
+            .any()
+        if (!stillLive) notFound("no project matches reference \"$projectRef\"")
         return projectId
     }
 
@@ -315,9 +396,16 @@ class WriteService(private val db: Database) {
             firstFreeSlug(base, taken)
         }
 
+    // The slugs already in use in a uniqueness scope, live rows only — matching
+    // the handle rules the schema now enforces. A deleted row holds no handle,
+    // so the name it used is free the moment it leaves.
+
     private fun takenProjectSlugs(prefix: String): Set<String> =
         ProjectTable.select(ProjectTable.slug)
-            .where { (ProjectTable.slug eq prefix) or (ProjectTable.slug like "$prefix-%") }
+            .where {
+                ((ProjectTable.slug eq prefix) or (ProjectTable.slug like "$prefix-%")) and
+                    ProjectTable.deletedAt.isNull()
+            }
             .map { it[ProjectTable.slug] }
             .toSet()
 
@@ -325,7 +413,8 @@ class WriteService(private val db: Database) {
         ProjectItemTable.select(ProjectItemTable.slug)
             .where {
                 (ProjectItemTable.projectId eq projectId) and
-                    ((ProjectItemTable.slug eq prefix) or (ProjectItemTable.slug like "$prefix-%"))
+                    ((ProjectItemTable.slug eq prefix) or (ProjectItemTable.slug like "$prefix-%")) and
+                    ProjectItemTable.deletedAt.isNull()
             }
             .map { it[ProjectItemTable.slug] }
             .toSet()
@@ -334,21 +423,34 @@ class WriteService(private val db: Database) {
         ReleaseTable.select(ReleaseTable.slug)
             .where {
                 (ReleaseTable.projectId eq projectId) and
-                    ((ReleaseTable.slug eq prefix) or (ReleaseTable.slug like "$prefix-%"))
+                    ((ReleaseTable.slug eq prefix) or (ReleaseTable.slug like "$prefix-%")) and
+                    ReleaseTable.deletedAt.isNull()
             }
             .map { it[ReleaseTable.slug] }
             .toSet()
 
-    /** Every blocker edge among the project's items, keyed by the blocked item. */
-    private fun projectBlockerEdges(projectId: Uuid): Map<Uuid, Set<Uuid>> {
-        val itemIds = ProjectItemTable.select(ProjectItemTable.id)
-            .where { ProjectItemTable.projectId eq projectId }
+    /** The ids of the live items sitting directly under [epicId]. */
+    private fun liveChildIds(epicId: Uuid): List<Uuid> =
+        ProjectItemTable.select(ProjectItemTable.id)
+            .where { (ProjectItemTable.parentId eq epicId) and ProjectItemTable.deletedAt.isNull() }
             .map { it[ProjectItemTable.id] }
-        if (itemIds.isEmpty()) return emptyMap()
-        return ItemDependencyTable.selectAll()
-            .where { ItemDependencyTable.itemId inList itemIds }
-            .groupBy({ it[ItemDependencyTable.itemId] }, { it[ItemDependencyTable.dependsOnId] })
-            .mapValues { (_, blockers) -> blockers.toSet() }
+
+    /**
+     * The blocker edges that run between two live items of the project, keyed
+     * by the blocked item — the graph cycle detection reasons over.
+     *
+     * Both ends must be live. A deleted item never holds anything up, so it
+     * closes no loop; counting its edges would refuse a legal one for a reason
+     * built out of rows the caller cannot see, let alone clear.
+     */
+    private fun projectBlockerEdges(projectId: Uuid): Map<Uuid, Set<Uuid>> {
+        val liveItemIds = ProjectItemTable.select(ProjectItemTable.id)
+            .where { (ProjectItemTable.projectId eq projectId) and ProjectItemTable.deletedAt.isNull() }
+            .map { it[ProjectItemTable.id] }
+        val live = liveItemIds.toSet()
+        return blockerSetsOf(liveItemIds)
+            .mapValues { (_, blockers) -> blockers intersect live }
+            .filterValues { it.isNotEmpty() }
     }
 
     /** Runs [validate] on a set value and returns it; null when the field is kept. */

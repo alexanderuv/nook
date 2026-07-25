@@ -1,21 +1,12 @@
 package io.nook.core.write
 
-// Slug rules as pure functions: no database, no clock, no state. The write
-// service applies them under its per-project lock; the schema's unique
-// constraints remain the backstop if the application-level check is ever
-// bypassed.
+import io.nook.core.store.isUuidShaped
 
-// A canonical UUID rendering: five hyphen-separated hex groups of 8-4-4-4-12.
-// Used both to decide that a reference is an id rather than a slug, and to
-// reject explicit slugs that could never be referenced (id resolution would
-// always win).
-private val uuidShape =
-    Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", RegexOption.IGNORE_CASE)
+// Slug rules as pure functions: no database, no clock, no state. The write
+// service applies them under its per-project lock; the schema's unique indexes
+// remain the backstop if the application-level check is ever bypassed.
 
 private val explicitSlugShape = Regex("[a-z0-9-]+")
-
-/** True when [ref] is written in UUID form and therefore resolves as an id, never a slug. */
-internal fun isUuidShaped(ref: String): Boolean = uuidShape.matches(ref)
 
 /**
  * Derives a slug from a display name: lowercased, every run of characters

@@ -15,13 +15,18 @@ object EmbeddedPostgresSupport {
     private val server: EmbeddedPostgres by lazy { EmbeddedPostgres.start() }
 
     /** Creates a new empty database, runs the changelog on it, and returns its JDBC URL. */
-    fun freshMigratedDatabase(): String {
+    fun freshMigratedDatabase(): String = freshEmptyDatabase().also(::migrateDatabase)
+
+    /**
+     * Creates a new database with no schema at all and returns its JDBC URL —
+     * for the one test that builds the schema from the Exposed declarations
+     * instead, so the two can be compared.
+     */
+    fun freshEmptyDatabase(): String {
         val name = "nook_test_${databaseCounter.incrementAndGet()}"
         server.postgresDatabase.connection.use { connection ->
             connection.createStatement().use { it.execute("CREATE DATABASE $name") }
         }
-        val url = server.getJdbcUrl("postgres", name)
-        migrateDatabase(url)
-        return url
+        return server.getJdbcUrl("postgres", name)
     }
 }

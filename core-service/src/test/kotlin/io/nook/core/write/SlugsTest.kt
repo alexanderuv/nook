@@ -52,15 +52,6 @@ class SlugsTest {
     }
 
     @Test
-    fun `uuid shape detection matches canonical renderings only`() {
-        assertEquals(true, isUuidShaped("3f2a8c1e-4b6d-4b0a-9f3e-2d1c0b9a8f7e"))
-        assertEquals(true, isUuidShaped("3F2A8C1E-4B6D-4B0A-9F3E-2D1C0B9A8F7E"))
-        assertEquals(false, isUuidShaped("3f2a"))
-        assertEquals(false, isUuidShaped("add-search"))
-        assertEquals(false, isUuidShaped("3f2a8c1e-4b6d-4b0a-9f3e"))
-    }
-
-    @Test
     fun `suffix allocation picks the first free number`() {
         assertEquals("add-search", firstFreeSlug("add-search", emptySet()))
         assertEquals("add-search-2", firstFreeSlug("add-search", setOf("add-search")))

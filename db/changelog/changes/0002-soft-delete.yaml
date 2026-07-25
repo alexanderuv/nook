@@ -1,0 +1,86 @@
+# Nook — soft delete.
+#
+# Deleting marks a row and leaves it in place; nothing is ever physically
+# removed. The mark exists for the store's own sake — history, and documents in
+# git that would otherwise point at nothing — never for a caller: no read
+# returns a marked row and no reference resolves to one.
+#
+# `deleted_at` is a nullable timestamp rather than a flag: NULL means live, and
+# a value records when the row left, which a boolean could not.
+#
+# Every entity kind that can be addressed by handle carries the mark, releases
+# included, even though no operation deletes a release yet. A table left out
+# becomes the exception someone has to discover and migrate later.
+#
+# The three changes below belong in ONE changeset and must never be split:
+#
+#   * A handle belongs to live rows only, so a name freed by a delete can be
+#     taken again at once. PostgreSQL has no uniqueness *constraint* carrying a
+#     condition (it rejects the WHERE outright), so each rule is dropped as a
+#     constraint and recreated, under the same name, as a partial unique index —
+#     raw SQL, since Liquibase's createIndex has no equivalent. This is what
+#     retires the master changelog's claim that the schema uses no
+#     database-specific features.
+#   * A view fixes its column list at creation, so `ready_item` — defined as
+#     SELECT i.* — would never show `deleted_at` unless it is rebuilt in the
+#     same change that adds the column. It is dropped and recreated rather than
+#     replaced in place, which is the only way to change that list.
+databaseChangeLog:
+
+  - changeSet:
+      id: 0009-soft-delete
+      author: nook
+      changes:
+        - addColumn:
+            tableName: project
+            columns:
+              - column: {name: deleted_at, type: timestamp}
+        - addColumn:
+            tableName: release
+            columns:
+              - column: {name: deleted_at, type: timestamp}
+        - addColumn:
+            tableName: project_item
+            columns:
+              - column: {name: deleted_at, type: timestamp}
+
+        # Handle uniqueness, rebuilt to cover live rows only. Same names as the
+        # constraints they replace: the rule is unchanged, its scope is not.
+        - dropUniqueConstraint:
+            tableName: project
+            constraintName: uq_project_slug
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_project_slug ON project (slug) WHERE deleted_at IS NULL
+        - dropUniqueConstraint:
+            tableName: release
+            constraintName: uq_release_project_slug
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_release_project_slug ON release (project_id, slug) WHERE deleted_at IS NULL
+        - dropUniqueConstraint:
+            tableName: project_item
+            constraintName: uq_item_project_slug
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_item_project_slug ON project_item (project_id, slug) WHERE deleted_at IS NULL
+
+        # READY, restated: a live leaf (type task/bug/chore) that is todo(1) with
+        # every blocker resolved — done(3), cancelled(4), or deleted. A deleted
+        # blocker is gone work and must not deadlock what sits behind it, exactly
+        # as a cancelled one does not; and a deleted leaf is never offered.
+        - dropView:
+            viewName: ready_item
+        - createView:
+            viewName: ready_item
+            selectQuery: >-
+              SELECT i.*
+              FROM project_item i
+              WHERE i.deleted_at IS NULL
+                AND i.type IN (2, 3, 4)
+                AND i.status = 1
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM item_dependency d
+                  JOIN project_item b ON b.id = d.depends_on_id
+                  WHERE d.item_id = i.id
+                    AND b.deleted_at IS NULL
+                    AND b.status NOT IN (3, 4)
+                )

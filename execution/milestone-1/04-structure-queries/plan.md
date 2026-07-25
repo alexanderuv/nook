@@ -182,20 +182,34 @@ rather than faked with hand-written SQL.
   spec-2 requires that a deleted project vanish from the listing and that its
   identifier stop resolving (AC21), and the only honest way to produce a deleted
   project is the operation that deletes it. Deleting an item runs under the
-  project's lock; deleting a project runs under the instance-wide lock, because
-  a project's handle is unique across the whole instance and freeing one must
-  not race a creation scanning those handles. Deleting a project marks its
-  releases and items in the same transaction — nothing may outlive a deletion
-  above it and stay visible. Releases get no delete of their own here — which
-  operations exist is the catalog's business, and no read in this epic returns a
-  release — but the store is ready for one.
+  project's lock. Deleting a project takes two locks, in a fixed order: the
+  instance-wide one, because a project's handle is unique across the whole
+  instance and freeing one must not race a creation scanning those handles; then
+  the project's own, because a writer already inside it would otherwise leave a
+  live row under a deleted parent. No other operation holds both, so the pair
+  cannot deadlock. That is not sufficient on its own — every write resolves its
+  project *before* taking the lock keyed on it, so the project can be deleted in
+  the gap; each write therefore re-reads the project under the lock, which is the
+  only place the answer holds still. Deleting a project marks its releases and
+  items in the same transaction — nothing may outlive a deletion above it and
+  stay visible. Neither delete returns an entity: the row is out of every
+  caller's reach the moment it commits, so there is nothing left to hand back.
+  Releases get no delete of their own here — which operations exist is the
+  catalog's business, and no read in this epic returns a release — but the store
+  is ready for one.
 
 - **A shared home for the pieces both paths need.** Reference resolution, the
   row-to-entity mapping, and the stored-code maps move from the write package
-  into a package both paths use. Reads must return exactly the entities writes
-  return (REQ6), and resolving a reference means the same thing on both sides;
-  two copies of either would drift. The move is mechanical — the code is
-  internal to the module, so no visibility changes and no behavior changes.
+  into a package both paths use — `io.nook.core.store`, sitting above the schema
+  declarations in `io.nook.core.db` and below both services. Reads must return
+  exactly the entities writes return (REQ6), and resolving a reference means the
+  same thing on both sides; two copies of either would drift. Two smaller pieces
+  follow them because resolution needs them: the rule deciding that a reference
+  is written in UUID form, and the two failures both paths raise — the other
+  two, conflict and cycle, stay in the write package, where they are the only
+  ones that can arise. The move is otherwise mechanical: the code is internal to
+  the module, so no visibility changes and no behavior changes beyond the
+  live-only rule of STEP4.
 
 - **The reads as their own service** in a new package, with exactly five public
   operations. Every one of them opens a transaction that is read-only and set to
@@ -213,6 +227,17 @@ rather than faked with hand-written SQL.
   door. The entity classes therefore never carry a deleted mark: the column is
   the store's business, and an entity that could report itself deleted would
   imply a caller could hold one.
+
+  The same rule reaches further into the write path than the handle scans it
+  was reached for. Every check the write path makes against *other* rows now
+  considers live ones only: the graph cycle detection walks, an epic's children,
+  and the edges that stop a leaf becoming an epic. A rule enforced against rows
+  the caller cannot see would refuse work for a reason they could never
+  diagnose, let alone clear. Deleting removes no blocker edge — an edge outlives
+  either end, so a live item's blocker set may name a row that is gone, which is
+  what the readiness rule already accounts for. Edges still change the one way
+  they always have: the whole set replaced at once, by the operation that owns
+  them.
 
 - **The readiness view is declared for reading only.** It is described to Exposed
   as though it were a table, kept out of the set the drift guard compares — the
@@ -245,7 +270,7 @@ the document tables.
 
 ## Steps
 
-- [ ] **STEP1** — Write `db/changelog/changes/0002-soft-delete.yaml`: add the
+- [x] **STEP1** — Write `db/changelog/changes/0002-soft-delete.yaml`: add the
   nullable `deleted_at` column to `project`, `release`, and `project_item`; drop
   the constraints `uq_project_slug`, `uq_release_project_slug`, and
   `uq_item_project_slug` and create in their place unique indexes of the same
@@ -257,30 +282,34 @@ the document tables.
   whole changelog to a fresh database and passes, and a new test reads all three
   index definitions back out of PostgreSQL and asserts each carries the
   live-only condition. This step is first because it is the only part of the
-  epic no probe has executed.
+  epic no probe has executed. All of it lands as one changeset, never several:
+  a run that added the column and stopped short of the view would leave a view
+  that can never show it.
 
-- [ ] **STEP2** — Mirror the change in `Tables.kt`: the new column on all three
+- [x] **STEP2** — Mirror the change in `Tables.kt`: the new column on all three
   tables, and the three handle rules re-declared with their live-only condition;
   verify: the drift guard passes, and a test builds the tables from the
   declarations on an empty database, reads the indexes PostgreSQL actually
   created, and asserts each matches the migrated schema's — the drift guard is
   blind to the condition (FIND2), so this is what guards it.
 
-- [ ] **STEP3** — Add a test asserting the readiness view's own stored
+- [x] **STEP3** — Add a test asserting the readiness view's own stored
   definition names the deleted mark in both places it must: excluding a marked
   item, and counting a marked blocker as resolved; verify: the test passes
   against the migrated database, and fails if pointed at the previous view
   definition.
 
-- [ ] **STEP4** — Move reference resolution, the row-to-entity mapping, and the
+- [x] **STEP4** — Move reference resolution, the row-to-entity mapping, and the
   stored-code maps out of `io.nook.core.write` into a package both paths use,
   and make resolution refuse a marked row — a reference naming one is
   `not_found`, by handle or by identifier, on both paths; verify: every existing
-  write-path test passes unchanged apart from imports, `./gradlew check` stays
-  green — a move that changes anything else has gone wrong — and a new resolver
-  test covers the marked row under both reference forms.
+  write-path test passes with nothing changed but its imports, `./gradlew check`
+  stays green — a move that changes anything else has gone wrong — and a new
+  resolver test covers the marked row under both reference forms. The resolver's
+  own tests move with it, the reference-form test among them: it belongs beside
+  the rule it exercises, not beside the slug rules it was filed with.
 
-- [ ] **STEP5** — Implement deleting an item on the write service: under the
+- [x] **STEP5** — Implement deleting an item on the write service: under the
   project's lock, set the mark, and mark an epic's children in the same
   transaction; deleting something already deleted is `not_found`, since a
   deleted row is not addressable at all; verify: named tests cover each rule of
@@ -289,16 +318,18 @@ the document tables.
   is immediately reusable by a new item, the delete leaves the status untouched,
   and a second delete of the same item comes back `not_found`.
 
-- [ ] **STEP6** — Implement deleting a project under the instance-wide lock,
-  marking the project together with its releases and its items in one
-  transaction, so nothing inside it stays visible; update
-  `WriteServiceSurfaceTest` to the nine operations the service now offers;
-  verify: named tests show a deleted project gone from the listing of projects
-  with its handle immediately reusable, every item it held gone from that
-  project's listing, and the surface test passing with the two new names and no
-  others.
+- [x] **STEP6** — Implement deleting a project under the instance-wide lock and
+  then the project's own, marking the project together with its releases and its
+  items in one transaction, so nothing inside it stays visible; make every write
+  re-read its project under the lock, since the resolution that produced the lock
+  key ran before the lock was held; update `WriteServiceSurfaceTest` to the nine
+  operations the service now offers; verify: named tests show a deleted project
+  gone from the listing of projects with its handle immediately reusable, every
+  item it held gone from that project's listing, four callers creating items
+  throughout the deletion leaving nothing live behind them, and the surface test
+  passing with the two new names and no others.
 
-- [ ] **STEP7** — Build the read scaffold: the transaction helper that opens one
+- [x] **STEP7** — Build the read scaffold: the transaction helper that opens one
   read-only, repeatable-read transaction with re-runs disabled; the readiness
   view declared for reading and kept out of the drift guard's set; and the
   listing filter types in `:contract` — each part optional and multi-valued, and
@@ -307,18 +338,18 @@ the document tables.
   and the database itself refuses it, and another attempts a write through the
   view declaration inside such a transaction and is refused the same way.
 
-- [ ] **STEP8** — Implement `get_project` and `list_projects` on the new read
+- [x] **STEP8** — Implement `get_project` and `list_projects` on the new read
   service: resolution across the whole instance rather than inside a project,
   live rows only, and newest-first ordering with the identifier as tiebreak;
   verify: the named tests for AC21 pass, and a test shows the same call repeated
   ten times returning one and the same order.
 
-- [ ] **STEP9** — Implement `get_item`: identifier or handle, both resolving to
+- [x] **STEP9** — Implement `get_item`: identifier or handle, both resolving to
   live rows only, an item from another project reported as not found, and a
   deleted item not found under either reference form; verify: the named tests
   for AC2, AC4, and AC17 pass.
 
-- [ ] **STEP10** — Implement `list_items`: every filter part optional, several
+- [x] **STEP10** — Implement `list_items`: every filter part optional, several
   values inside a part widening it and several parts narrowing each other, the
   reserved no-parent value, the ordering, live rows only, and the blocker sets
   fetched with one extra query for the whole listing. Rejected in application
@@ -326,20 +357,28 @@ the document tables.
   parent value naming something that is not an epic; verify: the named tests for
   AC5 through AC16 pass.
 
-- [ ] **STEP11** — Stress the listing against concurrent writes (AC22): one
+- [x] **STEP11** — Stress the listing against concurrent writes (AC22): one
   caller lists a project repeatedly while another creates items in it, 100
   repetitions; verify: every listing returns only fully committed items, each
   with its blocker set as committed, and no call fails. This runs here rather
   than at the end because it is the first proof that the two-query listing
   really describes one moment (FIND9).
 
-- [ ] **STEP12** — Implement `get_ready_items`: read the view, take no filter,
+  A soak alone does not prove that, though — it never caught the anomaly by
+  luck, in either direction, so on its own it would pass just as happily
+  without the discipline. Pair it with the shape the discovery used: run a
+  listing's two statements by hand with a writer committing between them, once
+  at each setting, and require the anomaly to appear at PostgreSQL's normal one
+  and to be gone at repeatable read. The soak then says the discipline holds
+  under load; the pair says it is what is holding.
+
+- [x] **STEP12** — Implement `get_ready_items`: read the view, take no filter,
   order as every other listing does, and carry blocker sets like any other item
   result; verify: the named tests for AC18, AC19, and AC20 pass — including a
   leaf whose only blocker was deleted coming back ready, and a deleted leaf
   coming back nowhere.
 
-- [ ] **STEP13** — Close the surface: a test asserts the read service offers
+- [x] **STEP13** — Close the surface: a test asserts the read service offers
   exactly the five operations, and that no operation and no filter type carries
   any way to ask for deleted rows; a test calls all five against a seeded
   project and asserts every stored row and every stored timestamp is unchanged

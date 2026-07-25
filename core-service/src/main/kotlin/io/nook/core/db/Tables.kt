@@ -2,6 +2,7 @@ package io.nook.core.db
 
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
 import org.jetbrains.exposed.v1.javatime.date
@@ -17,10 +18,16 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 // in application enums whose members carry explicit, stable integers. The single
 // writer (this service) enforces domain membership, containment, and per-type
 // rules — the schema stores no such semantics beyond its constraints.
+//
+// deleted_at is the soft-delete mark: NULL means live, a value records when the
+// row left. Nothing is ever physically removed. Every handle uniqueness rule is
+// therefore limited to live rows, so a name freed by a delete is free again at
+// once — a condition the drift check cannot see, and which SoftDeleteSchemaTest
+// verifies against PostgreSQL directly.
 
 object ProjectTable : Table("project") {
     val id = uuid("id")
-    val slug = varchar("slug", 200).uniqueIndex("uq_project_slug")
+    val slug = varchar("slug", 200)
     val name = varchar("name", 500)
     val description = text("description").default("").nullable()
     val artifactRepoUrl = varchar("artifact_repo_url", 1024).nullable()
@@ -28,12 +35,17 @@ object ProjectTable : Table("project") {
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
+    val deletedAt = timestamp("deleted_at").nullable()
 
     // The tenancy root: the subject that owns this project (distinct from
     // created_by, which is audit). Single-valued — one owner per project.
     val ownerSubject = varchar("owner_subject", 200).default("system")
 
     override val primaryKey = PrimaryKey(id)
+
+    init {
+        uniqueIndex("uq_project_slug", slug, filterCondition = { deletedAt.isNull() })
+    }
 }
 
 object ReleaseTable : Table("release") {
@@ -49,12 +61,15 @@ object ReleaseTable : Table("release") {
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
+    val deletedAt = timestamp("deleted_at").nullable()
 
     override val primaryKey = PrimaryKey(id)
 
     init {
-        uniqueIndex("uq_release_project_slug", projectId, slug)
+        uniqueIndex("uq_release_project_slug", projectId, slug, filterCondition = { deletedAt.isNull() })
         // Referenced by project_item's composite FK (same-project membership).
+        // Covers every row, live or not: a foreign key must still find the row
+        // it points at after the row is marked.
         uniqueIndex("uq_release_project_id", projectId, id)
     }
 }
@@ -78,14 +93,17 @@ object ProjectItemTable : Table("project_item") {
     val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
+    val deletedAt = timestamp("deleted_at").nullable()
 
     override val primaryKey = PrimaryKey(id)
 
     init {
         // Slug unique per project across ALL item types — a slug reference must
         // resolve to exactly one item.
-        uniqueIndex("uq_item_project_slug", projectId, slug)
+        uniqueIndex("uq_item_project_slug", projectId, slug, filterCondition = { deletedAt.isNull() })
         // Referenced by the parent self-FK and by document's composite item FK.
+        // Covers every row, live or not: a foreign key must still find the row
+        // it points at after the row is marked.
         uniqueIndex("uq_item_project_id", projectId, id)
         // A leaf's parent (an epic) must be in the SAME project. NO ACTION keeps
         // project → project_item the only cascade path.
