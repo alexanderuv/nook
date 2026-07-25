@@ -18,6 +18,16 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 // writer (this service) enforces domain membership, containment, and per-type
 // rules — the schema stores no such semantics beyond its constraints.
 
+// The rows writers lock to take a turn in a scope that owns no row of its own —
+// today just the instance-wide space of project handles. Holds no data: the row
+// exists to be locked FOR UPDATE and nothing reads its contents. One row per
+// scope, so a second scope would not queue behind this one.
+object InstanceLockTable : Table("instance_lock") {
+    val scope = varchar("scope", 100)
+
+    override val primaryKey = PrimaryKey(scope)
+}
+
 object ProjectTable : Table("project") {
     val id = uuid("id")
     val slug = varchar("slug", 200).uniqueIndex("uq_project_slug")
@@ -182,6 +192,7 @@ object DocumentSequenceTable : Table("document_sequence") {
 
 /** Every table of the structure schema, in dependency order — the drift check's scope. */
 val allStructureTables = arrayOf(
+    InstanceLockTable,
     ProjectTable,
     ReleaseTable,
     ProjectItemTable,

@@ -4,6 +4,7 @@ import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
 import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -35,16 +36,23 @@ internal fun isUuidShaped(ref: String): Boolean = uuidShape.matches(ref)
 internal fun parseUuidOrNull(ref: String): Uuid? =
     if (isUuidShaped(ref)) Uuid.parse(ref) else null
 
-/** Projects resolve instance-wide: by id, or by slug (unique across the instance). */
-internal fun resolveProject(ref: String): ResultRow {
+/**
+ * What it means for a project row to be the one [ref] names: its id when the
+ * reference is in UUID form, its slug otherwise. Separate from [resolveProject]
+ * because the write path locks the same row it resolves, in one statement, and
+ * both sides must agree on which row that is.
+ */
+internal fun projectIdentity(ref: String): Op<Boolean> {
     val id = parseUuidOrNull(ref)
-    val query = if (id != null) {
-        ProjectTable.selectAll().where { ProjectTable.id eq id }
-    } else {
-        ProjectTable.selectAll().where { ProjectTable.slug eq ref }
-    }
-    return query.firstOrNull() ?: notFound("no project matches reference \"$ref\"")
+    return if (id != null) ProjectTable.id eq id else ProjectTable.slug eq ref
 }
+
+/** Projects resolve instance-wide: by id, or by slug (unique across the instance). */
+internal fun resolveProject(ref: String): ResultRow =
+    ProjectTable.selectAll()
+        .where(projectIdentity(ref))
+        .firstOrNull()
+        ?: notFound("no project matches reference \"$ref\"")
 
 internal fun resolveItem(projectId: Uuid, ref: String): ResultRow {
     val id = parseUuidOrNull(ref)

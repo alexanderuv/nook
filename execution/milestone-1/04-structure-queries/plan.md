@@ -31,11 +31,11 @@ What already exists, checked against the repository rather than remembered:
 - **The write path built by epic 03**, in package `io.nook.core.write` of
   `:core-service`. `WriteService` holds seven public operations and nothing
   else. `WriteTransactions.kt` opens every write in one fresh transaction with
-  re-runs disabled, and each operation takes a lock before touching anything —
-  a PostgreSQL advisory lock, meaning a lock the application asks for on a
-  number of its own choosing, released when the transaction ends. The number is
-  the project's identifier folded to one long (`projectLockKey`), or a single
-  fixed instance-wide value for creating a project. `References.kt` turns a
+  re-runs disabled, and each operation takes a lock before touching anything.
+  That lock was a PostgreSQL advisory lock when this plan was written and is now
+  a locked row — `SELECT … FOR UPDATE` on the project's own row, or on a
+  dedicated row for the instance-wide scope — because the schema is deliberately
+  free of engine-specific features and the lock primitive was not. `References.kt` turns a
   caller's reference into a row: a value shaped like a UUID is looked up as an
   identifier, anything else as a handle, and item and release lookups are
   confined to the project in hand. `RowMappings.kt` turns rows into the shared
@@ -311,8 +311,8 @@ the document tables.
   neither reads nor writes a status, and a second delete comes back
   `not_found`.
 
-- [x] **STEP6** — Implement deleting a project under the instance-wide lock and
-  then the project's own, removing the project and letting the schema's cascade
+- [x] **STEP6** — Implement deleting a project under the instance-wide lock row
+  and then the project's own row, removing the project and letting the schema's cascade
   take its releases, items, edges and document rows; make every write
   re-read its project under the lock, since the resolution that produced the lock
   key ran before the lock was held; update `WriteServiceSurfaceTest` to the nine

@@ -12,13 +12,13 @@ class MigrationTest {
         val url = EmbeddedPostgresSupport.freshMigratedDatabase()
         DriverManager.getConnection(url).use { connection ->
             println("PostgreSQL build: ${serverVersion(connection)}")
-            assertEquals(8, appliedChangesetCount(connection))
+            assertEquals(9, appliedChangesetCount(connection))
         }
 
         migrateDatabase(url)
 
         DriverManager.getConnection(url).use { connection ->
-            assertEquals(8, appliedChangesetCount(connection))
+            assertEquals(9, appliedChangesetCount(connection))
         }
     }
 

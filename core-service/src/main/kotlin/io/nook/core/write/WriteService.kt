@@ -20,9 +20,7 @@ import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
 import io.nook.core.store.blockerSetsOf
 import io.nook.core.store.blockersOf
-import io.nook.core.store.notFound
 import io.nook.core.store.resolveItem
-import io.nook.core.store.resolveProject
 import io.nook.core.store.resolveRelease
 import io.nook.core.store.toProject
 import io.nook.core.store.toProjectItem
@@ -33,11 +31,9 @@ import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
-import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.select
@@ -51,11 +47,11 @@ import org.jetbrains.exposed.v1.jdbc.update
  * from the contract. Blocker edges change only by whole-set replacement, never
  * through any public delete.
  *
- * Every operation runs as one fresh transaction that takes an advisory lock
- * first — the project's own lock, or the instance-wide lock where the scope at
- * stake is the whole instance — so writers in one scope take turns. Validation
- * happens inside that lock; the schema's constraints stay on underneath as a
- * backstop, translated to structured errors if ever hit. A failure throws
+ * Every operation runs as one fresh transaction that locks a row before
+ * touching anything — the project's own row, or the instance-wide lock row
+ * where the scope at stake is the whole instance — so writers in one scope take
+ * turns. Validation happens inside that lock; the schema's constraints stay on
+ * underneath as a backstop. A failure throws
  * [io.nook.contract.StructuredErrorException] and rolls the transaction back,
  * leaving no partial effect.
  *
@@ -328,31 +324,14 @@ class WriteService(private val db: Database) {
      */
     fun deleteProject(projectRef: String): Unit = writeTransaction(db) {
         takeInstanceLock()
-        val projectId = resolveProject(projectRef)[ProjectTable.id]
-        takeProjectLock(projectId)
+        val projectId = lockedProjectId(projectRef)
         ProjectTable.deleteWhere { ProjectTable.id eq projectId }
     }
 
     // ── shared internals ─────────────────────────────────────────────────────
 
-    /**
-     * Resolves the project reference, takes its lock, and returns its id.
-     *
-     * The project is read twice on purpose. The first read is what the lock key
-     * is derived from, and it necessarily happens before the lock is held — so
-     * the project can be deleted in the gap. The second read is inside the lock,
-     * which is the only place an answer about the project holds still. Without
-     * it the write goes ahead against a project that is gone and the store
-     * refuses it on a foreign key, which reaches the caller as a fault in this
-     * service rather than as the `not_found` it actually is.
-     */
-    private fun JdbcTransaction.lockedProjectId(projectRef: String): Uuid {
-        val projectId = resolveProject(projectRef)[ProjectTable.id]
-        takeProjectLock(projectId)
-        val stillThere = ProjectTable.selectAll().where { ProjectTable.id eq projectId }.any()
-        if (!stillThere) notFound("no project matches reference \"$projectRef\"")
-        return projectId
-    }
+    /** Locks the project named by [projectRef] and returns its id. */
+    private fun lockedProjectId(projectRef: String): Uuid = lockProject(projectRef)[ProjectTable.id]
 
     /** Resolves [ref] to an epic in the project, or fails: leaves cannot parent. */
     private fun epicIdOf(projectId: Uuid, ref: String): Uuid {

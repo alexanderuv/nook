@@ -25,8 +25,8 @@ holding reference resolution, the row-to-entity mapping, and the two failures
 both paths raise; and `io.nook.core.read`, holding one `ReadService` whose public
 surface is exactly the five reads, each running in a read-only transaction that
 reads one moment and takes no lock. `WriteService` grew to nine mutations with
-`deleteItem` and `deleteProject`. `:contract` gained the listing filter. **The
-schema did not change at all** — `0001` already had everything deletion needs.
+`deleteItem` and `deleteProject`. `:contract` gained the listing filter. Deletion
+itself needed no schema change — `0001` already had everything it takes.
 
 That last point is the epic's real story, and it took a wrong turn to reach.
 Deletion was built as the plan specified: a `deleted_at` mark, the three handle
@@ -83,6 +83,17 @@ Deviations from the plan, all folded into its text:
   against the migrated schema's. It was added to guard the partial index's
   condition and kept afterwards: the drift guard compares which rules exist, not
   what they cover, and that gap is worth closing regardless.
+- **The advisory locks went too.** Removing the partial index left
+  `pg_advisory_xact_lock` as the last engine-specific SQL in the service, which
+  no recorded decision forbade but which made "plain standard SQL" true only of
+  the schema. Writers now take a turn by locking a row `FOR UPDATE`. A writer
+  inside a project locks that project's own row, which is strictly better than a
+  named lock: locking the row and checking the project is still there became one
+  statement, deleting the double-read the delete race had needed. The two writes
+  contending over the instance-wide space of project handles have no row to
+  lock, so changeset `0002-instance-lock` adds one — a table holding nothing,
+  one row per scope, seeded by the changelog. Its absence is treated as a broken
+  schema, never as a licence to skip the turn.
 
 ### Rule-to-test mapping
 
@@ -132,4 +143,7 @@ project-scoped, and nothing found once the row is removed), and
 `WriteServiceSurfaceTest` (exactly nine mutations; no command carrying a field
 that could ask for a deleted row back, since a way back would arrive as a
 parameter long before it arrived as an operation; and both deletes returning
-nothing).
+nothing), and `WriteLockTest` (a second writer provably waits on both the
+project row and the instance lock row, a project that is not there is
+`not_found` rather than an unlocked pass, and a missing lock row is reported as
+a broken schema instead of silently forfeiting the turn).

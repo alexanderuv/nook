@@ -40,7 +40,19 @@ portability; it keeps the DDL simple and the constraints strong:
   header comment.
 - **Uniqueness is plain, not partial.** Every UNIQUE is a whole-table constraint
   (e.g. task/epic/release slugs are unique per project via `(project_id, slug)`),
-  so there is no `WHERE`-filtered index to depend on.
+  so there is no `WHERE`-filtered index to depend on. This is also why deleting
+  removes the row rather than marking it: a mark would need uniqueness limited to
+  unmarked rows, which exists only as a partial index (see
+  [`docs/04`](../docs/04-structure-semantics.md)).
+- **`instance_lock` is a table that exists to be locked.** Writers take turns by
+  locking a row `FOR UPDATE` — plain standard SQL, where a named lock primitive
+  would not be. A writer inside one project locks that project's own row; the two
+  writes contending over the instance-wide space of project handles (creating and
+  deleting a project) have no such row, so they lock a dedicated one here. It
+  holds no data and nothing reads its contents; one row per scope, so a second
+  scope would not queue behind the first. The row is seeded by the changelog, and
+  the write path treats its absence as a broken schema rather than as "no lock
+  needed".
 - **The CHECK constraint and the `ready_item` view** are emitted as ANSI-portable SQL.
 
 ## Running migrations

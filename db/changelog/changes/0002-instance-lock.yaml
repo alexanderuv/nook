@@ -1,0 +1,34 @@
+# Nook — the instance-wide lock rows.
+#
+# Writers whose uniqueness scope is one project take turns by locking that
+# project's own row. Two writes have no such row to lock: creating a project,
+# which chooses a handle unique across the whole instance, and deleting one,
+# which frees a handle back into that same space. What they contend over is the
+# *set* of project handles, and no row represents it.
+#
+# This table is that row. It holds nothing and is never read for its contents;
+# a writer selects its scope's row FOR UPDATE and thereby takes a turn. The
+# alternative — PostgreSQL's advisory locks — does the same job in one statement
+# and no table, but it is engine-specific, and the schema is deliberately plain
+# standard SQL throughout.
+#
+# One row per scope rather than a single anonymous one, so that a second
+# instance-wide scope, if one ever appears, waits on its own row instead of
+# queueing behind this one.
+databaseChangeLog:
+
+  - changeSet:
+      id: 0009-create-instance-lock
+      author: nook
+      changes:
+        - createTable:
+            tableName: instance_lock
+            columns:
+              - column: {name: scope, type: varchar(100), constraints: {primaryKey: true, nullable: false}}
+        # The row must exist for the lock to be takeable at all; the write path
+        # treats a missing one as a corrupted schema rather than as "no lock
+        # needed", since silently skipping it would forfeit the turn-taking.
+        - insert:
+            tableName: instance_lock
+            columns:
+              - column: {name: scope, value: project_slug}

@@ -22,7 +22,9 @@ slug and cycle rules as pure functions, the reference resolver, the
 constraint-name error translator, and one `WriteService` class whose public
 surface is exactly the seven mutations. Every write runs in a fresh
 transaction with retries disabled and takes the per-project advisory lock (or
-the instance-wide lock for project creation) before touching anything. Both
+the instance-wide lock for project creation) before touching anything. *(Epic 04
+replaced both advisory locks with locked rows — `SELECT … FOR UPDATE` — so the
+write path holds no engine-specific SQL; the turn-taking is unchanged.)* Both
 concurrency stress tests held at 100 repetitions each.
 
 Deviations from the plan, all folded into its text: entity ids are Kotlin's
