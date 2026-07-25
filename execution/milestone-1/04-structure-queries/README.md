@@ -32,7 +32,9 @@ reference resolution, the row-to-entity mapping, and the two failures both paths
 raise; and `io.nook.core.read`, holding one `ReadService` whose public surface is
 exactly the five reads, each running in a read-only transaction that reads one
 moment and takes no lock. `WriteService` grew to nine mutations with `deleteItem`
-and `deleteProject`. `:contract` gained the listing filter.
+and `deleteProject`. `:contract` gained the listing filter. CI ran green on the
+whole of it, migration included — the one part of the epic no probe had
+executed.
 
 Two things the plan expected to be hard turned out fine, and one turned out
 harder. Liquibase performed the constraint-to-partial-index swap without
