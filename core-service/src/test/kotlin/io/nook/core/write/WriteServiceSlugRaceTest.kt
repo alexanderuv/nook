@@ -1,5 +1,7 @@
 package io.nook.core.write
 
+import io.nook.contract.CreateItem
+import io.nook.contract.CreateProject
 import io.nook.core.db.EmbeddedPostgresSupport
 import java.util.concurrent.Callable
 import java.util.concurrent.CyclicBarrier
@@ -24,13 +26,13 @@ class WriteServiceSlugRaceTest {
         val pool = Executors.newFixedThreadPool(2)
         try {
             repeat(100) { round ->
-                val project = service.createProject("Race Round $round")
+                val project = service.createProject(CreateProject("Race Round $round"))
                 val barrier = CyclicBarrier(2)
                 val created = (1..2).map {
                     pool.submit(
                         Callable {
                             barrier.await(10, TimeUnit.SECONDS)
-                            service.createItem(project.slug, type = "task", name = "Add search")
+                            service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
                         },
                     )
                 }.map { it.get(30, TimeUnit.SECONDS) }

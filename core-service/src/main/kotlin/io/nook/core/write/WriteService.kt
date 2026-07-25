@@ -1,17 +1,24 @@
 package io.nook.core.write
 
+import io.nook.contract.AssignEpicToRelease
+import io.nook.contract.CreateItem
+import io.nook.contract.CreateProject
+import io.nook.contract.CreateRelease
+import io.nook.contract.FieldChange
 import io.nook.contract.ItemStatus
 import io.nook.contract.ItemType
 import io.nook.contract.Project
 import io.nook.contract.ProjectItem
 import io.nook.contract.Release
 import io.nook.contract.ReleaseStatus
+import io.nook.contract.SetItemBlockedBy
+import io.nook.contract.UpdateItem
+import io.nook.contract.UpdateRelease
 import io.nook.core.db.ItemDependencyTable
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
 import java.time.Instant
-import java.time.LocalDate
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -28,9 +35,11 @@ import org.jetbrains.exposed.v1.jdbc.update
 
 /**
  * The single write path: every mutation of the structure store goes through
- * one of the seven public operations below. No operation deletes a project,
- * item, or release; blocker edges change only by whole-set replacement,
- * never through any public delete.
+ * one of the seven public operations below. Each takes the references that
+ * address its target as parameters and the payload as a command data class
+ * from the contract. No operation deletes a project, item, or release;
+ * blocker edges change only by whole-set replacement, never through any
+ * public delete.
  *
  * Every operation runs as one fresh transaction that takes an advisory lock
  * first — the project's own lock, or the instance-wide lock for project
@@ -46,45 +55,45 @@ import org.jetbrains.exposed.v1.jdbc.update
  */
 class WriteService(private val db: Database) {
 
-    fun createProject(name: String, slug: String? = null, description: String? = null): Project =
+    fun createProject(command: CreateProject): Project =
         writeTransaction(db) {
             takeInstanceLock()
-            requireUsableName(name)
-            val chosenSlug = chooseSlug(slug, name, takenProjectSlugs(slug ?: deriveSlug(name)))
+            requireUsableName(command.name)
+            val chosenSlug = chooseSlug(
+                command.slug, command.name,
+                takenProjectSlugs(command.slug ?: deriveSlug(command.name)),
+            )
             val id = Uuid.random()
             ProjectTable.insert {
                 it[ProjectTable.id] = id
                 it[ProjectTable.slug] = chosenSlug
-                it[ProjectTable.name] = name
-                if (description != null) it[ProjectTable.description] = description
+                it[ProjectTable.name] = command.name
+                if (command.description != null) it[ProjectTable.description] = command.description
             }
             loadProject(id)
         }
 
-    fun createItem(
-        projectRef: String,
-        type: String,
-        name: String,
-        slug: String? = null,
-        description: String? = null,
-        parentRef: String? = null,
-        releaseRef: String? = null,
-    ): ProjectItem = writeTransaction(db) {
+    fun createItem(projectRef: String, command: CreateItem): ProjectItem = writeTransaction(db) {
         val projectId = lockedProjectId(projectRef)
-        val itemType = ItemType.fromLabel(type)
-            ?: validationFailed("\"$type\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}")
-        requireUsableName(name)
+        val itemType = ItemType.fromLabel(command.type)
+            ?: validationFailed("\"${command.type}\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}")
+        requireUsableName(command.name)
+        val parentRef = command.parentRef
         val parentId = when {
             parentRef == null -> null
             itemType == ItemType.EPIC -> validationFailed("an epic never has a parent")
             else -> epicIdOf(projectId, parentRef)
         }
+        val releaseRef = command.releaseRef
         val releaseId = when {
             releaseRef == null -> null
             itemType.isLeaf -> validationFailed("release assignment applies to epics only")
             else -> resolveRelease(projectId, releaseRef)[ReleaseTable.id]
         }
-        val chosenSlug = chooseSlug(slug, name, takenItemSlugs(projectId, slug ?: deriveSlug(name)))
+        val chosenSlug = chooseSlug(
+            command.slug, command.name,
+            takenItemSlugs(projectId, command.slug ?: deriveSlug(command.name)),
+        )
         val id = Uuid.random()
         ProjectItemTable.insert {
             it[ProjectItemTable.id] = id
@@ -93,87 +102,80 @@ class WriteService(private val db: Database) {
             it[ProjectItemTable.releaseId] = releaseId
             it[ProjectItemTable.type] = itemType.code
             it[ProjectItemTable.slug] = chosenSlug
-            it[ProjectItemTable.name] = name
-            if (description != null) it[ProjectItemTable.description] = description
+            it[ProjectItemTable.name] = command.name
+            if (command.description != null) it[ProjectItemTable.description] = command.description
             it[ProjectItemTable.status] = ItemStatus.TODO.code
         }
         loadItem(id)
     }
 
-    fun updateItem(
-        projectRef: String,
-        itemRef: String,
-        name: FieldChange<String> = FieldChange.Keep,
-        slug: FieldChange<String> = FieldChange.Keep,
-        description: FieldChange<String?> = FieldChange.Keep,
-        status: FieldChange<String> = FieldChange.Keep,
-        type: FieldChange<String> = FieldChange.Keep,
-        parentRef: FieldChange<String?> = FieldChange.Keep,
-    ): ProjectItem = writeTransaction(db) {
-        val projectId = lockedProjectId(projectRef)
-        val row = resolveItem(projectId, itemRef)
-        val itemId = row[ProjectItemTable.id]
-        val currentType = ItemType.fromCode(row[ProjectItemTable.type])
-            ?: error("the store holds item type code ${row[ProjectItemTable.type]}, which no member carries")
+    fun updateItem(projectRef: String, itemRef: String, command: UpdateItem): ProjectItem =
+        writeTransaction(db) {
+            val projectId = lockedProjectId(projectRef)
+            val row = resolveItem(projectId, itemRef)
+            val itemId = row[ProjectItemTable.id]
+            val currentType = ItemType.fromCode(row[ProjectItemTable.type])
+                ?: error("the store holds item type code ${row[ProjectItemTable.type]}, which no member carries")
 
-        val newName = withSetValue(name) { requireUsableName(it) }
-        val newSlug = withSetValue(slug) { value ->
-            explicitSlugProblem(value)?.let { validationFailed(it) }
-            if (value != row[ProjectItemTable.slug] && value in takenItemSlugs(projectId, value)) {
-                conflict("slug \"$value\" is already taken by another item in the project")
+            val newName = withSetValue(command.name) { requireUsableName(it) }
+            val newSlug = withSetValue(command.slug) { value ->
+                explicitSlugProblem(value)?.let { validationFailed(it) }
+                if (value != row[ProjectItemTable.slug] && value in takenItemSlugs(projectId, value)) {
+                    conflict("slug \"$value\" is already taken by another item in the project")
+                }
             }
-        }
-        val newStatus = when (status) {
-            FieldChange.Keep -> null
-            is FieldChange.Set -> ItemStatus.fromLabel(status.value)
-                ?: validationFailed("\"${status.value}\" is not an item status; the item statuses are ${ItemStatus.entries.joinToString { it.label }}")
-        }
-        val targetType = when (type) {
-            FieldChange.Keep -> currentType
-            is FieldChange.Set -> ItemType.fromLabel(type.value)
-                ?: validationFailed("\"${type.value}\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}")
-        }
-        val targetParentId = when (parentRef) {
-            FieldChange.Keep -> row[ProjectItemTable.parentId]
-            is FieldChange.Set -> parentRef.value?.let { epicIdOf(projectId, it) }
+            val newStatus = when (val status = command.status) {
+                FieldChange.Keep -> null
+                is FieldChange.Set -> ItemStatus.fromLabel(status.value)
+                    ?: validationFailed("\"${status.value}\" is not an item status; the item statuses are ${ItemStatus.entries.joinToString { it.label }}")
+            }
+            val targetType = when (val type = command.type) {
+                FieldChange.Keep -> currentType
+                is FieldChange.Set -> ItemType.fromLabel(type.value)
+                    ?: validationFailed("\"${type.value}\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}")
+            }
+            val targetParentId = when (val parentRef = command.parentRef) {
+                FieldChange.Keep -> row[ProjectItemTable.parentId]
+                is FieldChange.Set -> parentRef.value?.let { epicIdOf(projectId, it) }
+            }
+
+            if (targetType == ItemType.EPIC && targetParentId != null) {
+                validationFailed("an epic never has a parent")
+            }
+            if (targetType == ItemType.EPIC && currentType.isLeaf) {
+                val inAnyEdge = ItemDependencyTable.selectAll()
+                    .where { (ItemDependencyTable.itemId eq itemId) or (ItemDependencyTable.dependsOnId eq itemId) }
+                    .any()
+                if (inAnyEdge) {
+                    validationFailed("an item in any dependency edge cannot become an epic; clear the edges first")
+                }
+            }
+            if (currentType == ItemType.EPIC && targetType.isLeaf) {
+                val hasChildren = ProjectItemTable.selectAll()
+                    .where { ProjectItemTable.parentId eq itemId }
+                    .any()
+                if (hasChildren) {
+                    validationFailed("an epic with child items cannot become a leaf; reparent the children first")
+                }
+                if (row[ProjectItemTable.releaseId] != null) {
+                    validationFailed("an epic assigned to a release cannot become a leaf; unassign it first")
+                }
+            }
+
+            ProjectItemTable.update({ ProjectItemTable.id eq itemId }) {
+                if (newName != null) it[ProjectItemTable.name] = newName
+                if (newSlug != null) it[ProjectItemTable.slug] = newSlug
+                val description = command.description
+                if (description is FieldChange.Set) it[ProjectItemTable.description] = description.value
+                if (newStatus != null) it[ProjectItemTable.status] = newStatus.code
+                if (command.type is FieldChange.Set) it[ProjectItemTable.type] = targetType.code
+                if (command.parentRef is FieldChange.Set) it[ProjectItemTable.parentId] = targetParentId
+                it[ProjectItemTable.updatedAt] = Instant.now()
+            }
+            loadItem(itemId)
         }
 
-        if (targetType == ItemType.EPIC && targetParentId != null) {
-            validationFailed("an epic never has a parent")
-        }
-        if (targetType == ItemType.EPIC && currentType.isLeaf) {
-            val inAnyEdge = ItemDependencyTable.selectAll()
-                .where { (ItemDependencyTable.itemId eq itemId) or (ItemDependencyTable.dependsOnId eq itemId) }
-                .any()
-            if (inAnyEdge) {
-                validationFailed("an item in any dependency edge cannot become an epic; clear the edges first")
-            }
-        }
-        if (currentType == ItemType.EPIC && targetType.isLeaf) {
-            val hasChildren = ProjectItemTable.selectAll()
-                .where { ProjectItemTable.parentId eq itemId }
-                .any()
-            if (hasChildren) {
-                validationFailed("an epic with child items cannot become a leaf; reparent the children first")
-            }
-            if (row[ProjectItemTable.releaseId] != null) {
-                validationFailed("an epic assigned to a release cannot become a leaf; unassign it first")
-            }
-        }
-
-        ProjectItemTable.update({ ProjectItemTable.id eq itemId }) {
-            if (newName != null) it[ProjectItemTable.name] = newName
-            if (newSlug != null) it[ProjectItemTable.slug] = newSlug
-            if (description is FieldChange.Set) it[ProjectItemTable.description] = description.value
-            if (newStatus != null) it[ProjectItemTable.status] = newStatus.code
-            if (type is FieldChange.Set) it[ProjectItemTable.type] = targetType.code
-            if (parentRef is FieldChange.Set) it[ProjectItemTable.parentId] = targetParentId
-            it[ProjectItemTable.updatedAt] = Instant.now()
-        }
-        loadItem(itemId)
-    }
-
-    fun setItemBlockedBy(projectRef: String, itemRef: String, blockerRefs: List<String>): ProjectItem =
+    fun setItemBlockedBy(projectRef: String, itemRef: String, command: SetItemBlockedBy): ProjectItem =
         writeTransaction(db) {
             val projectId = lockedProjectId(projectRef)
             val row = resolveItem(projectId, itemRef)
@@ -181,7 +183,7 @@ class WriteService(private val db: Database) {
             if (row[ProjectItemTable.type] == ItemType.EPIC.code) {
                 validationFailed("blockers apply to leaves; the target item is an epic")
             }
-            val blockerIds = blockerRefs.map { ref ->
+            val blockerIds = command.blockerRefs.map { ref ->
                 val blocker = resolveItem(projectId, ref)
                 if (blocker[ProjectItemTable.type] == ItemType.EPIC.code) {
                     validationFailed("a blocker must be a leaf; \"$ref\" is an epic")
@@ -205,74 +207,66 @@ class WriteService(private val db: Database) {
             loadItem(itemId)
         }
 
-    fun createRelease(
-        projectRef: String,
-        name: String,
-        slug: String? = null,
-        description: String? = null,
-        targetDate: LocalDate? = null,
-    ): Release = writeTransaction(db) {
+    fun createRelease(projectRef: String, command: CreateRelease): Release = writeTransaction(db) {
         val projectId = lockedProjectId(projectRef)
-        requireUsableName(name)
-        val chosenSlug = chooseSlug(slug, name, takenReleaseSlugs(projectId, slug ?: deriveSlug(name)))
+        requireUsableName(command.name)
+        val chosenSlug = chooseSlug(
+            command.slug, command.name,
+            takenReleaseSlugs(projectId, command.slug ?: deriveSlug(command.name)),
+        )
         val id = Uuid.random()
         ReleaseTable.insert {
             it[ReleaseTable.id] = id
             it[ReleaseTable.projectId] = projectId
             it[ReleaseTable.slug] = chosenSlug
-            it[ReleaseTable.name] = name
-            if (description != null) it[ReleaseTable.description] = description
+            it[ReleaseTable.name] = command.name
+            if (command.description != null) it[ReleaseTable.description] = command.description
             it[ReleaseTable.status] = ReleaseStatus.PLANNED.code
-            it[ReleaseTable.targetDate] = targetDate
+            it[ReleaseTable.targetDate] = command.targetDate
         }
         loadRelease(id)
     }
 
-    fun updateRelease(
-        projectRef: String,
-        releaseRef: String,
-        name: FieldChange<String> = FieldChange.Keep,
-        slug: FieldChange<String> = FieldChange.Keep,
-        description: FieldChange<String?> = FieldChange.Keep,
-        status: FieldChange<String> = FieldChange.Keep,
-        targetDate: FieldChange<LocalDate?> = FieldChange.Keep,
-    ): Release = writeTransaction(db) {
-        val projectId = lockedProjectId(projectRef)
-        val row = resolveRelease(projectId, releaseRef)
-        val releaseId = row[ReleaseTable.id]
+    fun updateRelease(projectRef: String, releaseRef: String, command: UpdateRelease): Release =
+        writeTransaction(db) {
+            val projectId = lockedProjectId(projectRef)
+            val row = resolveRelease(projectId, releaseRef)
+            val releaseId = row[ReleaseTable.id]
 
-        val newName = withSetValue(name) { requireUsableName(it) }
-        val newSlug = withSetValue(slug) { value ->
-            explicitSlugProblem(value)?.let { validationFailed(it) }
-            if (value != row[ReleaseTable.slug] && value in takenReleaseSlugs(projectId, value)) {
-                conflict("slug \"$value\" is already taken by another release in the project")
+            val newName = withSetValue(command.name) { requireUsableName(it) }
+            val newSlug = withSetValue(command.slug) { value ->
+                explicitSlugProblem(value)?.let { validationFailed(it) }
+                if (value != row[ReleaseTable.slug] && value in takenReleaseSlugs(projectId, value)) {
+                    conflict("slug \"$value\" is already taken by another release in the project")
+                }
             }
-        }
-        val newStatus = when (status) {
-            FieldChange.Keep -> null
-            is FieldChange.Set -> ReleaseStatus.fromLabel(status.value)
-                ?: validationFailed("\"${status.value}\" is not a release status; the release statuses are ${ReleaseStatus.entries.joinToString { it.label }}")
+            val newStatus = when (val status = command.status) {
+                FieldChange.Keep -> null
+                is FieldChange.Set -> ReleaseStatus.fromLabel(status.value)
+                    ?: validationFailed("\"${status.value}\" is not a release status; the release statuses are ${ReleaseStatus.entries.joinToString { it.label }}")
+            }
+
+            ReleaseTable.update({ ReleaseTable.id eq releaseId }) {
+                if (newName != null) it[ReleaseTable.name] = newName
+                if (newSlug != null) it[ReleaseTable.slug] = newSlug
+                val description = command.description
+                if (description is FieldChange.Set) it[ReleaseTable.description] = description.value
+                if (newStatus != null) it[ReleaseTable.status] = newStatus.code
+                val targetDate = command.targetDate
+                if (targetDate is FieldChange.Set) it[ReleaseTable.targetDate] = targetDate.value
+                it[ReleaseTable.updatedAt] = Instant.now()
+            }
+            loadRelease(releaseId)
         }
 
-        ReleaseTable.update({ ReleaseTable.id eq releaseId }) {
-            if (newName != null) it[ReleaseTable.name] = newName
-            if (newSlug != null) it[ReleaseTable.slug] = newSlug
-            if (description is FieldChange.Set) it[ReleaseTable.description] = description.value
-            if (newStatus != null) it[ReleaseTable.status] = newStatus.code
-            if (targetDate is FieldChange.Set) it[ReleaseTable.targetDate] = targetDate.value
-            it[ReleaseTable.updatedAt] = Instant.now()
-        }
-        loadRelease(releaseId)
-    }
-
-    fun assignEpicToRelease(projectRef: String, epicRef: String, releaseRef: String? = null): ProjectItem =
+    fun assignEpicToRelease(projectRef: String, epicRef: String, command: AssignEpicToRelease): ProjectItem =
         writeTransaction(db) {
             val projectId = lockedProjectId(projectRef)
             val row = resolveItem(projectId, epicRef)
             if (row[ProjectItemTable.type] != ItemType.EPIC.code) {
                 validationFailed("release assignment applies to epics only")
             }
-            val releaseId = releaseRef?.let { resolveRelease(projectId, it)[ReleaseTable.id] }
+            val releaseId = command.releaseRef?.let { resolveRelease(projectId, it)[ReleaseTable.id] }
             ProjectItemTable.update({ ProjectItemTable.id eq row[ProjectItemTable.id] }) {
                 it[ProjectItemTable.releaseId] = releaseId
                 it[ProjectItemTable.updatedAt] = Instant.now()

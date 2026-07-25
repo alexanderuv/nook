@@ -1,4 +1,4 @@
-package io.nook.core.write
+package io.nook.contract
 
 /**
  * A partial-update field: [Keep] leaves the stored value alone, [Set] writes

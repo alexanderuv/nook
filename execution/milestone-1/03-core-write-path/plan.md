@@ -123,7 +123,15 @@ shared shapes in `:contract`:
   concern. (Found in execution: entity ids use Kotlin's own `kotlin.uuid.Uuid`
   type, not Java's `java.util.UUID` — the database layer's column type is the
   Kotlin one, and carrying a single id type end to end beats converting at
-  every boundary.)
+  every boundary.) (Found in execution: `:contract` also gained one command
+  data class per operation — `CreateProject`, `CreateItem`, `UpdateItem`,
+  `SetItemBlockedBy`, `CreateRelease`, `UpdateRelease`, `AssignEpicToRelease`
+  — plus the `FieldChange` partial-update type. The first cut passed each
+  operation's payload as individual method parameters; that was rejected in
+  review, because the payload becomes a wire shape in epic 05 anyway and a
+  grouped class absorbs future field additions without changing every call
+  site. Each service operation now takes the references that address its
+  target as parameters and one command as the payload.)
 
 - **One write-service class** in `:core-service` as the single entry point,
   exposing exactly the seven operations. Every operation follows the same

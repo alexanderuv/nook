@@ -1,5 +1,8 @@
 package io.nook.core.write
 
+import io.nook.contract.CreateItem
+import io.nook.contract.CreateProject
+import io.nook.contract.CreateRelease
 import io.nook.contract.ErrorCode
 import io.nook.contract.ItemStatus
 import io.nook.contract.ReleaseStatus
@@ -31,90 +34,101 @@ class WriteServiceCreateTest {
 
     @Test
     fun `create_project derives the slug, returns the full entity, and suffixes a name collision`() {
-        val project = service.createProject("Search Revamp!")
+        val project = service.createProject(CreateProject("Search Revamp!"))
         assertEquals("search-revamp", project.slug)
         assertEquals("Search Revamp!", project.name)
         assertNull(project.artifactRepoUrl)
 
-        val second = service.createProject("Search Revamp")
+        val second = service.createProject(CreateProject("Search Revamp"))
         assertEquals("search-revamp-2", second.slug)
     }
 
     @Test
     fun `a new release starts planned and a new item starts todo`() {
-        val project = service.createProject("Fresh Statuses")
-        val release = service.createRelease(project.slug, "v1")
-        val item = service.createItem(project.slug, type = "task", name = "First task")
+        val project = service.createProject(CreateProject("Fresh Statuses"))
+        val release = service.createRelease(project.slug, CreateRelease("v1"))
+        val item = service.createItem(project.slug, CreateItem(type = "task", name = "First task"))
         assertEquals(ReleaseStatus.PLANNED, release.status)
         assertEquals(ItemStatus.TODO, item.status)
     }
 
     @Test
     fun `an unknown item type is rejected`() {
-        val project = service.createProject("Typed")
+        val project = service.createProject(CreateProject("Typed"))
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "story", name = "Not a thing")
+            service.createItem(project.slug, CreateItem(type = "story", name = "Not a thing"))
         }
     }
 
     @Test
     fun `a leaf parents under an epic and a parentless leaf sits at project level`() {
-        val project = service.createProject("Containment Happy")
-        val epic = service.createItem(project.slug, type = "epic", name = "Search core")
-        val task = service.createItem(project.slug, type = "task", name = "Index docs", parentRef = "search-core")
-        val bug = service.createItem(project.slug, type = "bug", name = "Crash on empty query")
+        val project = service.createProject(CreateProject("Containment Happy"))
+        val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Search core"))
+        val task = service.createItem(
+            project.slug,
+            CreateItem(type = "task", name = "Index docs", parentRef = "search-core"),
+        )
+        val bug = service.createItem(project.slug, CreateItem(type = "bug", name = "Crash on empty query"))
         assertEquals(epic.id, task.parentId)
         assertNull(bug.parentId)
     }
 
     @Test
     fun `a leaf cannot parent, an epic cannot be parented, and a leaf cannot join a release`() {
-        val project = service.createProject("Containment Rejections")
-        service.createItem(project.slug, type = "task", name = "Add search")
-        service.createRelease(project.slug, "v1")
+        val project = service.createProject(CreateProject("Containment Rejections"))
+        service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
+        service.createRelease(project.slug, CreateRelease("v1"))
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "task", name = "Child", parentRef = "add-search")
+            service.createItem(project.slug, CreateItem(type = "task", name = "Child", parentRef = "add-search"))
         }
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "epic", name = "Parented epic", parentRef = "add-search")
+            service.createItem(
+                project.slug,
+                CreateItem(type = "epic", name = "Parented epic", parentRef = "add-search"),
+            )
         }
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "task", name = "Released task", releaseRef = "v1")
+            service.createItem(project.slug, CreateItem(type = "task", name = "Released task", releaseRef = "v1"))
         }
     }
 
     @Test
     fun `derived slugs take suffixes in sequence`() {
-        val project = service.createProject("Suffix Sequence")
-        val slugs = (1..3).map { service.createItem(project.slug, type = "task", name = "Add search").slug }
+        val project = service.createProject(CreateProject("Suffix Sequence"))
+        val slugs = (1..3).map {
+            service.createItem(project.slug, CreateItem(type = "task", name = "Add search")).slug
+        }
         assertEquals(listOf("add-search", "add-search-2", "add-search-3"), slugs)
     }
 
     @Test
     fun `derivation skips over an explicitly claimed suffix to the first free one`() {
-        val project = service.createProject("Suffix Gap")
-        service.createItem(project.slug, type = "task", name = "Add search")
-        service.createItem(project.slug, type = "task", name = "Claimed", slug = "add-search-2")
-        val third = service.createItem(project.slug, type = "task", name = "Add search")
+        val project = service.createProject(CreateProject("Suffix Gap"))
+        service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
+        service.createItem(project.slug, CreateItem(type = "task", name = "Claimed", slug = "add-search-2"))
+        val third = service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
         assertEquals("add-search-3", third.slug)
     }
 
     @Test
     fun `unusable names and slugs are rejected, and an explicit slug saves an unusable name`() {
-        val project = service.createProject("Unusable Input")
+        val project = service.createProject(CreateProject("Unusable Input"))
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "task", name = "???")
+            service.createItem(project.slug, CreateItem(type = "task", name = "???"))
         }
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "task", name = "")
+            service.createItem(project.slug, CreateItem(type = "task", name = ""))
         }
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "task", name = "Cased", slug = "Add-Search")
+            service.createItem(project.slug, CreateItem(type = "task", name = "Cased", slug = "Add-Search"))
         }
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.createItem(project.slug, type = "task", name = "Uuid slug", slug = Uuid.random().toString())
+            service.createItem(
+                project.slug,
+                CreateItem(type = "task", name = "Uuid slug", slug = Uuid.random().toString()),
+            )
         }
-        val saved = service.createItem(project.slug, type = "task", name = "???", slug = "q3-spike")
+        val saved = service.createItem(project.slug, CreateItem(type = "task", name = "???", slug = "q3-spike"))
         assertEquals("q3-spike", saved.slug)
     }
 }

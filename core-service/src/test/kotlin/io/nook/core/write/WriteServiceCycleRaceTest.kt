@@ -1,6 +1,9 @@
 package io.nook.core.write
 
+import io.nook.contract.CreateItem
+import io.nook.contract.CreateProject
 import io.nook.contract.ErrorCode
+import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.core.db.EmbeddedPostgresSupport
 import java.util.concurrent.Callable
@@ -27,16 +30,18 @@ class WriteServiceCycleRaceTest {
         val pool = Executors.newFixedThreadPool(2)
         try {
             repeat(100) { round ->
-                val project = service.createProject("Cycle Round $round")
-                service.createItem(project.slug, type = "task", name = "x")
-                service.createItem(project.slug, type = "task", name = "y")
+                val project = service.createProject(CreateProject("Cycle Round $round"))
+                service.createItem(project.slug, CreateItem(type = "task", name = "x"))
+                service.createItem(project.slug, CreateItem(type = "task", name = "y"))
 
                 val barrier = CyclicBarrier(2)
                 val outcomes = listOf("x" to "y", "y" to "x").map { (item, blocker) ->
                     pool.submit(
                         Callable {
                             barrier.await(10, TimeUnit.SECONDS)
-                            runCatching { service.setItemBlockedBy(project.slug, item, listOf(blocker)) }
+                            runCatching {
+                                service.setItemBlockedBy(project.slug, item, SetItemBlockedBy(listOf(blocker)))
+                            }
                         },
                     )
                 }.map { it.get(30, TimeUnit.SECONDS) }
