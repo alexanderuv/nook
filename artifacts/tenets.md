@@ -4,8 +4,10 @@ Working principles for any agent contributing to this project. Each tenet is a
 **principle: non-negotiable**. Nothing enforces a tenet mechanically — each names
 its own check where one exists — but the absence of a gate is not permission: a
 principle holds because it is a principle, not because something blocks the
-alternative. Convenience, deadline pressure, or "just this once" are never
-grounds to set one aside. The project may layer its own tenets on top of this
+alternative. Convenience, deadline pressure, an expert audience, or "just this
+once" are never grounds to set one aside: the tenets bind every artifact and
+every stage of work — drafts, plans, and internal documents included — and a
+deliverable that violates one is unfinished, whatever else it achieves. The project may layer its own tenets on top of this
 base set; where the two collide, the project tenet wins — revising the set is
 the project's prerogative, never a working agent's.
 
@@ -41,9 +43,23 @@ the project's prerogative, never a working agent's.
   zero-based numbering in human-facing series reads as a programmer reflex, not a
   convention.
 
-- **Plain words over jargon.** Questions, explanations, and documents use everyday
-  language — no unexplained trade terms, no compressed shorthand. Where a technical
-  term is unavoidable, say what it means in plain words at first use ("a spike — a
-  small throwaway experiment built only to answer a question"). A concrete example
-  the reader can picture beats a category name. Check: if a reader outside the
-  specialty would have to ask what a sentence means, rewrite the sentence.
+- **Plain words over jargon — absolute, without exception.** Everything written
+  for a reader — questions, explanations, and every document, planning artifacts
+  included — uses everyday language. No unexplained trade terms. No compressed
+  shorthand: not bare token runs ("REQ17/REQ23/EDGE3"), not arrow chains
+  ("resolve → validate → insert"), not abbreviations a newcomer would have to
+  decode. Where a technical term is unavoidable, say what it means in plain
+  words at first use ("a spike — a small throwaway experiment built only to
+  answer a question"). Where an artifact is cited, weave the citation into a
+  sentence that states the point in plain words, so the pointer is a
+  cross-check, never required reading. A concrete example the reader can
+  picture beats a category name. No claimed audience lifts this rule: "the
+  readers are experts" or "it's an internal doc" is never grounds to skip the
+  plain-words pass — internal documents are read by future agents with no
+  context, exactly the readers jargon locks out. Nor is length: when plain
+  words make a document longer, the document gets longer; this tenet is never
+  traded against brevity. A document that fails this check is unfinished,
+  whatever else it achieves — rewriting it is part of the work, not polish
+  after it. Check: if a reader outside the specialty would have to ask what a
+  sentence means, rewrite the sentence; expect a reviewer to bounce the whole
+  document on a single unexplained term.
