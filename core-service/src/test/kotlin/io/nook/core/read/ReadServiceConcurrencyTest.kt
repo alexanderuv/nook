@@ -14,9 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -59,7 +57,7 @@ class ReadServiceConcurrencyTest {
 
         return transaction(db, isolation, readOnly = true) {
             val shown = ProjectItemTable.selectAll()
-                .where { (ProjectItemTable.projectId eq project.id) and ProjectItemTable.deletedAt.isNull() }
+                .where { ProjectItemTable.projectId eq project.id }
                 .map { it[ProjectItemTable.id] }
 
             val other = Thread {

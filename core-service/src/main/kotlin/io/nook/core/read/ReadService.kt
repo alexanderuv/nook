@@ -43,10 +43,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  * `not_found`. The other two codes of the error model belong to writes and
  * cannot arise.
  *
- * Only live rows are ever returned or resolved, and there is no argument by
- * which a caller could ask otherwise. That absence is the design, not an
- * oversight: to a caller, a deleted row is indistinguishable from one that never
- * existed.
+ * Nothing here needs a clause about deleted rows, because deleting removes the
+ * row: a deleted item is indistinguishable from one that never existed, by
+ * construction rather than by a rule each operation has to remember. There is
+ * correspondingly no argument, filter value, or operation by which a caller
+ * could ask to see one.
  *
  * References work exactly as they do on the write path, through the same code: a
  * string in UUID form resolves as an id, anything else as a slug, and items and
@@ -60,7 +61,6 @@ class ReadService(private val db: Database) {
 
     fun listProjects(): List<Project> = readTransaction(db) {
         ProjectTable.selectAll()
-            .where { ProjectTable.deletedAt.isNull() }
             .newestFirst(ProjectTable.createdAt, ProjectTable.id)
             .map { it.toProject() }
     }
@@ -75,7 +75,7 @@ class ReadService(private val db: Database) {
         val projectId = resolveProject(projectRef)[ProjectTable.id]
         withBlockerSets(
             ProjectItemTable.selectAll()
-                .where(liveItemsOf(projectId) and matchOf(projectId, filter))
+                .where(itemsOf(projectId) and matchOf(projectId, filter))
                 .newestFirst(ProjectItemTable.createdAt, ProjectItemTable.id)
                 .toList(),
         )
@@ -86,9 +86,8 @@ class ReadService(private val db: Database) {
      * "what can be worked on" is one question, and narrowing it is what
      * [listItems] is for.
      *
-     * The view decides which items are ready — deleted ones excluded, a deleted
-     * blocker counted as resolved — and `project_item` supplies what each one
-     * is, so the row-to-entity mapping stays in one place.
+     * The view decides which items are ready and `project_item` supplies what
+     * each one is, so the row-to-entity mapping stays in one place.
      */
     fun getReadyItems(projectRef: String): List<ProjectItem> = readTransaction(db) {
         val projectId = resolveProject(projectRef)[ProjectTable.id]
@@ -104,8 +103,7 @@ class ReadService(private val db: Database) {
 
     // ── internals ────────────────────────────────────────────────────────────
 
-    private fun liveItemsOf(projectId: Uuid): Op<Boolean> =
-        (ProjectItemTable.projectId eq projectId) and ProjectItemTable.deletedAt.isNull()
+    private fun itemsOf(projectId: Uuid): Op<Boolean> = ProjectItemTable.projectId eq projectId
 
     /**
      * Newest created first, with the id breaking a tie. Two rows can share a

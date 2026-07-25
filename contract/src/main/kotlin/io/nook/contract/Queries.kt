@@ -10,9 +10,9 @@ package io.nook.contract
  * something else entirely: asking to match any of nothing, which the service
  * rejects rather than answering with a silent empty result.
  *
- * There is deliberately nothing here that asks for deleted rows. A listing
- * considers live rows only, and no value, part, or combination reaches past
- * that.
+ * There is deliberately nothing here that asks for deleted rows, and nothing
+ * that could: deleting removes the row, so a listing has nothing to reach past
+ * in the first place.
  */
 data class ItemFilter(
     /** Item types by label: `epic`, `task`, `bug`, `chore`. */

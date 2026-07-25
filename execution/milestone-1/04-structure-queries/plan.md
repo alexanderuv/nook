@@ -8,6 +8,22 @@ those codes it is pointing at a numbered entry in those documents, and it states
 the point in plain words alongside the citation — the pointer is a cross-check,
 not required reading.
 
+> **Reversal, recorded after the fact.** This plan was executed as written, on a
+> soft-delete design: a `deleted_at` mark, the three handle rules rebuilt as
+> partial unique indexes, and the readiness view recreated to know about the
+> mark. It shipped green and was then reversed, because the partial index broke
+> a decision the plan never checked — `ARCHITECTURE.md`, `ADR-1`, and
+> `db/README.md` all state that the schema carries **no partial or filtered
+> indexes**, and a build plan is not where that gets overturned. Deletion now
+> removes the row, which needs no schema change at all: changeset
+> `0002-soft-delete.yaml` was deleted rather than reverted, leaving the schema
+> exactly as `0001` built it. The text below has been corrected to describe what
+> shipped; the steps stay ticked because the work behind them was done, and
+> where a step's subject no longer exists it says so. What the reversal costs is
+> recorded in [structure semantics](../../../docs/04-structure-semantics.md):
+> the git cleanup a delete owes once documents exist is now an open problem
+> rather than one the mark quietly deferred.
+
 ## Analysis
 
 What already exists, checked against the repository rather than remembered:
@@ -52,14 +68,18 @@ What already exists, checked against the repository rather than remembered:
   PostgreSQL inside the test process and hands each test class its own migrated
   database.
 
-- **What the schema does not have yet.** No table carries a deleted mark. The
+- **What the schema already provides, which turned out to be everything.** The
   handle uniqueness rules `uq_project_slug`, `uq_item_project_slug`, and
-  `uq_release_project_slug` are plain constraints covering every row, so a name
-  is locked whether or not its row is still wanted. The readiness view — changeset `0007-create-ready-item-view`
-  inside `db/changelog/changes/0001-initial-schema.yaml` — selects leaves that
-  are `todo` and have no blocker outside `done` and `cancelled`; it knows
-  nothing of deletion. The master changelog carries a comment claiming the
-  schema uses no database-specific features.
+  `uq_release_project_slug` are plain constraints covering every row — which is
+  exactly right once a delete removes the row, since the name goes with it. The
+  readiness view — changeset `0007-create-ready-item-view` inside
+  `db/changelog/changes/0001-initial-schema.yaml` — selects leaves that are
+  `todo` with no blocker outside `done` and `cancelled`, and needs no clause
+  about deletion, because a deleted blocker's edge is gone. `project` cascades
+  on delete to releases, items, documents and the sequence table, and an item
+  cascades to its blocker edges from either end. The one thing no cascade
+  covers is an epic's children: that link is deliberately `NO ACTION`, so the
+  write path removes them itself.
 
 - **Two pieces of epic 03's test code this epic disturbs.**
   `WriteServiceSurfaceTest` asserts the write service's public methods are
@@ -75,15 +95,14 @@ What this plan builds to, linked rather than restated:
 
 - **[The discovery](./discovery.md)** settled how the reads get built by running
   probes against real PostgreSQL. Adopted here:
-  - A handle can be freed by a delete, but only if its uniqueness rule is
-    rebuilt as an index limited to rows with no deleted mark — PostgreSQL
-    refuses to put such a condition on a plain constraint (FIND1).
-  - The readiness view must be recreated in the same schema change that adds
-    the mark, because a view fixes its column list when it is created and would
-    otherwise never show the new column (FIND4); the recreated view also has to
-    skip deleted items and count a deleted blocker as resolved, since today's
-    view offers a deleted item as ready work and lets a deleted blocker hold up
-    everything behind it (FIND3).
+  - *Superseded.* A handle can be freed by a soft delete, but only if its
+    uniqueness rule is rebuilt as an index limited to rows with no mark —
+    PostgreSQL refuses to put such a condition on a plain constraint (FIND1).
+    That index is the decision this epic ultimately would not pay for; removing
+    the row frees the handle under the plain constraint the schema already has.
+  - *Superseded with the mark.* The readiness view would have had to be
+    recreated in the same schema change (FIND4, FIND3). Removing the row leaves
+    the committed view correct as it stands.
   - Every read runs in one transaction that is both read-only and set to
     repeatable read — the setting under which the whole transaction sees the
     store as of its first statement. Read-only makes "a read changes nothing"
@@ -99,37 +118,34 @@ What this plan builds to, linked rather than restated:
 
   The discovery also ruled things out; do not re-investigate them: a uniqueness
   constraint carrying a condition does not exist in PostgreSQL (FIND1); the
-  drift guard cannot see the condition that limits a rule to live rows, and
-  pointed at a view it proposes creating a table (FIND2, FIND5); and declaring
-  the view for reading does not stop code writing through it, because a view
-  this simple is writable by default (FIND5).
+  drift guard, pointed at a view, proposes creating a table (FIND5); and
+  declaring the view for reading does not stop code writing through it, because
+  a view this simple is writable by default (FIND5).
 
 - **Deleting has no spec of its own, so this plan is its contract.**
   [Structure semantics](../../../docs/04-structure-semantics.md) settles what it
-  does — its deletion section was corrected while this plan was written, and
-  spec-2 with it, when deleted rows stopped being something a caller can ask
-  for. The rules the build must satisfy, in full:
-  - Nothing is ever physically removed. Deleting sets the row's mark and the row
-    stays in the store — for history, and so that no git document is left
-    pointing at nothing.
-  - The mark is for the store, not the caller. No read returns a deleted row,
-    and a reference naming one — by handle or by identifier — is `not_found`.
-    No argument anywhere asks for deleted rows.
+  does; that section was rewritten when the mark was dropped. The rules the
+  build must satisfy, in full:
+  - Deleting removes the row. There is no mark and no trash, so a deleted row is
+    indistinguishable from one that never existed — not by a rule each query
+    applies, but because there is nothing left to find.
+  - No read returns a deleted row, and a reference naming one — by handle or by
+    identifier — is `not_found`. No argument anywhere asks for deleted rows.
   - Deleting is independent of status. An item may be `cancelled` and then
     deleted, or deleted while still `todo`.
   - Deleting an epic deletes its children with it, and deleting a project
-    deletes everything in it. Nothing survives a deletion above it and stays
-    visible.
-  - A deleted row gives up its handle, so the name can be taken again at once.
-  - A deleted item stops blocking, exactly as a `cancelled` one does, and is
-    itself never offered as ready work.
+    deletes everything in it — releases, items, blocker edges, document rows.
+    Nothing survives a deletion above it.
+  - A deleted row gives up its handle, because the row holding it is gone; the
+    name can be taken again at once, under the plain uniqueness rule.
+  - A deleted item stops blocking, because its edges go with it, and is itself
+    never offered as ready work.
 
-  **There is no restore, by decision.** A delete cannot be undone through the
-  service: the row survives in the store, but nothing reads it back and no
-  operation clears the mark. Bringing a row back is deferred alongside physical
-  removal, and until someone specifies it, recovering a mistaken delete means
-  hand-written SQL. This is what makes the deletion rules above short — there is
-  no returning branch, and no handle to reclaim.
+  **There is no restore, by decision, and now no way to offer one.** With the
+  row gone there is nothing in the store to bring back: recovering a mistaken
+  delete is a restore-from-backup question, not an operation this service could
+  grow. That is a sharper trade than the mark made, and it is the trade the
+  schema's plain-SQL discipline is worth.
 
 - **[PRD-1](../prd-1.md)** frames the epic: its requirement REQ4 asks for the
   listing filter and the readiness query; its goal GOAL1 makes readiness the
@@ -164,18 +180,15 @@ order the discovery recommends, because every read requirement about deleted
 rows is untestable until a deleted row can be produced through the service
 rather than faked with hand-written SQL.
 
-- **The schema change.** One new changelog file adds a nullable timestamp
-  `deleted_at` to `project`, `release`, and `project_item`, rebuilds all three
-  handle uniqueness rules as indexes limited to rows with no mark, and recreates
-  the readiness view so that it skips deleted items and counts a deleted blocker
-  as resolved. A nullable timestamp rather than a true/false flag: it costs
-  nothing extra and answers a question a flag cannot, namely when the row left.
-  Every entity kind carries the mark and the live-only handle rule, including
-  releases, which no operation deletes yet: the store either supports deletion
-  or it does not, and a table left out becomes the exception someone has to
-  discover and migrate later. The same change amends the master changelog's
-  claim that the schema uses no database-specific features, which the
-  conditional index retires — PostgreSQL is the only supported engine anyway.
+- **No schema change at all.** This is where the plan was reversed. It was
+  built as a changelog file adding a `deleted_at` mark, rebuilding the three
+  handle rules as partial unique indexes, and recreating the readiness view —
+  and that changeset was then deleted, because the partial index is the one
+  engine-specific feature the schema refuses. Removing the row instead needs
+  nothing the schema does not already have: the plain uniqueness rules free a
+  handle when its row goes, the cascades reach releases, items, edges and
+  document rows, and the committed readiness view is already correct, since a
+  deleted blocker has no edge left to hold anything up.
 
 - **Two new operations on the existing write service**, not a second service:
   deleting an item and deleting a project. Projects need their own because
@@ -186,7 +199,7 @@ rather than faked with hand-written SQL.
   instance-wide one, because a project's handle is unique across the whole
   instance and freeing one must not race a creation scanning those handles; then
   the project's own, because a writer already inside it would otherwise leave a
-  live row under a deleted parent. No other operation holds both, so the pair
+  row behind in a project that is gone. No other operation holds both, so the pair
   cannot deadlock. That is not sufficient on its own — every write resolves its
   project *before* taking the lock keyed on it, so the project can be deleted in
   the gap; each write therefore re-reads the project under the lock, which is the
@@ -208,8 +221,7 @@ rather than faked with hand-written SQL.
   is written in UUID form, and the two failures both paths raise — the other
   two, conflict and cycle, stay in the write package, where they are the only
   ones that can arise. The move is otherwise mechanical: the code is internal to
-  the module, so no visibility changes and no behavior changes beyond the
-  live-only rule of STEP4.
+  the module, so no visibility changes and no behavior changes at all.
 
 - **The reads as their own service** in a new package, with exactly five public
   operations. Every one of them opens a transaction that is read-only and set to
@@ -219,31 +231,19 @@ rather than faked with hand-written SQL.
   check, and the rule that a parent filter naming a leaf is a caller mistake are
   all decided in application code before the store is asked anything.
 
-- **Live rows only, in one place rather than five.** Reference resolution
-  refuses a marked row, and every listing query carries the same condition, so
-  the rule is written once per shape and not repeated per operation. There is no
-  argument, filter value, or operation by which a caller could ask for a deleted
-  row — the absence is the design, and a test asserts the surface offers no such
-  door. The entity classes therefore never carry a deleted mark: the column is
-  the store's business, and an entity that could report itself deleted would
-  imply a caller could hold one.
+- **Nothing to filter out, in any of the five.** Because a delete removes the
+  row, no read carries a clause about deletion and no operation can forget one.
+  There is no argument, filter value, or operation by which a caller could ask
+  for a deleted row — the absence is the design, and a test asserts the surface
+  offers no such door. The entity classes carry no deleted mark for the same
+  reason there is no column: the state does not exist.
 
-  The same rule reaches further into the write path than the handle scans it
-  was reached for. Every check the write path makes against *other* rows now
-  considers live ones only: the graph cycle detection walks, an epic's children,
-  and the edges that stop a leaf becoming an epic. A rule enforced against rows
-  the caller cannot see would refuse work for a reason they could never
-  diagnose, let alone clear. Deleting removes no blocker edge — an edge outlives
-  either end, so a live item's blocker set may name a row that is gone, which is
-  what the readiness rule already accounts for. Edges still change the one way
-  they always have: the whole set replaced at once, by the operation that owns
-  them.
-
-- **The readiness view is declared for reading only.** It is described to Exposed
-  as though it were a table, kept out of the set the drift guard compares — the
-  guard does not recognise a view and would propose creating a table — and the
-  read-only transaction is what stops anything writing through it, since the
-  declaration itself would happily accept a write.
+  This is what the reversal bought back. Under the mark, every query on both
+  paths needed the same live-only clause, and the ones that were missed —
+  cycle detection, an epic's children, the edges blocking a type change — each
+  refused a caller's work for a reason built out of rows they could not see.
+  Removing the row deletes that whole class of mistake rather than guarding
+  against it.
 
 Why this way rather than the obvious alternative: computing readiness in
 application code instead of reading the view would put the same rule in two
@@ -270,57 +270,50 @@ the document tables.
 
 ## Steps
 
-- [x] **STEP1** — Write `db/changelog/changes/0002-soft-delete.yaml`: add the
-  nullable `deleted_at` column to `project`, `release`, and `project_item`; drop
-  the constraints `uq_project_slug`, `uq_release_project_slug`, and
-  `uq_item_project_slug` and create in their place unique indexes of the same
-  names limited to rows whose mark is unset, as raw SQL since a conditional rule
-  cannot be a constraint; and recreate the `ready_item` view so that it skips
-  items carrying a mark and treats a marked blocker as resolved alongside `done`
-  and `cancelled`. Amend the master changelog's comment that the schema uses no
-  database-specific features; verify: the existing migration test applies the
-  whole changelog to a fresh database and passes, and a new test reads all three
-  index definitions back out of PostgreSQL and asserts each carries the
-  live-only condition. This step is first because it is the only part of the
-  epic no probe has executed. All of it lands as one changeset, never several:
-  a run that added the column and stopped short of the view would leave a view
-  that can never show it.
+- [x] **STEP1** — *Reversed.* Written as
+  `db/changelog/changes/0002-soft-delete.yaml`: the `deleted_at` column on all
+  three tables, the three handle rules dropped as constraints and recreated as
+  partial unique indexes, and the readiness view rebuilt around the mark. It
+  applied cleanly and its tests passed. The changeset was then deleted outright
+  — no database outside a test run had ever held it — so the schema is once
+  again exactly what `0001` builds, and the master changelog's claim that the
+  schema uses no engine-specific features is true again without an edit.
 
-- [x] **STEP2** — Mirror the change in `Tables.kt`: the new column on all three
-  tables, and the three handle rules re-declared with their live-only condition;
-  verify: the drift guard passes, and a test builds the tables from the
-  declarations on an empty database, reads the indexes PostgreSQL actually
-  created, and asserts each matches the migrated schema's — the drift guard is
-  blind to the condition (FIND2), so this is what guards it.
+- [x] **STEP2** — *Partly reversed.* `Tables.kt` gained the column and the
+  live-only handle rules, and both went with the changeset. What survives is the
+  test the step existed for: `DriftGuardTest` now builds the schema from the
+  declarations onto an empty database and compares every index PostgreSQL
+  actually created against the migrated schema's, definitions and all. The drift
+  guard alone compares which rules exist, not what they cover, and that gap is
+  worth closing whether or not any rule is conditional.
 
-- [x] **STEP3** — Add a test asserting the readiness view's own stored
-  definition names the deleted mark in both places it must: excluding a marked
-  item, and counting a marked blocker as resolved; verify: the test passes
-  against the migrated database, and fails if pointed at the previous view
-  definition.
+- [x] **STEP3** — *Reversed with the view.* A test asserted the rebuilt view's
+  stored definition named the mark in both places it had to. The view is
+  unchanged from `0001`, so the test went with the changeset; readiness is
+  covered behaviourally by the readiness tests instead.
 
 - [x] **STEP4** — Move reference resolution, the row-to-entity mapping, and the
-  stored-code maps out of `io.nook.core.write` into a package both paths use,
-  and make resolution refuse a marked row — a reference naming one is
-  `not_found`, by handle or by identifier, on both paths; verify: every existing
-  write-path test passes with nothing changed but its imports, `./gradlew check`
-  stays green — a move that changes anything else has gone wrong — and a new
-  resolver test covers the marked row under both reference forms. The resolver's
-  own tests move with it, the reference-form test among them: it belongs beside
-  the rule it exercises, not beside the slug rules it was filed with.
+  stored-code maps out of `io.nook.core.write` into a package both paths use;
+  verify: every existing write-path test passes with nothing changed but its
+  imports, and `./gradlew check` stays green — a move that changes anything else
+  has gone wrong. A resolver test covers a row that has been removed, under both
+  reference forms. The resolver's own tests move with it, the reference-form
+  test among them: it belongs beside the rule it exercises, not beside the slug
+  rules it was filed with.
 
 - [x] **STEP5** — Implement deleting an item on the write service: under the
-  project's lock, set the mark, and mark an epic's children in the same
-  transaction; deleting something already deleted is `not_found`, since a
-  deleted row is not addressable at all; verify: named tests cover each rule of
-  the delete contract above — the row survives in the store while every read
-  loses sight of it, deleting an epic takes its four children, the freed handle
-  is immediately reusable by a new item, the delete leaves the status untouched,
-  and a second delete of the same item comes back `not_found`.
+  project's lock, remove the row, and an epic's children in the same
+  transaction; deleting something already deleted is `not_found`, like any other
+  reference to nothing; verify: named tests cover each rule of the delete
+  contract above — the row is gone from the store rather than marked in it,
+  deleting an epic takes its four children, an item takes its blocker edges from
+  both ends, the freed handle is immediately reusable by a new item, the delete
+  neither reads nor writes a status, and a second delete comes back
+  `not_found`.
 
 - [x] **STEP6** — Implement deleting a project under the instance-wide lock and
-  then the project's own, marking the project together with its releases and its
-  items in one transaction, so nothing inside it stays visible; make every write
+  then the project's own, removing the project and letting the schema's cascade
+  take its releases, items, edges and document rows; make every write
   re-read its project under the lock, since the resolution that produced the lock
   key ran before the lock was held; update `WriteServiceSurfaceTest` to the nine
   operations the service now offers; verify: named tests show a deleted project
@@ -340,18 +333,18 @@ the document tables.
 
 - [x] **STEP8** — Implement `get_project` and `list_projects` on the new read
   service: resolution across the whole instance rather than inside a project,
-  live rows only, and newest-first ordering with the identifier as tiebreak;
+  and newest-first ordering with the identifier as tiebreak;
   verify: the named tests for AC21 pass, and a test shows the same call repeated
   ten times returning one and the same order.
 
-- [x] **STEP9** — Implement `get_item`: identifier or handle, both resolving to
-  live rows only, an item from another project reported as not found, and a
-  deleted item not found under either reference form; verify: the named tests
+- [x] **STEP9** — Implement `get_item`: identifier or handle, an item from
+  another project reported as not found, and a deleted item not found under
+  either reference form; verify: the named tests
   for AC2, AC4, and AC17 pass.
 
 - [x] **STEP10** — Implement `list_items`: every filter part optional, several
   values inside a part widening it and several parts narrowing each other, the
-  reserved no-parent value, the ordering, live rows only, and the blocker sets
+  reserved no-parent value, the ordering, and the blocker sets
   fetched with one extra query for the whole listing. Rejected in application
   code: a value outside its vocabulary, a part supplied with no values, and a
   parent value naming something that is not an epic; verify: the named tests for
@@ -395,42 +388,40 @@ the document tables.
   question with the document that owns the catalog if it matters.
 
 - **no-go: a way back for a deleted row** — no restore operation, no "undelete"
-  option on an update, no listing that shows deleted rows, no flag that turns
-  them back on for debugging; each looks like a kindness and each reopens the
-  decision that deletion is final; instead: if recovery turns out to be needed,
-  it is designed as its own operation in the document that owns deletion, not
-  smuggled in as a parameter.
+  option on an update, no flag that turns them back on for debugging; each looks
+  like a kindness and each reopens the decision that deletion is final; instead:
+  if recovery turns out to be needed, it is a restore-from-backup question for
+  the document that owns deletion, since the row itself is gone.
 
 - **no-go: editing epic 03's spec to match the new surface** — it is finished
   work, and rewriting a settled contract to agree with newer code hides the
   change; instead: the divergence is recorded in this plan's Analysis, and only
   the surface test moves.
 
-- **no-go: physically removing a row** — deleting means marking, always; the
-  document layer will point at rows that must still exist; instead: if
-  something appears to need real removal, that is the deferred operation the
-  design documents already name, not a quiet addition here.
+- **no-go: a deleted row that half-survives** — a mark, a trash listing, an
+  archived flag; each reintroduces the two-state store this design exists to
+  avoid, and with it the live-only clause every query then has to remember;
+  instead: the row goes, and the absence of any such clause is the proof.
 
 - **no-go: naming a database driver type** — the build check keeps the driver
   off the compile classpath, so reading a rejection's constraint name off a
   driver exception cannot compile; instead: check the rule in application code
   under the lock, which is where every caller-facing decision is made.
 
-- **caveat: the drift guard cannot see the condition on a handle rule** — it
-  compares which rules exist, not which rows they cover, so it would stay green
-  the day the index is rebuilt without its condition (FIND2); instead: the
-  direct index test of STEP1 and STEP2 is the real guard — never treat a green
-  drift guard as proof the condition survived.
+- **caveat: the drift guard compares which rules exist, not what they cover**
+  (FIND2) — nothing in it would notice an index quietly rebuilt with a different
+  reach; instead: the index-definition comparison added in STEP2 reads both
+  schemas back out of PostgreSQL and is the real guard.
 
 - **no-go: letting the drift guard see the readiness view** — pointed at a view
   it proposes creating a table (FIND5); instead: the view's declaration stays
   out of the set the guard compares, and the view is checked by its own
   definition test.
 
-- **caveat: the view must be recreated in the same changeset that adds the
-  column** — a view fixes its column list when it is created, so one built
-  earlier will never show the mark (FIND4); instead: keep both changes in
-  `0002-soft-delete.yaml`, never split them across changesets.
+- **caveat: a view fixes its column list when it is created** (FIND4) — any
+  future changeset adding a column to `project_item` leaves `ready_item`
+  silently without it; instead: recreate the view in the same changeset as any
+  such column, never in a later one.
 
 - **rabbit-hole: one blocker query per listed item** — it reads more naturally
   and is about five times slower at 510 items, for an identical result (FIND8);
@@ -466,20 +457,21 @@ the document tables.
 
 ## Test plan
 
-- **TEST1** — integration: the whole changelog applies to a fresh database, and
-  all three handle indexes read back out of PostgreSQL carry their live-only
-  condition; the readiness view's stored definition names the deleted mark in
-  both places it must.
+- **TEST1** — *reversed with the changeset.* It checked that the migration
+  applied and that all three handle indexes carried their live-only condition.
+  What remains of it is the unchanged migration test: the whole changelog
+  applies to a fresh database, and a second run is a no-op.
 
-- **TEST2** — integration: the drift guard stays green with the new column and
-  the re-declared rules, and the index the declarations produce on an empty
-  database matches the migrated schema's.
+- **TEST2** — integration: the drift guard stays green, and every index the
+  declarations produce on an empty database matches the migrated schema's,
+  definition for definition.
 
 - **TEST3** — integration: the delete contract, rule by rule, through the
-  service — the row survives in the store while every read loses sight of it; an
-  epic takes its children and a project takes everything in it; a freed handle
-  is immediately reusable; a reference to a deleted row is `not_found` by handle
-  and by identifier alike; and deleting neither reads nor writes a status.
+  service — the row is gone from the store rather than marked in it; an epic
+  takes its children, an item takes its blocker edges from both ends, and a
+  project takes everything in it; a freed handle is immediately reusable; a
+  reference to a deleted row is `not_found` by handle and by identifier alike;
+  and deleting neither reads nor writes a status.
 
 - **TEST4** — integration: all 22 acceptance criteria of spec-2 as named tests
   against the embedded PostgreSQL, each named after the behavior it executes —
@@ -525,24 +517,12 @@ produces `conflict` or `cycle`.
 
 ## Rollback
 
-The code is trivially revertible, but the schema change is not, so back out in
-this order:
+There is no schema change to reverse, which is most of what this section used
+to be about. Reverting the code is enough, and it leaves a database built by
+`0001` exactly as it was.
 
-- **Revert the code first**, then the schema. The reverted code runs against the
-  new schema without trouble — an unread column and a uniqueness rule that
-  covers fewer rows change nothing for it — while new code against the old
-  schema fails immediately.
-- **Reversing the schema change means a new changeset**, never editing
-  `0002-soft-delete.yaml` once it has been applied anywhere: drop the three
-  conditional indexes and restore the plain constraints, recreate the readiness
-  view in its original form, and drop the columns last.
-- **What a revert cannot undo**: rows already marked deleted. Dropping the
-  column discards every mark at once, which makes rows visible again that
-  callers were told were gone; and restoring a plain uniqueness rule fails
-  outright while two rows share a handle — one live, one deleted. So before
-  dropping anything, decide row by row what happens to the marked ones. There is
-  no service operation for this and deliberately none: it is a human decision
-  taken against the database, not a script.
-- **Where the door closes**: once a caller has taken a handle freed by a delete,
-  the old rule can no longer be restored without renaming one of the two rows.
-  That is the first moment reversal stops being mechanical.
+What a revert cannot undo is the deletes themselves: rows removed are gone, and
+only a backup brings them back. That is the standing cost of the design, not a
+property of the revert — and it is the reason the git side of deletion
+([structure semantics](../../../docs/04-structure-semantics.md)) has to be
+settled before documents exist rather than after.

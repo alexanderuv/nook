@@ -50,36 +50,39 @@ worse than no rule here — rigor is added later when real usage justifies it.
   (the UI surfaces this; it is not blocked). Cancelling an epic does **not**
   auto-change its leaves. No cascades, no guards — explicit over surprising.
 
-**Deletion — soft in the store, gone to every caller.**
-- Nothing is ever physically removed from the store. Deleting marks the row as
-  deleted and it stays. The mark exists for the store's own sake, not the
-  caller's: it preserves history and, critically, avoids **orphaning git
-  documents**: git is not part of the DB's `ON DELETE CASCADE`, so a physical
-  delete would leave documents no row points at. Physical removal with
-  coordinated git cleanup stays a deferred, deliberate operation (see
-  [05](./05-project-and-ops.md)).
-- **A deleted row is unreachable through every operation.** No list returns it,
-  no `get_*` returns it, and a reference naming it — by slug or by id — is
-  `not_found`. There is no trash view and no way to ask for deleted rows; to a
-  caller, a deleted row is simply gone. Deletion is therefore a decision, not a
-  gesture: it is not undone by asking.
-- **Restoring is not offered.** Bringing a deleted row back is a deliberate
-  operation nobody has yet specified, of the same family as physical removal —
-  not something a caller can reach.
+**Deletion — the row is removed.**
+- Deleting removes the row from the store. There is no mark, no trash, and no
+  way back: a deleted row is indistinguishable from one that never existed, and
+  that holds by construction rather than by a rule every query has to remember.
+  No list returns it, no `get_*` returns it, and a reference naming it — by slug
+  or by id — is `not_found`. Deletion is therefore a decision, not a gesture.
+- **Restoring is not offered**, and with the row gone there is nothing to
+  restore from. Recovering a mistaken delete means a backup, not an operation.
 - **Delete is an action, not a status.** It is independent of the status
   vocabulary: an item may be `cancelled` and then deleted, or deleted while
   still `todo`. Cancelling retires work that was real and keeps it in sight;
-  deleting takes it out of sight entirely.
+  deleting removes it.
 - **Deleting an epic takes its children with it**, and deleting a project takes
-  everything in it. The whole branch goes at once, which is what abandoning a
-  branch of work means — and nothing may survive a deletion above it and stay
-  visible.
-- **A deleted row gives up its slug.** Slug uniqueness applies among live rows
-  only, so a name freed by a delete can be used again immediately — a caller
-  never collides with something they cannot see.
-- **A deleted item stops blocking**, exactly as a `cancelled` one does — the
-  `ready_item` view treats it as resolved, since work nobody can see must not
-  deadlock the work behind it. Deleted items are themselves never ready.
+  everything in it — releases, items, blocker edges, document rows. The whole
+  branch goes at once, which is what abandoning a branch of work means. The
+  project cascade is the schema's; an epic's children are removed by the write
+  path, because the parent link deliberately does not cascade.
+- **A deleted row gives up its slug**, because the row holding it is gone.
+  Uniqueness stays a plain whole-table rule, and a name is free the moment the
+  thing named stops existing.
+- **A deleted item stops blocking**, because its edges go with it. The
+  `ready_item` view needs no clause about deletion: what is gone cannot hold
+  anything up, and cannot itself be ready.
+
+> **Open — the git side of deletion.** Git is not part of the DB's `ON DELETE
+> CASCADE`, so once documents exist, removing a row will leave documents nothing
+> points at. Milestone 1 has no documents and no operation touching those tables,
+> so nothing is orphaned yet — but the document layer must settle what a delete
+> does to git content before it ships ([02](./02-document-layer.md),
+> [05](./05-project-and-ops.md)). A soft-delete mark was the earlier answer to
+> this; it was dropped because it bought the schema a partial index — the one
+> engine-specific feature the schema refuses ([ADR-1](../architecture/adrs/adr-1.md)) —
+> to solve a problem this milestone does not have.
 
 **Slugs — auto-generated, overridable.**
 - Default slug is derived from the name: lowercased, non-`[a-z0-9-]` collapsed to
@@ -117,11 +120,11 @@ worse than no rule here — rigor is added later when real usage justifies it.
 ## Deferred (not open — intentionally later)
 
 - A status transition state machine, if usage shows a need.
-- Physical removal of a soft-deleted row, with the coordinated git cleanup it
-  needs ([05](./05-project-and-ops.md)).
-- Bringing a deleted row back, and any caller-facing sight of deleted rows at
-  all — both would need a shape nobody has designed, and neither is missed
-  while deletion means gone.
+- The git cleanup a delete owes once documents exist — deferred, but not
+  optional; see the open note above and [05](./05-project-and-ops.md).
+- Bringing a deleted row back. Nothing in the store survives a delete to bring
+  back, so this would be a restore-from-backup feature rather than an
+  operation — and it is not missed while deletion means gone.
 - Free-text search across structure.
 
 ## Depends on / feeds

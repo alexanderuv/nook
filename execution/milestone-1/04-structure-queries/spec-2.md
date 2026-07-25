@@ -22,7 +22,7 @@ can be used anywhere an id can.
 
 In scope: the five reads above, invoked directly on the core service — their
 inputs, their results, their ordering, their error behavior, and how they
-treat deleted rows.
+treat rows that have been deleted.
 
 Out of scope:
 
@@ -59,7 +59,7 @@ task still waiting.
 
 **Initiator:** a developer looking at a busy project.
 **Flow:**
-1. `list_items` with no filter returns everything live in the project.
+1. `list_items` with no filter returns everything in the project.
 2. A second call asks for items that are `todo` or `in_progress`.
 3. A third call adds a type of `bug`, narrowing to open bugs only.
 **Outcome:** each call returns one list in newest-first order; asking for two
@@ -105,7 +105,7 @@ whatever the caller knows about the row.
    which has been deleted.
 2. The caller picks one from the result and calls `get_project` with its
    handle.
-**Outcome:** the listing shows the three live projects, newest first, without
+**Outcome:** the listing shows the three remaining projects, newest first, without
 any project having been chosen first; the fetch returns the picked project in
 full.
 
@@ -131,8 +131,7 @@ because a deleted blocker no longer holds anything up.
 - **REQ2** — A read MUST NOT change anything in the store — no row written, no
   timestamp advanced.
 - **REQ3** — When a reference string parses as a UUID, the system MUST resolve
-  it as an id; otherwise it MUST resolve it as a slug; and either way it MUST
-  resolve to live rows only.
+  it as an id; otherwise it MUST resolve it as a slug.
 - **REQ4** — When a reference resolves to no entity in its scope — the bound
   project for items and releases, the whole instance for projects — the
   operation MUST fail with `not_found`.
@@ -142,8 +141,8 @@ because a deleted blocker no longer holds anything up.
   MUST NOT arise here.
 - **REQ6** — A returned entity MUST be the full entity, carrying the same
   fields the write path returns; for an item this includes its complete blocker
-  set. Every entity a read returns is a live one, so no read result ever
-  reports a row as deleted.
+  set. No read result ever reports a row as deleted, because a deleted row is
+  not in the store to be returned.
 - **REQ7** — A listing operation MUST return an array, and a listing that
   matches nothing MUST succeed with an empty array rather than fail.
 
@@ -158,7 +157,7 @@ because a deleted blocker no longer holds anything up.
 - **REQ10** — `list_items` MUST accept a filter made of these parts, each of
   them optional: type, status, parent, and release.
 - **REQ11** — When no filter part is supplied, `list_items` MUST return every
-  live item in the project.
+  item in the project.
 - **REQ12** — Each of the type, status, parent, and release parts MUST accept
   one or more values, and an item MUST match that part when it matches any one
   of the supplied values.
@@ -178,30 +177,29 @@ because a deleted blocker no longer holds anything up.
 
 ### Deleted rows
 
-- **REQ18** — Every listing operation MUST consider live rows only, and MUST
-  offer the caller no way to ask for deleted ones — no argument, no filter
-  value, no separate operation.
-- **REQ19** — The read path MUST judge each row by its own deleted mark alone,
-  never by the mark of the epic or project above it; deleting a branch marks
-  every row in it, so the two answers never differ.
+- **REQ18** — No read operation MUST offer the caller any way to ask for a
+  deleted row — no argument, no filter value, no separate operation. Deleting
+  removes the row, so there is nothing for such an argument to return.
+- **REQ19** — Deleting a branch MUST remove every row in it, so no read can
+  return a row whose epic or project has been deleted.
 - **REQ20** — `get_item` and `get_project` MUST fail with `not_found` when the
-  reference names a deleted row, whether it is an id or a slug.
+  reference names a row that has been deleted, whether it is an id or a slug.
 
 ### Readiness
 
-- **REQ21** — `get_ready_items` MUST return exactly the live leaves of the
-  project that are `todo` and every one of whose blockers is `done`,
-  `cancelled`, or deleted.
+- **REQ21** — `get_ready_items` MUST return exactly the leaves of the project
+  that are `todo` and every one of whose blockers is `done` or `cancelled`. A
+  deleted blocker takes its edge with it, so it holds nothing up.
 - **REQ22** — `get_ready_items` MUST NOT return an epic, whatever its status
   or contents.
-- **REQ23** — `get_ready_items` MUST NOT return a deleted item.
+- **REQ23** — `get_ready_items` MUST NOT return an item that has been deleted.
 - **REQ24** — `get_ready_items` MUST take no filter, and MUST order its result
   the same way every other listing is ordered.
 
 ### Projects
 
-- **REQ25** — `list_projects` MUST return the instance's live projects, under
-  the same ordering as every other listing.
+- **REQ25** — `list_projects` MUST return the instance's projects, under the
+  same ordering as every other listing.
 - **REQ26** — `get_project` MUST resolve its reference across the whole
   instance rather than inside any one project.
 
@@ -226,7 +224,7 @@ because a deleted blocker no longer holds anything up.
 - **EDGE8** — `get_item` given the slug a deleted item used to hold, or given
   that item's id: `not_found` either way.
 - **EDGE9** — A slug freed by a delete and then taken by a new item: the slug
-  resolves to the live item, and the deleted one stays unreachable.
+  resolves to the new item, and the old id resolves to nothing.
 - **EDGE10** — A `todo` leaf whose only blocker has been deleted: ready.
 - **EDGE11** — A `todo` leaf that is itself deleted: not ready, and absent
   from every listing.
@@ -291,8 +289,8 @@ because a deleted blocker no longer holds anything up.
   succeeds with an empty array.
 - **AC14** (REQ17) — Given leaf `add-search`, when `list_items` filters by
   parent `add-search`, then it fails with `validation_failed`.
-- **AC15** (REQ18, EDGE13) — Given a project with three live items and two
-  deleted ones, when `list_items` is called, then exactly the three come back;
+- **AC15** (REQ18, EDGE13) — Given a project with three items and two others
+  since deleted, when `list_items` is called, then exactly the three come back;
   and the operation offers no argument by which the other two could be asked
   for — a listing of a project whose every item is deleted is an empty array.
 - **AC16** (REQ19, REQ20, EDGE6) — Given a deleted epic whose four children
@@ -304,8 +302,8 @@ because a deleted blocker no longer holds anything up.
   `add-search`, then it returns the new live item; and when it is called with
   the deleted item's id, then it fails with `not_found`.
 - **AC18** (REQ21, REQ22, EDGE10, EDGE12) — Given an epic, a `todo` leaf with
-  no blockers, a `todo` leaf whose blockers are one `done` and one deleted
-  item, a `todo` leaf blocked by an `in_progress` item, and a `done` leaf, when
+  no blockers, a `todo` leaf whose blockers are one `done` and one since
+  deleted, a `todo` leaf blocked by an `in_progress` item, and a `done` leaf, when
   `get_ready_items` is called, then exactly the first two `todo` leaves come
   back; and when every leaf is then set `done`, then it returns an empty array.
 - **AC19** (REQ23, EDGE11) — Given a `todo` leaf with no blockers that is then
@@ -314,9 +312,9 @@ because a deleted blocker no longer holds anything up.
 - **AC20** (REQ24) — Given a project with ready leaves created in sequence,
   when `get_ready_items` is called, then it accepts no filter argument and
   returns its result newest-created first.
-- **AC21** (REQ25, REQ26) — Given three live projects and one deleted project
-  on the instance, when `list_projects` is called, then it returns exactly the
-  three, newest first; when `get_project` is called with a live project's slug,
+- **AC21** (REQ25, REQ26) — Given three projects and a fourth since deleted on
+  the instance, when `list_projects` is called, then it returns exactly the
+  three, newest first; when `get_project` is called with one of their slugs,
   then it resolves without a project being bound first; and when it is called
   with the deleted project's id, then it fails with `not_found`.
 - **AC22** (EDGE15) — Given a caller repeatedly listing a project while another
@@ -328,13 +326,12 @@ because a deleted blocker no longer holds anything up.
 
 - **read path** — the five operations of REQ1, taken together; the only way
   structure leaves the store.
-- **live row** — a row whose deleted mark is not set; **deleted row** — one
-  whose mark is set. Deleting never removes a row from the store, but it does
-  remove it from every caller's reach: no read returns a deleted row and no
-  reference resolves to one.
+- **deleted row** — a row that has been removed from the store. Nothing of it
+  remains: no read returns it, no reference resolves to it, and it is
+  indistinguishable from a row that never existed.
 - **slug** — an item's handle: a short lowercase name used in paths and
-  accepted anywhere an id is. Handles belong to live rows only, so a name freed
-  by a delete is immediately available to something new.
+  accepted anywhere an id is. A handle belongs to the row holding it, so a name
+  is available again as soon as that row is deleted.
 - **reference (ref)** — a string naming an entity: a UUID, or a slug resolved
   within the scope that applies (a project for items and releases, the
   instance for projects).
@@ -346,25 +343,24 @@ because a deleted blocker no longer holds anything up.
 - **project-level leaf** — a leaf with no parent epic, hanging directly off the
   project; the no-parent filter value is how a caller asks for these.
 - **blocker set** — the items an item is blocked by; a blocker counts as
-  resolved when it is `done`, `cancelled`, or deleted.
-- **ready leaf** — a live leaf that is `todo` with every blocker resolved;
-  readiness is computed, never stored as a status.
+  resolved when it is `done` or `cancelled`. Deleting a blocker removes the edge
+  along with it, so it stops appearing in the set at all.
+- **ready leaf** — a leaf that is `todo` with every blocker resolved; readiness
+  is computed, never stored as a status.
 - **structured error** — the `{code, message, details?}` failure payload; on
   reads, only `validation_failed` and `not_found` occur.
 
 ## Assumptions
 
-- **ASM1** — The write path gains the delete action, and every entity kind
-  carries a stored deleted mark; if false: REQ18 through REQ20, REQ23, and
-  every requirement mentioning a deleted row are untestable, since nothing
-  could produce one.
-- **ASM2** — Slug uniqueness is enforced among live rows only, so a deleted
-  row's handle is free to be taken again; if false: EDGE9 is wrong, and a
-  caller collides with rows they cannot see.
-- **ASM3** — The `ready_item` view is updated to exclude deleted items and to
-  count a deleted blocker as resolved, alongside the `done` and `cancelled`
-  blockers it already counts; if false: REQ21 and REQ23 rest on application
-  code that re-implements the view, and the two will drift.
+- **ASM1** — The write path gains the delete action, and deleting removes the
+  row rather than marking it; if false: REQ18 through REQ20 and REQ23 are
+  untestable, since nothing could produce a deleted row.
+- **ASM2** — Deleting a branch reaches every row under it — an epic's children,
+  and everything inside a project — so no row is left pointing at something
+  gone; if false: REQ19 fails and a listing can return an orphan.
+- **ASM3** — The `ready_item` view as the changelog already builds it is the
+  readiness rule, unchanged; if false: REQ21 and REQ23 rest on application code
+  that re-implements the view, and the two will drift.
 - **ASM4** — Reads run against the same database as writes, with no cache in
   between; if false: REQ2's no-change guarantee still holds, but the ordering
   and committed-state guarantees of REQ8, REQ9, and EDGE15 no longer follow

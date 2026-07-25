@@ -53,7 +53,7 @@ class ReadServiceListingTest {
     }
 
     @Test
-    fun `no filter returns every live item in the project`() {
+    fun `no filter returns every item in the project`() {
         val project = writes.createProject(CreateProject("Unfiltered"))
         writes.createItem(project.slug, CreateItem(type = "epic", name = "An epic"))
         writes.createItem(project.slug, CreateItem(type = "task", name = "A task"))
@@ -200,7 +200,7 @@ class ReadServiceListingTest {
     }
 
     @Test
-    fun `a listing considers live rows only, and a project emptied by deletion looks empty`() {
+    fun `deleted items are absent, and a project emptied by deletion looks like one that never held anything`() {
         val project = writes.createProject(CreateProject("Live Rows Only"))
         (1..3).forEach { writes.createItem(project.slug, CreateItem(type = "task", name = "Live $it")) }
         (1..2).forEach { writes.createItem(project.slug, CreateItem(type = "task", name = "Gone $it")) }

@@ -6,25 +6,21 @@ import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
-import java.time.Instant
 import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.eq
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
  * Reference resolution against seeded rows: UUID-form references resolve as
- * ids, all others as slugs, both are scoped to the target project — an entity
- * in another project is not found, whichever form names it — and only live rows
- * resolve at all.
- *
- * The deleted rows here are marked directly, because this is the layer beneath
- * the operation that marks them: what the write path does with the mark is its
- * own tests' subject.
+ * ids, all others as slugs, and both are scoped to the target project — an
+ * entity in another project is not found, whichever form names it.
  */
 class ReferenceResolutionTest {
 
@@ -32,12 +28,9 @@ class ReferenceResolutionTest {
         val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
         val projectOne: Uuid = Uuid.random()
         val projectTwo: Uuid = Uuid.random()
-        val deletedProject: Uuid = Uuid.random()
         val itemInOne: Uuid = Uuid.random()
         val itemInTwo: Uuid = Uuid.random()
-        val deletedItem: Uuid = Uuid.random()
         val releaseInOne: Uuid = Uuid.random()
-        val deletedRelease: Uuid = Uuid.random()
 
         val seeded by lazy {
             transaction(db) {
@@ -50,12 +43,6 @@ class ReferenceResolutionTest {
                     it[id] = projectTwo
                     it[slug] = "project-two"
                     it[name] = "Project two"
-                }
-                ProjectTable.insert {
-                    it[id] = deletedProject
-                    it[slug] = "gone-project"
-                    it[name] = "Gone project"
-                    it[deletedAt] = Instant.now()
                 }
                 ProjectItemTable.insert {
                     it[id] = itemInOne
@@ -71,26 +58,11 @@ class ReferenceResolutionTest {
                     it[slug] = "other-item"
                     it[name] = "Other item"
                 }
-                ProjectItemTable.insert {
-                    it[id] = deletedItem
-                    it[projectId] = projectOne
-                    it[type] = 2
-                    it[slug] = "gone-item"
-                    it[name] = "Gone item"
-                    it[deletedAt] = Instant.now()
-                }
                 ReleaseTable.insert {
                     it[id] = releaseInOne
                     it[projectId] = projectOne
                     it[slug] = "v1"
                     it[name] = "v1"
-                }
-                ReleaseTable.insert {
-                    it[id] = deletedRelease
-                    it[projectId] = projectOne
-                    it[slug] = "gone-release"
-                    it[name] = "Gone release"
-                    it[deletedAt] = Instant.now()
                 }
             }
             true
@@ -162,19 +134,28 @@ class ReferenceResolutionTest {
     }
 
     @Test
-    fun `a deleted row is not found under either form of reference`() {
+    fun `a row that has been removed is not found under either form of reference`() {
+        val removedId = Uuid.random()
         transaction(db) {
-            mapOf<String, () -> Unit>(
-                "a deleted project by slug" to { resolveProject("gone-project") },
-                "a deleted project by id" to { resolveProject(deletedProject.toString()) },
-                "a deleted item by slug" to { resolveItem(projectOne, "gone-item") },
-                "a deleted item by id" to { resolveItem(projectOne, deletedItem.toString()) },
-                "a deleted release by slug" to { resolveRelease(projectOne, "gone-release") },
-                "a deleted release by id" to { resolveRelease(projectOne, deletedRelease.toString()) },
-            ).forEach { (description, attempt) ->
-                val failure = assertFailsWith<StructuredErrorException>(description) { attempt() }
-                assertEquals(ErrorCode.NOT_FOUND, failure.error.code, description)
+            ProjectItemTable.insert {
+                it[id] = removedId
+                it[projectId] = projectOne
+                it[type] = 2
+                it[slug] = "was-here"
+                it[name] = "Was here"
             }
+        }
+        transaction(db) {
+            ProjectItemTable.deleteWhere { ProjectItemTable.id eq removedId }
+        }
+
+        transaction(db) {
+            val bySlug = assertFailsWith<StructuredErrorException> { resolveItem(projectOne, "was-here") }
+            assertEquals(ErrorCode.NOT_FOUND, bySlug.error.code)
+            val byId = assertFailsWith<StructuredErrorException> {
+                resolveItem(projectOne, removedId.toString())
+            }
+            assertEquals(ErrorCode.NOT_FOUND, byId.error.code)
         }
     }
 }

@@ -81,7 +81,7 @@ class ReadServiceItemTest {
     }
 
     @Test
-    fun `a handle taken over by a new item resolves to the live one, and the deleted id to nothing`() {
+    fun `a handle taken over by a new item resolves to it, and the old id to nothing`() {
         val project = writes.createProject(CreateProject("Handle Handover"))
         val gone = writes.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
         writes.deleteItem(project.slug, "add-search")

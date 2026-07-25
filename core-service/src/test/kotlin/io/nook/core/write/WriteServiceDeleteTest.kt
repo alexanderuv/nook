@@ -5,7 +5,6 @@ import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
 import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
-import io.nook.contract.ItemStatus
 import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
@@ -17,13 +16,9 @@ import io.nook.core.db.ReleaseTable
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.uuid.Uuid
-import org.jetbrains.exposed.v1.core.ResultRow
-import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -31,17 +26,16 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 /**
  * The deletion contract, rule by rule, through the service:
  *
- *  - nothing is physically removed — the row stays, carrying its mark;
- *  - the mark reaches no caller: every reference to a marked row is not_found,
- *    by handle and by id alike;
- *  - deleting an epic takes its children, and a project takes everything in it;
- *  - a freed handle is available again at once;
+ *  - the row is removed, not marked: nothing about it survives anywhere;
+ *  - deleting an epic takes its children, and a project takes everything in it,
+ *    including the blocker edges reaching into what went;
+ *  - the handle it held is free again at once;
  *  - deleting is independent of status, in both directions;
- *  - and there is no way back — the surface offers nothing that clears a mark.
+ *  - a second delete is `not_found`, like any other reference to nothing;
+ *  - and there is no way back — the surface offers nothing that restores.
  *
- * What the reads do with a deleted row is the read path's own subject; the rows
- * seen here are read from the tables directly, which is the only remaining way
- * to observe that a deleted row still exists at all.
+ * The counts here are read from the tables directly, because after a delete
+ * there is nothing left for an operation to return.
  */
 class WriteServiceDeleteTest {
 
@@ -55,30 +49,32 @@ class WriteServiceDeleteTest {
         assertEquals(code, failure.error.code)
     }
 
-    /** The stored row behind an id, mark included — bypassing every live-only rule. */
-    private fun storedItem(id: Uuid): ResultRow? = transaction(db) {
-        ProjectItemTable.selectAll().where { ProjectItemTable.id eq id }.firstOrNull()
+    private fun itemsWithId(id: Uuid): Long = transaction(db) {
+        ProjectItemTable.selectAll().where { ProjectItemTable.id eq id }.count()
     }
 
-    private fun storedProject(id: Uuid): ResultRow? = transaction(db) {
-        ProjectTable.selectAll().where { ProjectTable.id eq id }.firstOrNull()
+    private fun projectsWithId(id: Uuid): Long = transaction(db) {
+        ProjectTable.selectAll().where { ProjectTable.id eq id }.count()
     }
 
-    private fun storedRelease(id: Uuid): ResultRow? = transaction(db) {
-        ReleaseTable.selectAll().where { ReleaseTable.id eq id }.firstOrNull()
+    private fun releasesWithId(id: Uuid): Long = transaction(db) {
+        ReleaseTable.selectAll().where { ReleaseTable.id eq id }.count()
+    }
+
+    private fun edgesTouching(id: Uuid): Long = transaction(db) {
+        ItemDependencyTable.selectAll()
+            .where { (ItemDependencyTable.itemId eq id) or (ItemDependencyTable.dependsOnId eq id) }
+            .count()
     }
 
     @Test
-    fun `a deleted item stays in the store and leaves every caller's reach`() {
-        val project = service.createProject(CreateProject("Survives Deletion"))
+    fun `a deleted item is gone from the store, not marked in it`() {
+        val project = service.createProject(CreateProject("Gone Means Gone"))
         val item = service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
 
         service.deleteItem(project.slug, "add-search")
 
-        val stored = assertNotNull(storedItem(item.id), "the row must survive the delete")
-        assertNotNull(stored[ProjectItemTable.deletedAt], "the surviving row must carry the mark")
-        assertEquals("add-search", stored[ProjectItemTable.slug], "the row keeps the handle it held")
-
+        assertEquals(0L, itemsWithId(item.id), "the row must be removed")
         assertFailsWithCode(ErrorCode.NOT_FOUND) {
             service.updateItem(project.slug, "add-search", UpdateItem(name = FieldChange.Set("Renamed")))
         }
@@ -113,21 +109,32 @@ class WriteServiceDeleteTest {
         service.deleteItem(project.slug, "search")
 
         (children.map { it.id } + epic.id).forEach { id ->
-            assertNotNull(
-                storedItem(id)?.get(ProjectItemTable.deletedAt),
-                "every row of the branch must carry the mark",
-            )
+            assertEquals(0L, itemsWithId(id), "every row of the branch must be gone")
         }
-        assertNull(
-            storedItem(outsider.id)?.get(ProjectItemTable.deletedAt),
-            "an item outside the branch must be untouched",
-        )
+        assertEquals(1L, itemsWithId(outsider.id), "an item outside the branch must be untouched")
+    }
+
+    @Test
+    fun `a deleted item takes its blocker edges with it, from both ends`() {
+        val project = service.createProject(CreateProject("Edges Go Too"))
+        val blocker = service.createItem(project.slug, CreateItem(type = "task", name = "Blocker"))
+        service.createItem(project.slug, CreateItem(type = "task", name = "Blocked"))
+        service.createItem(project.slug, CreateItem(type = "task", name = "Downstream"))
+        service.setItemBlockedBy(project.slug, "blocked", SetItemBlockedBy(listOf("blocker")))
+        service.setItemBlockedBy(project.slug, "downstream", SetItemBlockedBy(listOf("blocker")))
+
+        service.deleteItem(project.slug, "blocker")
+
+        assertEquals(0L, edgesTouching(blocker.id), "no edge may point at a row that is gone")
+        // The items it was holding up remain, now unblocked.
+        assertEquals(emptySet(), readItem(db, project.slug, "blocked").blockedBy)
+        assertEquals(emptySet(), readItem(db, project.slug, "downstream").blockedBy)
     }
 
     @Test
     fun `a handle freed by a delete is available again at once`() {
         val project = service.createProject(CreateProject("Handles Come Back"))
-        val gone = service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
+        service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
         service.deleteItem(project.slug, "add-search")
 
         val replacement = service.createItem(
@@ -136,12 +143,7 @@ class WriteServiceDeleteTest {
         )
 
         assertEquals("add-search", replacement.slug, "the freed handle must be taken as asked, never suffixed")
-        assertEquals(gone.slug, replacement.slug)
-        assertEquals(
-            replacement.id,
-            transaction(db) { io.nook.core.store.resolveItem(project.id, "add-search") }[ProjectItemTable.id],
-            "the handle must resolve to the live item, not the deleted one",
-        )
+        assertEquals(replacement.id, readItem(db, project.slug, "add-search").id)
     }
 
     @Test
@@ -167,32 +169,34 @@ class WriteServiceDeleteTest {
         service.deleteItem(project.slug, "abandoned")
         service.deleteItem(project.slug, "fresh")
 
-        assertEquals(ItemStatus.CANCELLED.code, storedItem(cancelled.id)?.get(ProjectItemTable.status))
-        assertEquals(ItemStatus.TODO.code, storedItem(stillTodo.id)?.get(ProjectItemTable.status))
+        assertEquals(0L, itemsWithId(cancelled.id))
+        assertEquals(0L, itemsWithId(stillTodo.id))
     }
 
     @Test
-    fun `deleting a project marks everything inside it in one transaction`() {
+    fun `deleting a project takes everything inside it in one transaction`() {
         val project = service.createProject(CreateProject("Doomed Project"))
         val release = service.createRelease(project.slug, CreateRelease("v1"))
         val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Epic"))
         val leaf = service.createItem(project.slug, CreateItem(type = "task", name = "Leaf", parentRef = "epic"))
-        val loose = service.createItem(project.slug, CreateItem(type = "bug", name = "Loose"))
+        val blocker = service.createItem(project.slug, CreateItem(type = "bug", name = "Loose"))
+        service.setItemBlockedBy(project.slug, "leaf", SetItemBlockedBy(listOf("loose")))
 
         service.deleteProject(project.slug)
 
-        assertNotNull(storedProject(project.id)?.get(ProjectTable.deletedAt))
-        assertNotNull(storedRelease(release.id)?.get(ReleaseTable.deletedAt))
-        listOf(epic.id, leaf.id, loose.id).forEach { id ->
-            assertNotNull(storedItem(id)?.get(ProjectItemTable.deletedAt), "nothing in the project may stay live")
+        assertEquals(0L, projectsWithId(project.id))
+        assertEquals(0L, releasesWithId(release.id))
+        listOf(epic.id, leaf.id, blocker.id).forEach { id ->
+            assertEquals(0L, itemsWithId(id), "nothing in the project may survive it")
         }
+        assertEquals(0L, edgesTouching(leaf.id))
         assertFailsWithCode(ErrorCode.NOT_FOUND) {
             service.createItem(project.slug, CreateItem(type = "task", name = "Too late"))
         }
     }
 
     @Test
-    fun `nothing stays live in a project deleted while another caller writes into it`() {
+    fun `nothing survives a project deleted while another caller writes into it`() {
         val project = service.createProject(CreateProject("Deleted Mid-Write"))
         val creators = (1..4).map { worker ->
             Thread {
@@ -213,12 +217,11 @@ class WriteServiceDeleteTest {
         service.deleteProject(project.slug)
         creators.forEach { it.join() }
 
-        val stillLive = transaction(db) {
-            ProjectItemTable.selectAll()
-                .where { (ProjectItemTable.projectId eq project.id) and ProjectItemTable.deletedAt.isNull() }
-                .count()
+        val leftBehind = transaction(db) {
+            ProjectItemTable.selectAll().where { ProjectItemTable.projectId eq project.id }.count()
         }
-        assertEquals(0L, stillLive, "no item may outlive the deletion of the project holding it")
+        assertEquals(0L, leftBehind, "no item may outlive the deletion of the project holding it")
+        assertEquals(0L, projectsWithId(project.id))
     }
 
     @Test
@@ -238,28 +241,6 @@ class WriteServiceDeleteTest {
 
         assertFailsWithCode(ErrorCode.NOT_FOUND) { service.deleteProject(project.slug) }
         assertFailsWithCode(ErrorCode.NOT_FOUND) { service.deleteProject(project.id.toString()) }
-    }
-
-    @Test
-    fun `a deleted blocker leaves its edge behind and stops constraining live work`() {
-        val project = service.createProject(CreateProject("Edges Outlive Rows"))
-        service.createItem(project.slug, CreateItem(type = "task", name = "Blocker"))
-        val blocked = service.createItem(project.slug, CreateItem(type = "task", name = "Blocked"))
-        service.setItemBlockedBy(project.slug, "blocked", SetItemBlockedBy(listOf("blocker")))
-
-        service.deleteItem(project.slug, "blocker")
-
-        val edges = transaction(db) {
-            ItemDependencyTable.selectAll()
-                .where { ItemDependencyTable.itemId eq blocked.id }
-                .map { it[ItemDependencyTable.dependsOnId] }
-        }
-        assertEquals(1, edges.size, "the edge is history and must survive the blocker's deletion")
-
-        // The blocked item is now free of every live constraint, so a conversion
-        // the surviving edge would otherwise refuse must succeed.
-        val converted = service.updateItem(project.slug, "blocked", UpdateItem(type = FieldChange.Set("epic")))
-        assertEquals("epic", converted.type.label)
     }
 
     @Test

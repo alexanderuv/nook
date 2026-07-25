@@ -20,10 +20,6 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 // the write that produced it returned. An unknown stored code is a corrupted
 // store, not a caller error — this service is the single writer and never
 // stores one — so it fails loudly instead of mapping to anything.
-//
-// No entity carries the deleted mark. The mark is the store's business: nothing
-// a caller can hold is deleted, so an entity able to report itself deleted
-// would describe a state that cannot reach them.
 
 internal fun ResultRow.toProject(): Project = Project(
     id = this[ProjectTable.id],
@@ -77,11 +73,6 @@ internal fun blockersOf(itemId: Uuid): Set<Uuid> =
  * omitting items with none. One query for the whole set rather than one per
  * item: measurably faster, and it keeps a listing's answer inside the two
  * statements one transaction makes consistent with each other.
- *
- * An edge survives the deletion of either end, so a set may name an item the
- * caller cannot fetch. That is the store's history showing through, and it is
- * what a blocker set means: the deleted blocker no longer holds the item up,
- * but it did.
  */
 internal fun blockerSetsOf(itemIds: Collection<Uuid>): Map<Uuid, Set<Uuid>> {
     if (itemIds.isEmpty()) return emptyMap()

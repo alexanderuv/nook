@@ -1,5 +1,16 @@
 # Structure queries approach
 
+> **Its recommendation was not taken; its measurements stand.** This report
+> recommended soft delete, and the epic built it and then reversed it: the
+> partial unique index FIND1 shows to be unavoidable is the one engine-specific
+> feature the schema refuses ([ADR-1](../../../architecture/adrs/adr-1.md)), and
+> that constraint was never weighed here. Deletion now removes the row. FIND1
+> through FIND5 remain accurate about what a soft-delete design would have
+> cost — which is precisely why it was dropped — and FIND6 through FIND10, on
+> the filter, the ordering, the blocker fetch, and the transaction discipline,
+> are what the reads were actually built on. See the reversal note in
+> [the plan](./plan.md).
+
 ## Summary
 
 - **Letting a deleted row give up its handle works, but only as a uniqueness

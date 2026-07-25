@@ -6,10 +6,10 @@ import org.jetbrains.exposed.v1.javatime.timestamp
 /**
  * The `ready_item` view, declared so it can be queried like a table.
  *
- * The view holds the readiness rule itself — a live leaf that is `todo` with
- * every blocker done, cancelled, or deleted — and it is deliberately the only
- * place that rule is written. Recomputing it here would put the same rule in two
- * places, and the two would drift.
+ * The view holds the readiness rule itself — a leaf that is `todo` with every
+ * blocker done or cancelled — and it is deliberately the only place that rule is
+ * written. Recomputing it here would put the same rule in two places, and the
+ * two would drift.
  *
  * It mirrors `project_item` column for column, because that is what the view
  * selects. Only [id] and [projectId] are read: readiness decides *which* items
@@ -39,5 +39,4 @@ internal object ReadyItemView : Table("ready_item") {
     val updatedAt = timestamp("updated_at")
     val createdBy = varchar("created_by", 200)
     val updatedBy = varchar("updated_by", 200)
-    val deletedAt = timestamp("deleted_at").nullable()
 }

@@ -17,9 +17,8 @@ import kotlin.test.assertEquals
  *
  * Both halves are checked, because the operation names alone would not catch
  * the shape a way back would most plausibly take. Nobody would add a
- * `restoreItem`; someone would add a field to an existing command and have the
- * update clear the mark — leaving the name set untouched and the no-go quietly
- * reopened.
+ * `restoreItem`; someone would add a field to an existing command — leaving the
+ * name set untouched and the no-go quietly reopened.
  */
 class WriteServiceSurfaceTest {
 

@@ -1,10 +1,8 @@
 # Nook — Liquibase master changelog.
 #
-# PostgreSQL is the sole supported engine — production, development, and tests
-# (embedded binaries) all run it. The schema was plain standard SQL until soft
-# delete arrived: a handle belongs to live rows only, and uniqueness limited to
-# some rows exists in PostgreSQL as a partial index and not as a constraint, so
-# the three handle rules are engine-specific. Everything else stays portable.
+# The schema is plain standard SQL (no partial indexes or other DB-specific
+# features). PostgreSQL is the sole supported engine — production, development,
+# and tests (embedded binaries) all run it.
 databaseChangeLog:
   - includeAll:
       path: changes
