@@ -266,7 +266,7 @@ drift guard, `Main.kt`, and `docs/`.
   release slugs unique per project rather than per instance; verify: the
   named tests for AC21 and AC22 pass.
 
-- [ ] **STEP10** — Close the surface: a test asserts the write service's
+- [x] **STEP10** — Close the surface: a test asserts the write service's
   public operations are exactly the seven — in particular, no delete anywhere
   (AC1); run `./gradlew check` on a clean checkout, then push for the CI run;
   verify: check green locally and in CI, with the new tests visibly executed.
