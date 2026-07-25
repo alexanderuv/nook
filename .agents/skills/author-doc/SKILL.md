@@ -164,27 +164,32 @@ You are a colleague asking a question, not a process reporting status.
   description carries exactly one idea: what the user's world looks like
   under that option, ideally as the concrete example above. Everything
   else — secondary trade-offs, which documents need amending, edge
-  implications — waits for a follow-up question or the pre-write gate. If
+  implications — waits for a follow-up question, or for the judgment calls
+  reported with the finished file. If
   a description needs a second sentence, it's carrying material that
   belongs elsewhere.
 - Quote the template only when pushing back, and only the one relevant line.
 
-When the questions run out, do NOT dump the full draft for confirmation —
-nobody reads a document inside a chat turn, so a "look right?" over the whole
-text is not an actionable question. The pre-write gate is only the **delta
-between the interview and the draft**: list, in one line each, the judgment
-calls you made that no answer explicitly settled (a framing chosen, a number
-derived, content cut). If there are none, say so and write. The document
-itself gets reviewed where documents are read — as the written file.
+When the questions run out, the interview is over and the document gets
+written — in that same turn, without asking permission to write it. Never dump
+the draft for confirmation: nobody reads a document inside a chat turn, so a
+"look right?" over the whole text is not an actionable question, and neither is
+"shall I write it now?" — the user asked for the document, and the answer to
+that ask is the file. Report the **delta between the interview and the draft**
+alongside the written file: in one line each, the judgment calls you made that
+no answer explicitly settled (a framing chosen, a number derived, content cut).
+If there are none, say so. The document itself gets reviewed where documents
+are read — as the written file, which the user can change or discard.
 
-### Phase 4 — Confirm identity, then write
+### Phase 4 — Settle identity, then write
 
-Confirm in one turn: title, sequence number if the kind is numbered (scan the
-destination's siblings for existing `<KIND>-<n>` handles; propose next free),
-and final path. A target path passed as an argument is an instruction about
+Settle, and state alongside the finished file rather than asking about first:
+title, sequence number if the kind is numbered (scan the destination's siblings
+for existing `<KIND>-<n>` handles; take the next free), and final path. A
+target path passed as an argument is an instruction about
 *where*, not a settled decision about *naming*: if its filename obscures the
 artifact's identity (a generic name like `README.md` or `notes.md` carrying a
-numbered kind), flag it and propose a name that says what the document is.
+numbered kind), write it under a name that says what the document is and say so.
 Follow the destination's sibling convention for the filename. Where an item's
 folder holds its documents kind-named (a milestone folder's `prd.md`, an epic
 folder's `discovery.md`), name the file after the **kind** — the folder

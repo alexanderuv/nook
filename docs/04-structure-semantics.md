@@ -50,12 +50,36 @@ worse than no rule here — rigor is added later when real usage justifies it.
   (the UI surfaces this; it is not blocked). Cancelling an epic does **not**
   auto-change its leaves. No cascades, no guards — explicit over surprising.
 
-**Deletion — cancel, not delete.**
-- Project items are retired by setting `cancelled`, never hard-deleted in v1.
-  This preserves history and, critically, avoids **orphaning their git documents**:
-  git is not part of the DB's `ON DELETE CASCADE`, so a DB delete would leave
-  documents no row points at. Hard delete + coordinated git cleanup is a deferred,
-  deliberate operation (see [05](./05-project-and-ops.md)).
+**Deletion — soft in the store, gone to every caller.**
+- Nothing is ever physically removed from the store. Deleting marks the row as
+  deleted and it stays. The mark exists for the store's own sake, not the
+  caller's: it preserves history and, critically, avoids **orphaning git
+  documents**: git is not part of the DB's `ON DELETE CASCADE`, so a physical
+  delete would leave documents no row points at. Physical removal with
+  coordinated git cleanup stays a deferred, deliberate operation (see
+  [05](./05-project-and-ops.md)).
+- **A deleted row is unreachable through every operation.** No list returns it,
+  no `get_*` returns it, and a reference naming it — by slug or by id — is
+  `not_found`. There is no trash view and no way to ask for deleted rows; to a
+  caller, a deleted row is simply gone. Deletion is therefore a decision, not a
+  gesture: it is not undone by asking.
+- **Restoring is not offered.** Bringing a deleted row back is a deliberate
+  operation nobody has yet specified, of the same family as physical removal —
+  not something a caller can reach.
+- **Delete is an action, not a status.** It is independent of the status
+  vocabulary: an item may be `cancelled` and then deleted, or deleted while
+  still `todo`. Cancelling retires work that was real and keeps it in sight;
+  deleting takes it out of sight entirely.
+- **Deleting an epic takes its children with it**, and deleting a project takes
+  everything in it. The whole branch goes at once, which is what abandoning a
+  branch of work means — and nothing may survive a deletion above it and stay
+  visible.
+- **A deleted row gives up its slug.** Slug uniqueness applies among live rows
+  only, so a name freed by a delete can be used again immediately — a caller
+  never collides with something they cannot see.
+- **A deleted item stops blocking**, exactly as a `cancelled` one does — the
+  `ready_item` view treats it as resolved, since work nobody can see must not
+  deadlock the work behind it. Deleted items are themselves never ready.
 
 **Slugs — auto-generated, overridable.**
 - Default slug is derived from the name: lowercased, non-`[a-z0-9-]` collapsed to
@@ -72,6 +96,13 @@ worse than no rule here — rigor is added later when real usage justifies it.
 - `list_items` filters by type, status, and parent (and, for epics, release); the
   `ready` notion is `get_ready_items` (leaves only). Default sort is newest-first
   (`created_at` desc). Free-text search is deferred.
+- Each filter accepts **several values at once** (`status` of `todo` *or*
+  `in_progress` in one call), and naming several filters **narrows** the result
+  (that type *and* that status). Asking for open work is the everyday question,
+  and one call returns it in one correct ordering.
+- The `parent` filter names an epic, or the reserved value for **no epic at
+  all** — the way to ask for the leaves sitting directly on the project, which
+  omitting the filter (meaning "any parent") cannot express.
 
 **`blocked_by` integrity.**
 - Blockers are **leaves in the same project** (cross-epic within a project is allowed;
@@ -86,7 +117,11 @@ worse than no rule here — rigor is added later when real usage justifies it.
 ## Deferred (not open — intentionally later)
 
 - A status transition state machine, if usage shows a need.
-- Hard deletion with coordinated git cleanup ([05](./05-project-and-ops.md)).
+- Physical removal of a soft-deleted row, with the coordinated git cleanup it
+  needs ([05](./05-project-and-ops.md)).
+- Bringing a deleted row back, and any caller-facing sight of deleted rows at
+  all — both would need a shape nobody has designed, and neither is missed
+  while deletion means gone.
 - Free-text search across structure.
 
 ## Depends on / feeds

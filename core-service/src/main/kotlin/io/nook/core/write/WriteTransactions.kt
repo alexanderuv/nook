@@ -28,10 +28,14 @@ internal fun projectLockKey(projectId: Uuid): Long =
 
 /**
  * Runs [block] in one fresh transaction that fails on the first error instead
- * of silently re-running, and translates database constraint rejections into
- * structured errors. The block must take its advisory lock (via
+ * of silently re-running. The block must take its advisory lock (via
  * [takeProjectLock] or [takeInstanceLock]) before reading anything it will
  * write against.
+ *
+ * Every caller mistake is refused by validation inside the block, so the store
+ * refusing a write means validation let an invalid one through. That is a fault
+ * in this service — reported as one, with the store's own complaint attached —
+ * and never dressed up as a caller error.
  */
 internal fun <T> writeTransaction(db: Database, block: JdbcTransaction.() -> T): T =
     try {
@@ -39,8 +43,11 @@ internal fun <T> writeTransaction(db: Database, block: JdbcTransaction.() -> T):
             maxAttempts = 1
             block()
         }
-    } catch (failure: ExposedSQLException) {
-        throw translateConstraintViolation(failure) ?: failure
+    } catch (rejection: ExposedSQLException) {
+        throw IllegalStateException(
+            "the store refused a write that validation should have refused first",
+            rejection,
+        )
     }
 
 /** Blocks until this transaction holds the project's advisory lock. */
