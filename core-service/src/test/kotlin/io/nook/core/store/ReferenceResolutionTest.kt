@@ -81,6 +81,16 @@ class ReferenceResolutionTest {
         assertEquals(false, isUuidShaped("3f2a"))
         assertEquals(false, isUuidShaped("add-search"))
         assertEquals(false, isUuidShaped("3f2a8c1e-4b6d-4b0a-9f3e"))
+
+        // Renderings a lenient UUID parser accepts and this one must not. The
+        // first three are five short groups, which such a parser left-pads into
+        // an id; the last is the undashed form. Every one of them is a legal
+        // slug, so reading it as an id would send the lookup after a row the
+        // caller never named.
+        assertEquals(false, isUuidShaped("1-2-3-4-5"))
+        assertEquals(false, isUuidShaped("cafe-1-2-3-4"))
+        assertEquals(false, isUuidShaped("2026-07-25-0-1"))
+        assertEquals(false, isUuidShaped("3f2a8c1e4b6d4b0a9f3e2d1c0b9a8f7e"))
     }
 
     @Test

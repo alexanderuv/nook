@@ -23,18 +23,23 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 // These functions query the database, so they must run inside an open
 // transaction.
 
-// A canonical UUID rendering: five hyphen-separated hex groups of 8-4-4-4-12.
-// Used both to decide that a reference is an id rather than a slug, and to
-// reject explicit slugs that could never be referenced (id resolution would
-// always win).
-private val uuidShape =
-    Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", RegexOption.IGNORE_CASE)
+/**
+ * The id [ref] names, or null when it names a slug instead.
+ *
+ * UUID form here means the canonical rendering and only that: five
+ * hyphen-separated hex groups of 8-4-4-4-12, in either case. It has to be the
+ * strict parser: the lenient ones left-pad short groups, so a legal slug like
+ * `2026-07-25-0-1` parses as an id and the lookup goes after a row its caller
+ * never named.
+ */
+internal fun parseUuidOrNull(ref: String): Uuid? = Uuid.parseHexDashOrNull(ref)
 
-/** True when [ref] is written in UUID form and therefore resolves as an id, never a slug. */
-internal fun isUuidShaped(ref: String): Boolean = uuidShape.matches(ref)
-
-internal fun parseUuidOrNull(ref: String): Uuid? =
-    if (isUuidShaped(ref)) Uuid.parse(ref) else null
+/**
+ * True when [ref] is written in UUID form and therefore resolves as an id,
+ * never a slug. Also what makes such a slug unacceptable to accept in the first
+ * place: id resolution would always win, leaving it unreferenceable.
+ */
+internal fun isUuidShaped(ref: String): Boolean = parseUuidOrNull(ref) != null
 
 /**
  * What it means for a project row to be the one [ref] names: its id when the
