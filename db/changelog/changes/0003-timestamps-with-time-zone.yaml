@@ -1,0 +1,104 @@
+# Nook — timestamps become absolute moments.
+#
+# Every audit column started as `timestamp` — a wall-clock reading with no zone
+# attached — while the contract hands callers a `java.time.Instant`, which is a
+# point on the timeline and nothing else. The two cannot both be right. Writing
+# an Instant into a zoneless column stores the wall clock of whichever JVM did
+# the writing, and reading it back rebuilds an Instant using the zone of
+# whichever JVM does the reading. One row then answers differently on two
+# machines: a moment written on a host in America/Chicago reads five hours later
+# on a host in UTC and fourteen hours earlier on one in Asia/Tokyo. Nothing
+# reports this; the row looks fine everywhere.
+#
+# `timestamptz` stores the instant itself, so the answer no longer depends on
+# who asks. The application side moves with it, from Instant to OffsetDateTime
+# at UTC, which JDBC carries without consulting a default zone at either end.
+#
+# Both halves have to move in the same change. The drift guard cannot see this
+# difference — it compares Exposed's declaration against the migrated database
+# and reports these two types as the same one — so a half-done conversion would
+# leave the tests green and the bug in place.
+#
+# Existing rows are read as UTC. Any instance that ran on a JVM outside UTC
+# holds wall clocks in that JVM's zone instead, and its own offset belongs in
+# the USING clause below; there is no way to recover the zone from the row,
+# which is the defect being fixed rather than a shortcoming of the fix.
+#
+# The readiness view selects `i.*` from project_item, so PostgreSQL refuses to
+# retype a column underneath it. The view is dropped and recreated around the
+# conversion, unchanged — see changeSet 0007 for the definition it must match.
+databaseChangeLog:
+
+  - changeSet:
+      id: 0010-timestamps-with-time-zone
+      author: nook
+      changes:
+        - sql:
+            sql: DROP VIEW ready_item
+        - sql:
+            sql: ALTER TABLE project ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE project ALTER COLUMN updated_at TYPE timestamptz USING updated_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE release ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE release ALTER COLUMN updated_at TYPE timestamptz USING updated_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE project_item ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE project_item ALTER COLUMN updated_at TYPE timestamptz USING updated_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE item_dependency ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE document ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE document ALTER COLUMN updated_at TYPE timestamptz USING updated_at AT TIME ZONE 'UTC'
+        - createView:
+            viewName: ready_item
+            selectQuery: >-
+              SELECT i.*
+              FROM project_item i
+              WHERE i.type IN (2, 3, 4)
+                AND i.status = 1
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM item_dependency d
+                  JOIN project_item b ON b.id = d.depends_on_id
+                  WHERE d.item_id = i.id
+                    AND b.status NOT IN (3, 4)
+                )
+      rollback:
+        - sql:
+            sql: DROP VIEW ready_item
+        - sql:
+            sql: ALTER TABLE document ALTER COLUMN updated_at TYPE timestamp USING updated_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE document ALTER COLUMN created_at TYPE timestamp USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE item_dependency ALTER COLUMN created_at TYPE timestamp USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE project_item ALTER COLUMN updated_at TYPE timestamp USING updated_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE project_item ALTER COLUMN created_at TYPE timestamp USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE release ALTER COLUMN updated_at TYPE timestamp USING updated_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE release ALTER COLUMN created_at TYPE timestamp USING created_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE project ALTER COLUMN updated_at TYPE timestamp USING updated_at AT TIME ZONE 'UTC'
+        - sql:
+            sql: ALTER TABLE project ALTER COLUMN created_at TYPE timestamp USING created_at AT TIME ZONE 'UTC'
+        - createView:
+            viewName: ready_item
+            selectQuery: >-
+              SELECT i.*
+              FROM project_item i
+              WHERE i.type IN (2, 3, 4)
+                AND i.status = 1
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM item_dependency d
+                  JOIN project_item b ON b.id = d.depends_on_id
+                  WHERE d.item_id = i.id
+                    AND b.status NOT IN (3, 4)
+                )

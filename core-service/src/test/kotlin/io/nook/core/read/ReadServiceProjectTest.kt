@@ -7,6 +7,7 @@ import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectTable
 import io.nook.core.write.WriteService
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -80,8 +81,8 @@ class ReadServiceProjectTest {
                     it[ProjectTable.id] = id
                     it[ProjectTable.slug] = "twin-$number"
                     it[ProjectTable.name] = "Twin $number"
-                    it[ProjectTable.createdAt] = sharedInstant
-                    it[ProjectTable.updatedAt] = sharedInstant
+                    it[ProjectTable.createdAt] = sharedInstant.atOffset(ZoneOffset.UTC)
+                    it[ProjectTable.updatedAt] = sharedInstant.atOffset(ZoneOffset.UTC)
                 }
             }
             id to sharedInstant

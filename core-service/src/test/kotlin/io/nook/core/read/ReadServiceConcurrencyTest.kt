@@ -16,6 +16,7 @@ import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.JdbcTransaction
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
@@ -51,11 +52,14 @@ class ReadServiceConcurrencyTest {
      * blocker that did not exist when the first statement ran, pointed at by an
      * edge that does exist when the second one does.
      */
-    private fun blockersNamedButNeverShown(isolation: Int, projectName: String): Set<Uuid> {
+    private fun blockersNamedButNeverShown(
+        reader: (JdbcTransaction.() -> Set<Uuid>) -> Set<Uuid>,
+        projectName: String,
+    ): Set<Uuid> {
         val project = writes.createProject(CreateProject(projectName))
         writes.createItem(project.slug, CreateItem(type = "task", name = "Waiting leaf"))
 
-        return transaction(db, isolation, readOnly = true) {
+        return reader {
             val shown = ProjectItemTable.selectAll()
                 .where { ProjectItemTable.projectId eq project.id }
                 .map { it[ProjectItemTable.id] }
@@ -77,7 +81,7 @@ class ReadServiceConcurrencyTest {
     @Test
     fun `at the database's normal setting the two statements can describe two moments`() {
         val straddled = blockersNamedButNeverShown(
-            Connection.TRANSACTION_READ_COMMITTED,
+            { block -> transaction(db, Connection.TRANSACTION_READ_COMMITTED, readOnly = true, statement = block) },
             "Two Moments",
         )
 
@@ -87,10 +91,17 @@ class ReadServiceConcurrencyTest {
         )
     }
 
+    /**
+     * Through [readTransaction] itself, not through a transaction configured to
+     * match it. Handing the isolation level in as a parameter would test
+     * PostgreSQL's repeatable read and say nothing about whether the read path
+     * asks for it: the level could be changed in [readTransaction] and this test
+     * would stay green.
+     */
     @Test
     fun `reading one moment leaves the two statements agreeing`() {
         val straddled = blockersNamedButNeverShown(
-            Connection.TRANSACTION_REPEATABLE_READ,
+            { block -> readTransaction(db, block) },
             "One Moment",
         )
 

@@ -8,6 +8,7 @@ import io.nook.contract.FieldChange
 import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
+import io.nook.core.db.DocumentTable
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ItemDependencyTable
 import io.nook.core.db.ProjectItemTable
@@ -20,6 +21,7 @@ import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
@@ -241,6 +243,73 @@ class WriteServiceDeleteTest {
 
         assertFailsWithCode(ErrorCode.NOT_FOUND) { service.deleteProject(project.slug) }
         assertFailsWithCode(ErrorCode.NOT_FOUND) { service.deleteProject(project.id.toString()) }
+    }
+
+    /**
+     * The documents attached to what is deleted go with it. Nothing writes a
+     * document yet, so these rows are inserted directly — but the foreign key
+     * that would otherwise refuse the delete is on already, and it is `NO
+     * ACTION`: without the write path removing them first, deleting an item
+     * with a document attached comes back as a fault in the service.
+     *
+     * A document row is a pointer; the content lives in git and is not this
+     * operation's to remove. That reach is the same one deleting a project
+     * already has, and the git side is deferred deliberately (see docs/04).
+     */
+    @Test
+    fun `a deleted item takes its documents, and an epic takes its children's too`() {
+        val project = service.createProject(CreateProject("Documents Go Too"))
+        val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Documented epic"))
+        val child = service.createItem(
+            project.slug,
+            CreateItem(type = "task", name = "Documented child", parentRef = epic.slug),
+        )
+        val bystander = service.createItem(project.slug, CreateItem(type = "task", name = "Bystander"))
+
+        val onEpic = attachDocument(project.id, epic.id, "/epics/documented-epic/plan.md")
+        val onChild = attachDocument(project.id, child.id, "/epics/documented-epic/child/plan.md")
+        val onBystander = attachDocument(project.id, bystander.id, "/tasks/bystander/plan.md")
+        val projectLevel = attachDocument(project.id, null, "/architecture.md")
+
+        service.deleteItem(project.slug, epic.slug)
+
+        assertEquals(0L, documentsWithId(onEpic), "the epic's own document must go with it")
+        assertEquals(0L, documentsWithId(onChild), "a child's document must go with the child")
+        assertEquals(1L, documentsWithId(onBystander), "an unrelated item's document must be untouched")
+        assertEquals(1L, documentsWithId(projectLevel), "a project-level document belongs to no item")
+    }
+
+    @Test
+    fun `deleting a project takes its documents with it, attached or not`() {
+        val project = service.createProject(CreateProject("Documented Project"))
+        val item = service.createItem(project.slug, CreateItem(type = "task", name = "Documented task"))
+        val attached = attachDocument(project.id, item.id, "/doomed/tasks/plan.md")
+        val projectLevel = attachDocument(project.id, null, "/doomed/architecture.md")
+
+        service.deleteProject(project.slug)
+
+        assertEquals(0L, documentsWithId(attached))
+        assertEquals(0L, documentsWithId(projectLevel))
+    }
+
+    /** A document row, written directly: no operation creates one yet. */
+    private fun attachDocument(projectId: Uuid, itemId: Uuid?, path: String): Uuid {
+        val id = Uuid.random()
+        transaction(db) {
+            DocumentTable.insert {
+                it[DocumentTable.id] = id
+                it[DocumentTable.projectId] = projectId
+                it[DocumentTable.itemId] = itemId
+                it[DocumentTable.kind] = 2
+                it[DocumentTable.name] = "plan"
+                it[DocumentTable.path] = path
+            }
+        }
+        return id
+    }
+
+    private fun documentsWithId(id: Uuid): Long = transaction(db) {
+        DocumentTable.selectAll().where { DocumentTable.id eq id }.count()
     }
 
     @Test

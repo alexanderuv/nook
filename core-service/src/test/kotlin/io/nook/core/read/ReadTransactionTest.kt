@@ -3,7 +3,8 @@ package io.nook.core.read
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
-import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -82,8 +83,8 @@ class ReadTransactionTest {
                     it[ReadyItemView.slug] = "smuggled"
                     it[ReadyItemView.name] = "Smuggled through the view"
                     it[ReadyItemView.status] = 1
-                    it[ReadyItemView.createdAt] = Instant.now()
-                    it[ReadyItemView.updatedAt] = Instant.now()
+                    it[ReadyItemView.createdAt] = OffsetDateTime.now(ZoneOffset.UTC)
+                    it[ReadyItemView.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
                     it[ReadyItemView.createdBy] = "system"
                     it[ReadyItemView.updatedBy] = "system"
                 }
@@ -110,8 +111,8 @@ class ReadTransactionTest {
                 it[ReadyItemView.slug] = "writable-view"
                 it[ReadyItemView.name] = "The view is writable"
                 it[ReadyItemView.status] = 1
-                it[ReadyItemView.createdAt] = Instant.now()
-                it[ReadyItemView.updatedAt] = Instant.now()
+                it[ReadyItemView.createdAt] = OffsetDateTime.now(ZoneOffset.UTC)
+                it[ReadyItemView.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
                 it[ReadyItemView.createdBy] = "system"
                 it[ReadyItemView.updatedBy] = "system"
             }

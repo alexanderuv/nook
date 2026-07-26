@@ -3,20 +3,34 @@ package io.nook.core.db
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.neq
-import org.jetbrains.exposed.v1.javatime.CurrentTimestamp
+import org.jetbrains.exposed.v1.javatime.CurrentTimestampWithTimeZone
 import org.jetbrains.exposed.v1.javatime.date
-import org.jetbrains.exposed.v1.javatime.timestamp
+import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
 
 // The structure schema, declared for Exposed. The database itself is built and
 // evolved exclusively by the Liquibase changelog; these declarations must mirror
-// it exactly — every column type, nullability, default, constraint, and index —
-// and a drift check compares them against the migrated database, so any mismatch
-// fails tests instead of surfacing as a broken query later.
+// it exactly — every column type, nullability, default, constraint, and index.
+//
+// Two checks hold them to it, because one of them alone would not. Exposed's own
+// comparison reports what the migrated database is missing, which catches a
+// declaration with no counterpart; it does not read what each rule *says*, so a
+// CHECK rewritten under its own name or a column retyped between two types it
+// treats as equivalent passes it silently. The other check builds the schema a
+// second time from these declarations onto an empty database and diffs what
+// PostgreSQL reports about the two — indexes, columns, and constraint
+// definitions — which is the reading rather than a summary of it.
 //
 // Enum-valued columns (type, status, kind) are SMALLINT codes; the meaning lives
 // in application enums whose members carry explicit, stable integers. The single
 // writer (this service) enforces domain membership, containment, and per-type
 // rules — the schema stores no such semantics beyond its constraints.
+//
+// Audit timestamps are TIMESTAMPTZ, carried here as OffsetDateTime and handed to
+// callers as the Instant the contract promises. A zoneless column would store
+// the writing machine's wall clock and rebuild an Instant from the reading
+// machine's zone, so the same row would name a different moment on a different
+// host. The drift check cannot tell the two column types apart, which is why the
+// mismatch has to be prevented rather than caught.
 
 // The rows writers lock to take a turn in a scope that owns no row of its own —
 // today just the instance-wide space of project handles. Holds no data: the row
@@ -34,8 +48,8 @@ object ProjectTable : Table("project") {
     val name = varchar("name", 500)
     val description = text("description").default("").nullable()
     val artifactRepoUrl = varchar("artifact_repo_url", 1024).nullable()
-    val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
-    val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
 
@@ -55,8 +69,8 @@ object ReleaseTable : Table("release") {
     val description = text("description").default("").nullable()
     val status = short("status").default(1)
     val targetDate = date("target_date").nullable()
-    val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
-    val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
 
@@ -84,8 +98,8 @@ object ProjectItemTable : Table("project_item") {
     val name = varchar("name", 500)
     val description = text("description").default("").nullable()
     val status = short("status").default(1)
-    val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
-    val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
 
@@ -124,7 +138,7 @@ object ItemDependencyTable : Table("item_dependency") {
         .references(ProjectItemTable.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.NO_ACTION, fkName = "fk_dep_item")
     val dependsOnId = uuid("depends_on_id")
         .references(ProjectItemTable.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.NO_ACTION, fkName = "fk_dep_blocker")
-    val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
 
     override val primaryKey = PrimaryKey(itemId, dependsOnId, name = "pk_item_dependency")
 
@@ -159,8 +173,8 @@ object DocumentTable : Table("document") {
     // repeat across items.
     val path = varchar("path", 1024).uniqueIndex("uq_document_path")
     val currentVersion = varchar("current_version", 64).nullable()
-    val createdAt = timestamp("created_at").defaultExpression(CurrentTimestamp)
-    val updatedAt = timestamp("updated_at").defaultExpression(CurrentTimestamp)
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
 
@@ -175,6 +189,10 @@ object DocumentTable : Table("document") {
             onUpdate = ReferenceOption.NO_ACTION,
             name = "fk_doc_item_same_project",
         )
+        // Both ways a document is reached by what owns it: the cascade from
+        // project, and the write path taking an item's documents with it. A
+        // leading-column prefix serves the first, the whole index the second.
+        index("ix_doc_project_item", false, projectId, itemId)
     }
 }
 

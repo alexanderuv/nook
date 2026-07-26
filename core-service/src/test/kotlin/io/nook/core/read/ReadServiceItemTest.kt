@@ -12,7 +12,7 @@ import io.nook.core.write.WriteService
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.jdbc.Database
 
@@ -52,7 +52,7 @@ class ReadServiceItemTest {
         val epic = writes.createItem(project.slug, CreateItem(type = "epic", name = "Search"))
         val firstBlocker = writes.createItem(project.slug, CreateItem(type = "task", name = "Blocker one"))
         val secondBlocker = writes.createItem(project.slug, CreateItem(type = "task", name = "Blocker two"))
-        writes.createItem(
+        val item = writes.createItem(
             project.slug,
             CreateItem(
                 type = "task",
@@ -76,8 +76,14 @@ class ReadServiceItemTest {
         assertEquals(epic.id, fetched.parentId)
         assertEquals(project.id, fetched.projectId)
         assertEquals(setOf(firstBlocker.id, secondBlocker.id), fetched.blockedBy)
-        assertNotNull(fetched.createdAt)
-        assertNotNull(fetched.updatedAt)
+        // Both timestamps are non-nullable, so their presence says nothing. What
+        // is worth asserting is that a read hands back the moments the write
+        // recorded, and that the blocker set arriving later moved only one of them.
+        assertEquals(item.createdAt, fetched.createdAt)
+        assertTrue(
+            fetched.updatedAt >= fetched.createdAt,
+            "an item cannot have been updated before it existed",
+        )
     }
 
     @Test

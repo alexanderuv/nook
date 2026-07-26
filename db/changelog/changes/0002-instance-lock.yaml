@@ -32,3 +32,12 @@ databaseChangeLog:
             tableName: instance_lock
             columns:
               - column: {name: scope, value: project_slug}
+      # An insert is the one change type here Liquibase cannot reverse on its
+      # own; dropping the table would take the row with it, but only if the
+      # reversal is stated at all.
+      rollback:
+        - delete:
+            tableName: instance_lock
+            where: scope = 'project_slug'
+        - dropTable:
+            tableName: instance_lock

@@ -92,12 +92,22 @@ class WriteServiceBlockerTest {
         service.createItem(project.slug, CreateItem(type = "task", name = "a"))
         service.createItem(project.slug, CreateItem(type = "task", name = "b"))
         service.createItem(project.slug, CreateItem(type = "task", name = "c"))
+        service.createItem(project.slug, CreateItem(type = "task", name = "d"))
         service.setItemBlockedBy(project.slug, "b", SetItemBlockedBy(listOf("a")))
         service.setItemBlockedBy(project.slug, "c", SetItemBlockedBy(listOf("b")))
+        // `a` starts out already blocked, so "nothing was stored" is a claim about
+        // this call and not about a set that was empty before it and after it.
+        val before = service.setItemBlockedBy(project.slug, "a", SetItemBlockedBy(listOf("d")))
 
         assertFailsWithCode(ErrorCode.CYCLE) {
             service.setItemBlockedBy(project.slug, "a", SetItemBlockedBy(listOf("c")))
         }
-        assertTrue(reload(project.slug, "a").blockedBy.isEmpty(), "the rejected call left an edge behind")
+
+        assertEquals(
+            before.blockedBy,
+            reload(project.slug, "a").blockedBy,
+            "the rejected call must leave the whole set as it found it — neither adding nor clearing",
+        )
+        assertTrue(before.blockedBy.isNotEmpty(), "the set under test must not have been empty to begin with")
     }
 }

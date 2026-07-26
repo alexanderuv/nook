@@ -44,10 +44,14 @@
 #                        7=prd 8=adr 9=discovery 10=test_plan 11=retro 12=spec
 #                        13=architecture
 #
-# Portability notes:
+# Plain-SQL notes. PostgreSQL is the only supported engine — production,
+# development, and tests all run it, and no other is promised or tested (see
+# db/README.md). Sticking to plain SQL is discipline rather than a portability
+# claim: it keeps the DDL simple and the constraints strong, and it keeps
+# engine-specific behaviour out of the one place the whole schema is defined.
 #   * The schema is plain standard SQL — tables, plain UNIQUE / PK / FK
 #     constraints, CHECK constraints, and a view. No partial/filtered indexes or
-#     other engine-specific capabilities, so it is not tied to any one database.
+#     other engine-specific capabilities.
 #   * Column types use Liquibase abstract types so each dialect gets its own
 #     (uuid, timestamp, smallint, ...). UUIDs are generated in the application.
 #   * Enum domains are SMALLINT codes validated by the application enums, not
@@ -185,6 +189,21 @@ databaseChangeLog:
         # same-project and leaves-only are write-path rules; self-block is structural:
         - sql:
             sql: ALTER TABLE item_dependency ADD CONSTRAINT ck_dep_no_self_block CHECK (item_id <> depends_on_id)
+      # Liquibase reverses its own change types unaided; raw SQL it cannot read,
+      # so the reversal is stated. Without this the whole changeset is
+      # irreversible, including the three changes above it that would have been
+      # fine on their own.
+      rollback:
+        - sql:
+            sql: ALTER TABLE item_dependency DROP CONSTRAINT ck_dep_no_self_block
+        - dropIndex:
+            tableName: item_dependency
+            indexName: ix_dep_depends_on
+        - dropPrimaryKey:
+            tableName: item_dependency
+            constraintName: pk_item_dependency
+        - dropTable:
+            tableName: item_dependency
 
   # ── document (pointer; content is in git) ───────────────────────────────────
   - changeSet:

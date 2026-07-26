@@ -14,23 +14,27 @@ import io.nook.contract.ReleaseStatus
 import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
+import io.nook.core.db.DocumentTable
 import io.nook.core.db.ItemDependencyTable
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
 import io.nook.core.store.blockerSetsOf
 import io.nook.core.store.blockersOf
+import io.nook.core.store.isUuidShaped
 import io.nook.core.store.resolveItem
 import io.nook.core.store.resolveRelease
 import io.nook.core.store.toProject
 import io.nook.core.store.toProjectItem
 import io.nook.core.store.toRelease
 import io.nook.core.store.validationFailed
-import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -59,7 +63,8 @@ import org.jetbrains.exposed.v1.jdbc.update
  * store holds what exists and nothing else, so every other query here needs no
  * clause about deletion and no rule can be enforced against something a caller
  * cannot see. What a delete reaches is bounded by the schema's own cascades,
- * plus the children an epic must take with it, which no cascade covers.
+ * plus what [deleteItem] states for itself — an epic's children and the
+ * documents attached to them, neither of which any cascade covers.
  *
  * References: a string in UUID form resolves as an id, anything else as a
  * slug in the target project. Enum-valued inputs (item type, statuses) arrive
@@ -71,6 +76,7 @@ class WriteService(private val db: Database) {
         writeTransaction(db) {
             takeInstanceLock()
             requireUsableName(command.name)
+            requireUsableDescription(command.description)
             val chosenSlug = chooseSlug(
                 command.slug, command.name,
                 takenProjectSlugs(command.slug ?: deriveSlug(command.name)),
@@ -80,7 +86,7 @@ class WriteService(private val db: Database) {
                 it[ProjectTable.id] = id
                 it[ProjectTable.slug] = chosenSlug
                 it[ProjectTable.name] = command.name
-                if (command.description != null) it[ProjectTable.description] = command.description
+                it[ProjectTable.description] = command.description
             }
             loadProject(id)
         }
@@ -90,6 +96,7 @@ class WriteService(private val db: Database) {
         val itemType = ItemType.fromLabel(command.type)
             ?: validationFailed("\"${command.type}\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}")
         requireUsableName(command.name)
+        requireUsableDescription(command.description)
         val parentRef = command.parentRef
         val parentId = when {
             parentRef == null -> null
@@ -115,7 +122,7 @@ class WriteService(private val db: Database) {
             it[ProjectItemTable.type] = itemType.code
             it[ProjectItemTable.slug] = chosenSlug
             it[ProjectItemTable.name] = command.name
-            if (command.description != null) it[ProjectItemTable.description] = command.description
+            it[ProjectItemTable.description] = command.description
             it[ProjectItemTable.status] = ItemStatus.TODO.code
         }
         loadItem(id)
@@ -136,6 +143,8 @@ class WriteService(private val db: Database) {
                     conflict("slug \"$value\" is already taken by another item in the project")
                 }
             }
+            val newDescription = command.description
+            if (newDescription is FieldChange.Set) requireUsableDescription(newDescription.value)
             val newStatus = when (val status = command.status) {
                 FieldChange.Keep -> null
                 is FieldChange.Set -> ItemStatus.fromLabel(status.value)
@@ -151,6 +160,16 @@ class WriteService(private val db: Database) {
                 is FieldChange.Set -> parentRef.value?.let { epicIdOf(projectId, it) }
             }
 
+            // A reference to the item itself clears every other guard here on the
+            // strength of the type this very update is replacing: epicIdOf reads
+            // the stored row, which still says `epic`, while the demotion checks
+            // below find no children, the item being about to become its own
+            // first one. The schema does not object either — the composite self
+            // FK is satisfied by the row pointing at itself. So the only place
+            // this can be refused is here.
+            if (targetParentId == itemId) {
+                validationFailed("an item cannot be its own parent")
+            }
             if (targetType == ItemType.EPIC && targetParentId != null) {
                 validationFailed("an epic never has a parent")
             }
@@ -177,12 +196,11 @@ class WriteService(private val db: Database) {
             ProjectItemTable.update({ ProjectItemTable.id eq itemId }) {
                 if (newName != null) it[ProjectItemTable.name] = newName
                 if (newSlug != null) it[ProjectItemTable.slug] = newSlug
-                val description = command.description
-                if (description is FieldChange.Set) it[ProjectItemTable.description] = description.value
+                if (newDescription is FieldChange.Set) it[ProjectItemTable.description] = newDescription.value
                 if (newStatus != null) it[ProjectItemTable.status] = newStatus.code
                 if (command.type is FieldChange.Set) it[ProjectItemTable.type] = targetType.code
                 if (command.parentRef is FieldChange.Set) it[ProjectItemTable.parentId] = targetParentId
-                it[ProjectItemTable.updatedAt] = Instant.now()
+                it[ProjectItemTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
             }
             loadItem(itemId)
         }
@@ -214,7 +232,7 @@ class WriteService(private val db: Database) {
                 }
             }
             ProjectItemTable.update({ ProjectItemTable.id eq itemId }) {
-                it[ProjectItemTable.updatedAt] = Instant.now()
+                it[ProjectItemTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
             }
             loadItem(itemId)
         }
@@ -222,6 +240,7 @@ class WriteService(private val db: Database) {
     fun createRelease(projectRef: String, command: CreateRelease): Release = writeTransaction(db) {
         val projectId = lockedProjectId(projectRef)
         requireUsableName(command.name)
+        requireUsableDescription(command.description)
         val chosenSlug = chooseSlug(
             command.slug, command.name,
             takenReleaseSlugs(projectId, command.slug ?: deriveSlug(command.name)),
@@ -232,7 +251,7 @@ class WriteService(private val db: Database) {
             it[ReleaseTable.projectId] = projectId
             it[ReleaseTable.slug] = chosenSlug
             it[ReleaseTable.name] = command.name
-            if (command.description != null) it[ReleaseTable.description] = command.description
+            it[ReleaseTable.description] = command.description
             it[ReleaseTable.status] = ReleaseStatus.PLANNED.code
             it[ReleaseTable.targetDate] = command.targetDate
         }
@@ -252,6 +271,8 @@ class WriteService(private val db: Database) {
                     conflict("slug \"$value\" is already taken by another release in the project")
                 }
             }
+            val newDescription = command.description
+            if (newDescription is FieldChange.Set) requireUsableDescription(newDescription.value)
             val newStatus = when (val status = command.status) {
                 FieldChange.Keep -> null
                 is FieldChange.Set -> ReleaseStatus.fromLabel(status.value)
@@ -261,12 +282,11 @@ class WriteService(private val db: Database) {
             ReleaseTable.update({ ReleaseTable.id eq releaseId }) {
                 if (newName != null) it[ReleaseTable.name] = newName
                 if (newSlug != null) it[ReleaseTable.slug] = newSlug
-                val description = command.description
-                if (description is FieldChange.Set) it[ReleaseTable.description] = description.value
+                if (newDescription is FieldChange.Set) it[ReleaseTable.description] = newDescription.value
                 if (newStatus != null) it[ReleaseTable.status] = newStatus.code
                 val targetDate = command.targetDate
                 if (targetDate is FieldChange.Set) it[ReleaseTable.targetDate] = targetDate.value
-                it[ReleaseTable.updatedAt] = Instant.now()
+                it[ReleaseTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
             }
             loadRelease(releaseId)
         }
@@ -281,21 +301,29 @@ class WriteService(private val db: Database) {
             val releaseId = command.releaseRef?.let { resolveRelease(projectId, it)[ReleaseTable.id] }
             ProjectItemTable.update({ ProjectItemTable.id eq row[ProjectItemTable.id] }) {
                 it[ProjectItemTable.releaseId] = releaseId
-                it[ProjectItemTable.updatedAt] = Instant.now()
+                it[ProjectItemTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
             }
             loadItem(row[ProjectItemTable.id])
         }
 
     /**
-     * Removes an item, and an epic's children with it — nothing may survive a
-     * deletion above it. Its blocker edges go too, by the schema's cascade,
-     * whichever end of the edge it sat on. Nothing is returned: the item does
-     * not exist once this commits, so there is no entity left to hand back.
+     * Removes an item, an epic's children with it, and the documents attached to
+     * any of them — nothing may survive a deletion above it. Its blocker edges go
+     * too, by the schema's cascade, whichever end of the edge it sat on. Nothing
+     * is returned: the item does not exist once this commits, so there is no
+     * entity left to hand back.
      *
-     * Children are removed explicitly because the parent link deliberately does
-     * not cascade: `project → project_item` is the schema's single cascade path,
-     * which is what keeps deletion's reach something this code states rather
-     * than something the reader has to derive from a graph of foreign keys.
+     * Children and documents are removed explicitly because neither link
+     * cascades: every cascade in the schema starts at `project`, which is what
+     * keeps deletion's reach something this code states rather than something
+     * the reader has to derive from a graph of foreign keys. Documents go first
+     * — while the items they point at are still there, which is what their
+     * composite foreign key requires.
+     *
+     * A document row is a pointer; the content it points at lives in git and is
+     * not touched here. Removing the row without it is the same reach deleting a
+     * whole project already has, and the git side of a delete is deferred
+     * deliberately (see docs/04).
      *
      * Deleting something already deleted is [io.nook.contract.ErrorCode.NOT_FOUND],
      * the same as any other reference to a row that is not there.
@@ -304,10 +332,18 @@ class WriteService(private val db: Database) {
         val projectId = lockedProjectId(projectRef)
         val row = resolveItem(projectId, itemRef)
         val itemId = row[ProjectItemTable.id]
-        if (row[ProjectItemTable.type] == ItemType.EPIC.code) {
-            ProjectItemTable.deleteWhere { ProjectItemTable.parentId eq itemId }
+        // The item and whatever hangs off it, named as a condition rather than
+        // as a list of ids: an epic with more children than a statement has
+        // room for bound parameters would otherwise fail on its own size. No
+        // test for the type is needed either — only an epic parents anything,
+        // so for a leaf this matches the leaf alone.
+        val doomed: Op<Boolean> =
+            (ProjectItemTable.id eq itemId) or (ProjectItemTable.parentId eq itemId)
+        DocumentTable.deleteWhere {
+            (DocumentTable.projectId eq projectId) and
+                (DocumentTable.itemId inSubQuery ProjectItemTable.select(ProjectItemTable.id).where(doomed))
         }
-        ProjectItemTable.deleteWhere { ProjectItemTable.id eq itemId }
+        ProjectItemTable.deleteWhere { doomed }
     }
 
     /**
@@ -344,6 +380,12 @@ class WriteService(private val db: Database) {
 
     private fun requireUsableName(name: String) {
         if (name.isBlank()) validationFailed("a name must not be empty or only whitespace")
+        requireStorableText(name, "name", MAX_NAME_LENGTH)
+    }
+
+    /** A description has no width of its own, so only the NUL rule applies. */
+    private fun requireUsableDescription(description: String?) {
+        if (description != null) requireStorableText(description, "description")
     }
 
     /**
@@ -351,6 +393,12 @@ class WriteService(private val db: Database) {
      * free (never suffixed); a derived slug takes the first free numeric
      * suffix on collision. [taken] holds the slugs already in use in the
      * uniqueness scope that could collide with the candidate.
+     *
+     * A derived slug is held to the same UUID-form rule as an explicit one, and
+     * for the same reason: a reference in UUID form resolves as an id, so such
+     * a slug would name nothing and its entity would be unreachable by the
+     * handle it was given. Deriving it rather than being handed it changes
+     * nothing about that, only who has to fix it.
      */
     private fun chooseSlug(explicit: String?, name: String, taken: Set<String>): String =
         if (explicit != null) {
@@ -362,7 +410,17 @@ class WriteService(private val db: Database) {
             if (base.isEmpty()) {
                 validationFailed("the name \"$name\" yields no usable slug; supply a slug explicitly")
             }
+            if (isUuidShaped(base)) {
+                validationFailed(
+                    "the name \"$name\" yields the slug \"$base\", which is in UUID form and would " +
+                        "always resolve as an id; supply a slug explicitly",
+                )
+            }
             firstFreeSlug(base, taken)
+                ?: validationFailed(
+                    "every handle derivable from the name \"$name\" is already taken in its scope; " +
+                        "supply a slug explicitly",
+                )
         }
 
     // The slugs already in use in a uniqueness scope. Every row in the scope is

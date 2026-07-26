@@ -47,20 +47,24 @@ class DriftGuardTest {
     }
 
     /**
-     * What the guard above cannot do. It compares which rules exist, not which
-     * rows they cover, so a handle index rebuilt without its live-only condition
-     * leaves it green. Building the schema from the declarations onto an empty
-     * database and reading both results back out of PostgreSQL compares the
-     * whole index definition, condition included.
+     * What the guard above cannot do, and the shape of the answer.
+     *
+     * The comparison reports which rules exist, not what each one says. It sees
+     * a missing index and a missing constraint; it does not see an index
+     * rebuilt without its condition, a CHECK whose predicate was replaced under
+     * the same name, or a column retyped in a way it treats as equivalent —
+     * `timestamp` for `timestamptz` among them, which is how a timezone bug can
+     * pass a drift check.
+     *
+     * So each of these builds the schema a second way — from the declarations,
+     * onto an empty database — and compares what PostgreSQL itself reports about
+     * the two. A catalog reading is the definition, not a summary of it, so
+     * anything the two schemas disagree about shows up whether or not the
+     * comparison above has a name for it.
      */
     @Test
     fun `the indexes the declarations build match the migrated schema's`() {
-        val declared = EmbeddedPostgresSupport.freshEmptyDatabase()
-        transaction(Database.connect(declared)) {
-            SchemaUtils.create(tables = allStructureTables, inBatch = false)
-        }
-
-        val fromDeclarations = indexDefinitions(declared)
+        val fromDeclarations = indexDefinitions(schemaBuiltFromDeclarations())
         val fromChangelog = indexDefinitions(EmbeddedPostgresSupport.freshMigratedDatabase())
 
         assertEquals(fromChangelog, fromDeclarations)
@@ -72,21 +76,104 @@ class DriftGuardTest {
         )
     }
 
+    @Test
+    fun `the columns the declarations build match the migrated schema's, type for type`() {
+        val fromDeclarations = columnDefinitions(schemaBuiltFromDeclarations())
+        val fromChangelog = columnDefinitions(EmbeddedPostgresSupport.freshMigratedDatabase())
+
+        assertEquals(fromChangelog, fromDeclarations)
+    }
+
+    /**
+     * Every audit timestamp keeps its zone. Stated separately from the
+     * comparison above because it is the one column property nothing else in
+     * this file would notice losing: both halves would have to be wrong
+     * together, which is exactly what a careless half-migration produces.
+     */
+    @Test
+    fun `every timestamp column carries a time zone`() {
+        val columns = columnDefinitions(EmbeddedPostgresSupport.freshMigratedDatabase())
+        val timestamps = columns.filterKeys { it.endsWith(".created_at") || it.endsWith(".updated_at") }
+
+        assertEquals(9, timestamps.size, "expected nine audit timestamps, found ${timestamps.keys}")
+        timestamps.forEach { (column, definition) ->
+            assertTrue(
+                definition.startsWith("timestamp with time zone"),
+                "$column is $definition, so the moment it names depends on who reads it",
+            )
+        }
+    }
+
+    @Test
+    fun `the constraints the declarations build match the migrated schema's, predicate included`() {
+        val fromDeclarations = constraintDefinitions(schemaBuiltFromDeclarations())
+        val fromChangelog = constraintDefinitions(EmbeddedPostgresSupport.freshMigratedDatabase())
+
+        assertEquals(fromChangelog, fromDeclarations)
+        assertEquals(
+            "CHECK ((item_id <> depends_on_id))",
+            fromChangelog["ck_dep_no_self_block"],
+            "the schema's only business rule must still say what it always said",
+        )
+    }
+
+    /** An empty database with the schema built from the Exposed declarations alone. */
+    private fun schemaBuiltFromDeclarations(): String {
+        val url = EmbeddedPostgresSupport.freshEmptyDatabase()
+        transaction(Database.connect(url)) {
+            SchemaUtils.create(tables = allStructureTables, inBatch = false)
+        }
+        return url
+    }
+
     /** Every index PostgreSQL holds for the structure tables, by name, as it renders them. */
-    private fun indexDefinitions(jdbcUrl: String): Map<String, String> {
-        val tableNames = allStructureTables.joinToString { "'${it.tableName}'" }
-        return DriverManager.getConnection(jdbcUrl).use { connection ->
+    private fun indexDefinitions(jdbcUrl: String): Map<String, String> = catalogReading(
+        jdbcUrl,
+        "SELECT indexname, indexdef FROM pg_indexes WHERE tablename IN (${structureTableNames()})",
+    )
+
+    /**
+     * Every structure column, as `table.column` to the type and nullability
+     * PostgreSQL reports. The type is spelled out in full — `timestamp with
+     * time zone` and `timestamp without time zone` are different readings here,
+     * which is the whole reason for asking the catalog rather than the guard.
+     */
+    private fun columnDefinitions(jdbcUrl: String): Map<String, String> = catalogReading(
+        jdbcUrl,
+        """
+        SELECT table_name || '.' || column_name,
+               data_type
+                 || coalesce(' (' || character_maximum_length || ')', '')
+                 || coalesce(' (' || numeric_precision || ')', '')
+                 || ' ' || is_nullable
+          FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name IN (${structureTableNames()})
+        """.trimIndent(),
+    )
+
+    /** Every constraint on the structure tables, by name, as PostgreSQL defines it. */
+    private fun constraintDefinitions(jdbcUrl: String): Map<String, String> = catalogReading(
+        jdbcUrl,
+        """
+        SELECT c.conname, pg_get_constraintdef(c.oid)
+          FROM pg_constraint c
+          JOIN pg_class t ON t.oid = c.conrelid
+         WHERE t.relname IN (${structureTableNames()})
+        """.trimIndent(),
+    )
+
+    private fun structureTableNames(): String = allStructureTables.joinToString { "'${it.tableName}'" }
+
+    private fun catalogReading(jdbcUrl: String, query: String): Map<String, String> =
+        DriverManager.getConnection(jdbcUrl).use { connection ->
             connection.createStatement().use { statement ->
-                statement.executeQuery(
-                    "SELECT indexname, indexdef FROM pg_indexes WHERE tablename IN ($tableNames)",
-                ).use { rows ->
+                statement.executeQuery(query).use { rows ->
                     buildMap {
                         while (rows.next()) put(rows.getString(1), rows.getString(2))
                     }
                 }
             }
         }
-    }
 
     // The comparison re-emits computed defaults verbatim even when the database
     // already has them; this is the only statement shape the guard tolerates.

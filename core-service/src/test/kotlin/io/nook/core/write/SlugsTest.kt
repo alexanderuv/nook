@@ -64,4 +64,33 @@ class SlugsTest {
             firstFreeSlug("add-search", setOf("add-search", "add-search-3")),
         )
     }
+
+    /**
+     * A derivation leaves room for the suffix rather than making room later.
+     * Cutting the base to fit a suffix would produce a slug that no longer
+     * starts with the base — and the taken-slug scan finds candidates by exactly
+     * that prefix, so it would stop seeing what it had already handed out.
+     */
+    @Test
+    fun `a derived slug and every suffix it can take fit the column and keep the base`() {
+        val base = deriveSlug("z".repeat(MAX_NAME_LENGTH))
+        val suffixed = firstFreeSlug(base, setOf(base))
+
+        assertEquals(true, base.length < MAX_SLUG_LENGTH, "the base must leave room to grow: ${base.length}")
+        assertEquals("$base-2", suffixed)
+        assertEquals(true, suffixed!!.length <= MAX_SLUG_LENGTH, "suffixed slug is ${suffixed.length}")
+        assertEquals(true, suffixed.startsWith(base), "a suffixed slug must still start with its base")
+
+        // The largest suffix the reserved room holds still fits.
+        assertEquals(true, "$base-999999".length <= MAX_SLUG_LENGTH)
+    }
+
+    @Test
+    fun `a base whose every suffix is taken yields nothing rather than an unusable slug`() {
+        val taken = buildSet {
+            add("crowded")
+            (2..999_999).forEach { add("crowded-$it") }
+        }
+        assertNull(firstFreeSlug("crowded", taken))
+    }
 }

@@ -4,6 +4,7 @@ import io.nook.core.db.InstanceLockTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.store.notFound
 import io.nook.core.store.projectIdentity
+import io.nook.core.store.requireNoOpenTransaction
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.vendors.ForUpdateOption
@@ -33,13 +34,18 @@ private const val PROJECT_SLUG_SCOPE = "project_slug"
  * of silently re-running. The block must take its lock (via [lockProject] or
  * [takeInstanceLock]) before reading anything it will write against.
  *
+ * Fresh means fresh: entering this from inside another transaction is refused,
+ * because Exposed would satisfy it with the open one and the fresh transaction,
+ * its single attempt, and its commit boundary would all be someone else's.
+ *
  * Every caller mistake is refused by validation inside the block, so the store
  * refusing a write means validation let an invalid one through. That is a fault
  * in this service — reported as one, with the store's own complaint attached —
  * and never dressed up as a caller error.
  */
-internal fun <T> writeTransaction(db: Database, block: JdbcTransaction.() -> T): T =
-    try {
+internal fun <T> writeTransaction(db: Database, block: JdbcTransaction.() -> T): T {
+    requireNoOpenTransaction("a write")
+    return try {
         transaction(db) {
             maxAttempts = 1
             block()
@@ -50,6 +56,7 @@ internal fun <T> writeTransaction(db: Database, block: JdbcTransaction.() -> T):
             rejection,
         )
     }
+}
 
 /**
  * Resolves [projectRef], locks the project's row, and returns it — one

@@ -1,0 +1,25 @@
+# Nook — the index behind every lookup of a document by what it belongs to.
+#
+# Two queries reach `document` by owner and nothing else, and neither had an
+# index to use. Deleting a project cascades into `document` by project_id.
+# Deleting an item takes its documents with it, by project and item together —
+# stated in the write path, since that foreign key deliberately does not
+# cascade.
+#
+# One composite index serves both: PostgreSQL uses a leading-column prefix, so
+# (project_id, item_id) answers the project-only lookup as well as the pair.
+# Without it each delete is a sequential scan of every document in the instance,
+# which is invisible while the table is empty and is why it is worth adding
+# before anything writes to it.
+databaseChangeLog:
+
+  - changeSet:
+      id: 0011-create-document-lookup-index
+      author: nook
+      changes:
+        - createIndex:
+            tableName: document
+            indexName: ix_doc_project_item
+            columns:
+              - column: {name: project_id}
+              - column: {name: item_id}

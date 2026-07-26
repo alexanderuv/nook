@@ -1,7 +1,7 @@
 package io.nook.core.read
 
 import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.javatime.timestamp
+import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
 
 /**
  * The `ready_item` view, declared so it can be queried like a table.
@@ -35,8 +35,8 @@ internal object ReadyItemView : Table("ready_item") {
     val name = varchar("name", 500)
     val description = text("description").nullable()
     val status = short("status")
-    val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at")
+    val createdAt = timestampWithTimeZone("created_at")
+    val updatedAt = timestampWithTimeZone("updated_at")
     val createdBy = varchar("created_by", 200)
     val updatedBy = varchar("updated_by", 200)
 }

@@ -7,8 +7,8 @@ import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.InstanceLockTable
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
-import kotlin.uuid.Uuid
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
@@ -17,6 +17,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -32,8 +33,64 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  * instance-wide space of project handles has no row of its own, so a dedicated
  * one is locked instead; that row must exist, and its absence is a corrupted
  * schema rather than a licence to skip the turn.
+ *
+ * Every wait here is bounded and every worker is a daemon. A test about threads
+ * blocking each other is exactly the one that hangs when the thing it tests
+ * breaks, and a hang is the worst failure to receive: no assertion message, no
+ * report, and a build that runs until something outside it gives up.
  */
 class WriteLockTest {
+
+    private companion object {
+        /**
+         * Long enough that no loaded machine trips it, short enough that a
+         * regression fails the test rather than wedging the run. Every wait here
+         * is for another thread that either arrives in milliseconds or never.
+         */
+        const val WAIT_SECONDS = 30L
+
+        /** How often the database is asked whether a session is blocked yet. */
+        const val POLL_MILLIS = 20L
+    }
+
+    private fun CountDownLatch.awaitOrFail(what: String) {
+        if (!await(WAIT_SECONDS, TimeUnit.SECONDS)) {
+            throw AssertionError("timed out after ${WAIT_SECONDS}s waiting for $what")
+        }
+    }
+
+    private fun Thread.joinOrFail(what: String) {
+        join(TimeUnit.SECONDS.toMillis(WAIT_SECONDS))
+        if (isAlive) throw AssertionError("$what never finished within ${WAIT_SECONDS}s")
+    }
+
+    /** The number of sessions the database currently reports as waiting on a lock. */
+    private fun sessionsWaitingOnLock(db: Database): Int = transaction(db) {
+        exec("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'") { rows ->
+            rows.next()
+            rows.getInt(1)
+        } ?: 0
+    }
+
+    /**
+     * Blocks until the database itself reports a session waiting on a lock, and
+     * fails if [acquired] flips first.
+     *
+     * Sleeping a fixed interval and then asserting that nothing happened would
+     * prove nothing: on a busy machine the second writer may not have reached
+     * the lock at all, and the assertion passes for a reason unrelated to
+     * locking. Asking the database which session is blocked is the difference
+     * between "has not arrived yet" and "arrived and is waiting its turn".
+     */
+    private fun awaitBlockedOnLock(db: Database, acquired: AtomicBoolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(WAIT_SECONDS)
+        while (System.nanoTime() < deadline) {
+            assertFalse(acquired.get(), "a second writer took the lock while the first still held it")
+            if (sessionsWaitingOnLock(db) > 0) return
+            Thread.sleep(POLL_MILLIS)
+        }
+        throw AssertionError("no session ever blocked on the lock within ${WAIT_SECONDS}s")
+    }
 
     @Test
     fun `a second writer waits for the project row and then sees the first writer's commit`() {
@@ -49,11 +106,10 @@ class WriteLockTest {
 
         val firstHoldsLock = CountDownLatch(1)
         val releaseFirst = CountDownLatch(1)
-        val secondAttempting = CountDownLatch(1)
         val secondAcquired = AtomicBoolean(false)
         val itemsSeenBySecond = AtomicInteger(-1)
 
-        val first = thread {
+        val first = thread(isDaemon = true) {
             writeTransaction(db) {
                 lockProject("locked-project")
                 ProjectItemTable.insert {
@@ -64,12 +120,11 @@ class WriteLockTest {
                     it[name] = "First item"
                 }
                 firstHoldsLock.countDown()
-                releaseFirst.await()
+                releaseFirst.awaitOrFail("the test to release the first writer")
             }
         }
-        val second = thread {
-            firstHoldsLock.await()
-            secondAttempting.countDown()
+        val second = thread(isDaemon = true) {
+            firstHoldsLock.awaitOrFail("the first writer to take the lock")
             writeTransaction(db) {
                 lockProject("locked-project")
                 secondAcquired.set(true)
@@ -82,16 +137,11 @@ class WriteLockTest {
             }
         }
 
-        secondAttempting.await()
-        Thread.sleep(300)
-        assertFalse(
-            secondAcquired.get(),
-            "the second writer acquired the lock while the first still held it",
-        )
+        awaitBlockedOnLock(db, secondAcquired)
 
         releaseFirst.countDown()
-        first.join(10_000)
-        second.join(10_000)
+        first.joinOrFail("the first writer")
+        second.joinOrFail("the second writer")
         assertTrue(secondAcquired.get(), "the second writer never acquired the lock")
         assertEquals(
             1,
@@ -106,32 +156,28 @@ class WriteLockTest {
 
         val firstHoldsLock = CountDownLatch(1)
         val releaseFirst = CountDownLatch(1)
-        val secondAttempting = CountDownLatch(1)
         val secondAcquired = AtomicBoolean(false)
 
-        val first = thread {
+        val first = thread(isDaemon = true) {
             writeTransaction(db) {
                 takeInstanceLock()
                 firstHoldsLock.countDown()
-                releaseFirst.await()
+                releaseFirst.awaitOrFail("the test to release the first writer")
             }
         }
-        val second = thread {
-            firstHoldsLock.await()
-            secondAttempting.countDown()
+        val second = thread(isDaemon = true) {
+            firstHoldsLock.awaitOrFail("the first writer to take the instance lock")
             writeTransaction(db) {
                 takeInstanceLock()
                 secondAcquired.set(true)
             }
         }
 
-        secondAttempting.await()
-        Thread.sleep(300)
-        assertFalse(secondAcquired.get(), "two writers held the instance lock at once")
+        awaitBlockedOnLock(db, secondAcquired)
 
         releaseFirst.countDown()
-        first.join(10_000)
-        second.join(10_000)
+        first.joinOrFail("the first writer")
+        second.joinOrFail("the second writer")
         assertTrue(secondAcquired.get(), "the second writer never acquired the instance lock")
     }
 

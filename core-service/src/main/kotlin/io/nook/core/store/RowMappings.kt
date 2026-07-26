@@ -20,6 +20,11 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 // the write that produced it returned. An unknown stored code is a corrupted
 // store, not a caller error — this service is the single writer and never
 // stores one — so it fails loudly instead of mapping to anything.
+//
+// Timestamps drop their offset on the way out. The store keeps one so that a
+// row names an absolute moment rather than a wall clock, and the contract
+// carries the moment alone; the offset a row was written at is a storage
+// detail, and returning it would invite callers to read meaning into it.
 
 internal fun ResultRow.toProject(): Project = Project(
     id = this[ProjectTable.id],
@@ -27,8 +32,8 @@ internal fun ResultRow.toProject(): Project = Project(
     name = this[ProjectTable.name],
     description = this[ProjectTable.description],
     artifactRepoUrl = this[ProjectTable.artifactRepoUrl],
-    createdAt = this[ProjectTable.createdAt],
-    updatedAt = this[ProjectTable.updatedAt],
+    createdAt = this[ProjectTable.createdAt].toInstant(),
+    updatedAt = this[ProjectTable.updatedAt].toInstant(),
 )
 
 internal fun ResultRow.toProjectItem(blockedBy: Set<Uuid>): ProjectItem = ProjectItem(
@@ -44,8 +49,8 @@ internal fun ResultRow.toProjectItem(blockedBy: Set<Uuid>): ProjectItem = Projec
     status = ItemStatus.fromCode(this[ProjectItemTable.status])
         ?: error("the store holds item status code ${this[ProjectItemTable.status]}, which no member carries"),
     blockedBy = blockedBy,
-    createdAt = this[ProjectItemTable.createdAt],
-    updatedAt = this[ProjectItemTable.updatedAt],
+    createdAt = this[ProjectItemTable.createdAt].toInstant(),
+    updatedAt = this[ProjectItemTable.updatedAt].toInstant(),
 )
 
 internal fun ResultRow.toRelease(): Release = Release(
@@ -57,8 +62,8 @@ internal fun ResultRow.toRelease(): Release = Release(
     status = ReleaseStatus.fromCode(this[ReleaseTable.status])
         ?: error("the store holds release status code ${this[ReleaseTable.status]}, which no member carries"),
     targetDate = this[ReleaseTable.targetDate],
-    createdAt = this[ReleaseTable.createdAt],
-    updatedAt = this[ReleaseTable.updatedAt],
+    createdAt = this[ReleaseTable.createdAt].toInstant(),
+    updatedAt = this[ReleaseTable.updatedAt].toInstant(),
 )
 
 /** The ids of the items [itemId] is blocked by. Must run inside an open transaction. */
@@ -76,8 +81,21 @@ internal fun blockersOf(itemId: Uuid): Set<Uuid> =
  */
 internal fun blockerSetsOf(itemIds: Collection<Uuid>): Map<Uuid, Set<Uuid>> {
     if (itemIds.isEmpty()) return emptyMap()
-    return ItemDependencyTable.selectAll()
-        .where { ItemDependencyTable.itemId inList itemIds }
-        .groupBy({ it[ItemDependencyTable.itemId] }, { it[ItemDependencyTable.dependsOnId] })
+    return itemIds.chunked(MAX_IDS_PER_STATEMENT)
+        .flatMap { chunk ->
+            ItemDependencyTable.selectAll()
+                .where { ItemDependencyTable.itemId inList chunk }
+                .map { it[ItemDependencyTable.itemId] to it[ItemDependencyTable.dependsOnId] }
+        }
+        .groupBy({ it.first }, { it.second })
         .mapValues { (_, blockers) -> blockers.toSet() }
 }
+
+/**
+ * How many ids one statement may name. The limit is the wire protocol's: a
+ * statement carries at most 65535 bound parameters, and one id is one parameter,
+ * so a listing of a large enough project would fail on its blocker sets alone —
+ * at a size nothing about the query looks wrong at. Well under it, and large
+ * enough that ordinary listings still take one statement.
+ */
+private const val MAX_IDS_PER_STATEMENT = 10_000

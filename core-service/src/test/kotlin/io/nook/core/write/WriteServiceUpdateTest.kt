@@ -156,19 +156,39 @@ class WriteServiceUpdateTest {
         assertEquals(ItemType.EPIC, promoted.type)
     }
 
+    // Two guards stop an epic becoming a leaf, and each gets a fixture where it
+    // is the only thing that could refuse the call. Setting up children and a
+    // release together would pass while either one alone still worked, which
+    // reads the same as passing while both do.
+
     @Test
-    fun `an epic with children or a release assignment cannot become a leaf until detached`() {
-        val project = service.createProject(CreateProject("Epic Demotion"))
-        val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Loaded epic"))
+    fun `an epic with children cannot become a leaf until they are reparented`() {
+        val project = service.createProject(CreateProject("Epic Demotion Children"))
+        val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Parent epic"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Child task", parentRef = epic.slug))
+
+        val failure = assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
+            service.updateItem(project.slug, epic.slug, UpdateItem(type = FieldChange.Set("task")))
+        }
+        assertEquals(true, failure.error.message.contains("child"), failure.error.message)
+
+        service.updateItem(project.slug, "child-task", UpdateItem(parentRef = FieldChange.Set(null)))
+        val demoted = service.updateItem(project.slug, epic.slug, UpdateItem(type = FieldChange.Set("task")))
+        assertEquals(ItemType.TASK, demoted.type)
+    }
+
+    @Test
+    fun `an epic in a release cannot become a leaf until it is unassigned`() {
+        val project = service.createProject(CreateProject("Epic Demotion Release"))
+        val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Released epic"))
         service.createRelease(project.slug, CreateRelease("v1"))
         service.assignEpicToRelease(project.slug, epic.slug, AssignEpicToRelease("v1"))
 
-        assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
+        val failure = assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
             service.updateItem(project.slug, epic.slug, UpdateItem(type = FieldChange.Set("task")))
         }
+        assertEquals(true, failure.error.message.contains("release"), failure.error.message)
 
-        service.updateItem(project.slug, "child-task", UpdateItem(parentRef = FieldChange.Set(null)))
         service.assignEpicToRelease(project.slug, epic.slug, AssignEpicToRelease(null))
         val demoted = service.updateItem(project.slug, epic.slug, UpdateItem(type = FieldChange.Set("task")))
         assertEquals(ItemType.TASK, demoted.type)

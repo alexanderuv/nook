@@ -13,6 +13,7 @@ import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.write.WriteService
 import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -165,6 +166,40 @@ class ReadServiceListingTest {
                 ItemFilter(types = listOf("bug"), parents = listOf(ParentFilter.NoEpic)),
             ).toSet(),
         )
+
+        // Values inside one part widen it, so naming an epic *and* the no-epic
+        // value returns both sets at once. This is the only combination that
+        // exercises the alternation between the two kinds of parent value; every
+        // case above supplies one kind on its own.
+        assertEquals(
+            setOf("under-first", "loose-bug-1", "loose-bug-2", "loose-bug-3", "first-epic", "second-epic"),
+            slugsOf(
+                project.slug,
+                ItemFilter(parents = listOf(ParentFilter.Epic("first-epic"), ParentFilter.NoEpic)),
+            ).toSet(),
+        )
+        // And narrowing that widened part with another one still narrows it,
+        // which is what would break if the alternation were left unparenthesised.
+        assertEquals(
+            setOf("under-first", "under-second"),
+            slugsOf(
+                project.slug,
+                ItemFilter(
+                    types = listOf("task"),
+                    parents = listOf(ParentFilter.Epic("first-epic"), ParentFilter.Epic("second-epic")),
+                ),
+            ).toSet(),
+        )
+        assertEquals(
+            setOf("under-first"),
+            slugsOf(
+                project.slug,
+                ItemFilter(
+                    types = listOf("task"),
+                    parents = listOf(ParentFilter.Epic("first-epic"), ParentFilter.NoEpic),
+                ),
+            ).toSet(),
+        )
     }
 
     @Test
@@ -252,8 +287,8 @@ class ReadServiceListingTest {
                     it[ProjectItemTable.type] = 2
                     it[ProjectItemTable.slug] = "twin-$number"
                     it[ProjectItemTable.name] = "Twin $number"
-                    it[ProjectItemTable.createdAt] = sharedInstant
-                    it[ProjectItemTable.updatedAt] = sharedInstant
+                    it[ProjectItemTable.createdAt] = sharedInstant.atOffset(ZoneOffset.UTC)
+                    it[ProjectItemTable.updatedAt] = sharedInstant.atOffset(ZoneOffset.UTC)
                 }
             }
             id to sharedInstant
