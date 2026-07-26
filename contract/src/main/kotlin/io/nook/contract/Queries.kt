@@ -14,26 +14,34 @@ package io.nook.contract
  * that could: deleting removes the row, so a listing has nothing to reach past
  * in the first place.
  */
-data class ItemFilter(
+public data class ItemFilter(
     /** Item types by label: `epic`, `task`, `bug`, `chore`. */
-    val types: List<String>? = null,
+    public val types: List<String>? = null,
     /** Item statuses by label: `todo`, `in_progress`, `done`, `cancelled`. */
-    val statuses: List<String>? = null,
+    public val statuses: List<String>? = null,
     /** Matches an item's own direct parent, never an ancestor further up. */
-    val parents: List<ParentFilter>? = null,
+    public val parents: List<ParentFilter>? = null,
     /**
      * Release references, matching an item's own release assignment. Only an
      * epic carries one, so a leaf matches no release value.
      */
-    val releases: List<String>? = null,
+    public val releases: List<String>? = null,
 )
 
 /** One value of the parent part: a named epic, or the reserved "no epic at all". */
-sealed interface ParentFilter {
+public sealed interface ParentFilter {
 
-    /** Items hanging directly off the project, with no epic above them. */
-    data object NoEpic : ParentFilter
+    /**
+     * Items with no epic above them — the leaves sitting directly on the
+     * project, and the project's epics, which never have a parent either.
+     *
+     * The epics are not an accident of the implementation. Parts of a filter
+     * narrow each other, so `NoEpic` together with a type of `epic` has to
+     * return the project's epics; excluding them here would make that
+     * combination empty and leave "top-level epics" unaskable.
+     */
+    public data object NoEpic : ParentFilter
 
     /** Items whose direct parent is the epic named by [ref]. */
-    data class Epic(val ref: String) : ParentFilter
+    public data class Epic(public val ref: String) : ParentFilter
 }

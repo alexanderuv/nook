@@ -14,10 +14,10 @@ import java.time.LocalDate
  */
 
 /** Creates a project. A null [slug] means: derive it from [name]. */
-data class CreateProject(
-    val name: String,
-    val slug: String? = null,
-    val description: String? = null,
+public data class CreateProject(
+    public val name: String,
+    public val slug: String? = null,
+    public val description: String? = null,
 )
 
 /**
@@ -25,60 +25,60 @@ data class CreateProject(
  * [parentRef] names the epic to sit under (leaves only); [releaseRef] names
  * the release to join (epics only).
  */
-data class CreateItem(
-    val type: String,
-    val name: String,
-    val slug: String? = null,
-    val description: String? = null,
-    val parentRef: String? = null,
-    val releaseRef: String? = null,
+public data class CreateItem(
+    public val type: String,
+    public val name: String,
+    public val slug: String? = null,
+    public val description: String? = null,
+    public val parentRef: String? = null,
+    public val releaseRef: String? = null,
 )
 
 /**
  * Partially updates an item: every field defaults to keeping the stored
  * value. Setting [parentRef] to null moves the item to project level.
  */
-data class UpdateItem(
-    val name: FieldChange<String> = FieldChange.Keep,
-    val slug: FieldChange<String> = FieldChange.Keep,
-    val description: FieldChange<String?> = FieldChange.Keep,
-    val status: FieldChange<String> = FieldChange.Keep,
-    val type: FieldChange<String> = FieldChange.Keep,
-    val parentRef: FieldChange<String?> = FieldChange.Keep,
+public data class UpdateItem(
+    public val name: FieldChange<String> = FieldChange.Keep,
+    public val slug: FieldChange<String> = FieldChange.Keep,
+    public val description: FieldChange<String?> = FieldChange.Keep,
+    public val status: FieldChange<String> = FieldChange.Keep,
+    public val type: FieldChange<String> = FieldChange.Keep,
+    public val parentRef: FieldChange<String?> = FieldChange.Keep,
 )
 
 /**
  * Replaces an item's whole blocker set with [blockerRefs], deduplicated.
  * An empty list clears every blocker.
  */
-data class SetItemBlockedBy(
-    val blockerRefs: List<String>,
+public data class SetItemBlockedBy(
+    public val blockerRefs: List<String>,
 )
 
 /** Creates a release in a project. A null [slug] means: derive it from [name]. */
-data class CreateRelease(
-    val name: String,
-    val slug: String? = null,
-    val description: String? = null,
-    val targetDate: LocalDate? = null,
+public data class CreateRelease(
+    public val name: String,
+    public val slug: String? = null,
+    public val description: String? = null,
+    public val targetDate: LocalDate? = null,
 )
 
 /**
  * Partially updates a release: every field defaults to keeping the stored
  * value. Setting [targetDate] to null clears the date.
  */
-data class UpdateRelease(
-    val name: FieldChange<String> = FieldChange.Keep,
-    val slug: FieldChange<String> = FieldChange.Keep,
-    val description: FieldChange<String?> = FieldChange.Keep,
-    val status: FieldChange<String> = FieldChange.Keep,
-    val targetDate: FieldChange<LocalDate?> = FieldChange.Keep,
+public data class UpdateRelease(
+    public val name: FieldChange<String> = FieldChange.Keep,
+    public val slug: FieldChange<String> = FieldChange.Keep,
+    public val description: FieldChange<String?> = FieldChange.Keep,
+    public val status: FieldChange<String> = FieldChange.Keep,
+    public val targetDate: FieldChange<LocalDate?> = FieldChange.Keep,
 )
 
 /**
  * Puts an epic into the release named by [releaseRef], or takes it out of
  * any release when [releaseRef] is null.
  */
-data class AssignEpicToRelease(
-    val releaseRef: String? = null,
+public data class AssignEpicToRelease(
+    public val releaseRef: String? = null,
 )

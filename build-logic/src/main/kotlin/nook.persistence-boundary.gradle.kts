@@ -1,58 +1,41 @@
-import org.gradle.api.artifacts.result.ResolvedComponentResult
-import org.gradle.api.artifacts.result.ResolvedDependencyResult
+import io.nook.gradle.CheckPersistenceBoundary
+import org.gradle.api.tasks.SourceSetContainer
 
 // Database/persistence dependencies are allowed only inside :core-service; the
 // adapters reach the core over HTTP and hold no module edge to it. This plugin is
 // applied to every other module, whose entire compile and runtime graphs must
 // therefore stay free of the coordinates below. Must be applied after a JVM plugin
-// (the compileClasspath and runtimeClasspath configurations have to exist).
+// (the source sets and their classpath configurations have to exist).
+//
+// Every source set is walked, not just the main one. Test code is where an
+// adapter first reaches for a database — a fixture that "just needs a table for
+// a moment" — and a boundary that stopped at production code would let exactly
+// that through while reporting the module clean.
 
-val bannedGroups = setOf(
+val bannedPersistenceGroups = setOf(
     "org.jetbrains.exposed",
     "org.postgresql",
     "org.xerial",
     "org.liquibase",
 )
 
-val checkPersistenceBoundary by tasks.registering {
+val checkPersistenceBoundary = tasks.register<CheckPersistenceBoundary>("checkPersistenceBoundary") {
     group = "verification"
     description =
-        "Fails if a persistence dependency appears anywhere in this module's " +
-            "resolved compile or runtime graph."
+        "Fails if a persistence dependency appears anywhere in any of this " +
+            "module's resolved compile or runtime graphs."
 
-    val modulePath = project.path
-    val graphRoots = listOf("compileClasspath", "runtimeClasspath").map { configurationName ->
-        configurationName to configurations.named(configurationName)
-            .flatMap { it.incoming.resolutionResult.rootComponent }
-    }
+    modulePath = project.path
+    bannedGroups = bannedPersistenceGroups
+}
 
-    doLast {
-        val violations = mutableListOf<String>()
-        graphRoots.forEach { (configurationName, rootProvider) ->
-            val visited = mutableSetOf<ResolvedComponentResult>()
-            fun walk(component: ResolvedComponentResult, path: List<String>) {
-                if (!visited.add(component)) return
-                component.dependencies.filterIsInstance<ResolvedDependencyResult>().forEach { dependency ->
-                    val selected = dependency.selected
-                    val pathHere = path + selected.id.displayName
-                    val module = selected.moduleVersion
-                    if (module != null && module.group in bannedGroups) {
-                        violations += "$modulePath ($configurationName): banned coordinate " +
-                            "${module.group}:${module.name}:${module.version}\n" +
-                            "      via ${pathHere.joinToString(" -> ")}"
-                    } else {
-                        walk(selected, pathHere)
-                    }
-                }
-            }
-            walk(rootProvider.get(), listOf(modulePath))
+the<SourceSetContainer>().all {
+    val graphRoots = listOf(compileClasspathConfigurationName, runtimeClasspathConfigurationName)
+        .associateWith { name ->
+            configurations.named(name).flatMap { it.incoming.resolutionResult.rootComponent }
         }
-        if (violations.isNotEmpty()) {
-            throw GradleException(
-                "Persistence boundary violated (persistence stays inside :core-service):\n" +
-                    violations.joinToString("\n") { "  - $it" }
-            )
-        }
+    checkPersistenceBoundary.configure {
+        graphRoots.forEach { (name, root) -> graphs.put(name, root) }
     }
 }
 

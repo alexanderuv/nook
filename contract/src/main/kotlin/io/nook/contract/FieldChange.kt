@@ -5,7 +5,7 @@ package io.nook.contract
  * the carried value — which may itself be null for nullable fields, where
  * "set to null" (clear) and "leave alone" mean different things.
  */
-sealed interface FieldChange<out T> {
-    data object Keep : FieldChange<Nothing>
-    data class Set<T>(val value: T) : FieldChange<T>
+public sealed interface FieldChange<out T> {
+    public data object Keep : FieldChange<Nothing>
+    public data class Set<T>(public val value: T) : FieldChange<T>
 }

@@ -12,6 +12,10 @@ build/
 *.iws
 .vscode/
 
+# Agent tooling. Per-developer settings, named `.local` but not matched by the
+# `*.local` rule below — which is why it is listed here rather than left to it.
+.claude/settings.local.json
+
 # Node / React (UI)
 node_modules/
 dist/
