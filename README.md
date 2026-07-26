@@ -67,7 +67,11 @@ rationale behind each decision.
 
 ## Status
 
-Pre-implementation. The architecture is settled (see `ARCHITECTURE.md`); code
-does not exist yet. The v1 goal is a **shallow end-to-end** slice: every part
-present — MCP, structure store, document store, skills, tenets, UI — none of them
-deep.
+Milestone 1, in progress. The architecture is settled (see `ARCHITECTURE.md`).
+The core service's structure layer is built: the PostgreSQL schema, the nine
+write operations, the five reads, and the tests that hold them to it. Still
+design only: the MCP server and web app, the document layer, and the git-backed
+artifact store.
+
+The v1 goal is a **shallow end-to-end** slice: every part present — MCP,
+structure store, document store, skills, tenets, UI — none of them deep.

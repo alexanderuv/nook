@@ -1,7 +1,10 @@
 # Nook — session guide
 
-Agent-native project-management + artifact repository. **Pre-implementation**: this
-repo is design docs and schema only; no application code exists yet.
+Agent-native project-management + artifact repository. **Milestone 1 in progress**:
+the design is settled and the core service's structure layer is built — schema,
+the nine write operations, the five reads, and their tests. The adapters
+(`:mcp-server`, `:web-app`), the document layer, and the git-backed artifact
+store are still design only.
 
 ## Where things are
 

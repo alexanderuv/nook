@@ -68,8 +68,19 @@ planning artifacts):
 | AC25 | `WriteServiceUpdateTest` — a failed update is one structured error and changes nothing |
 
 The supporting units: `SlugsTest` (derivation, explicit-slug validation,
-suffix allocation), `CycleDetectionTest` (the walk on the chain, diamond, and
-safe-edge shapes), `ConstraintTranslationTest` (translator coverage of every
-declared constraint), `EnumCodesTest` in `:contract` (codes against the
-changelog map), `AdvisoryLockTest` (the lock provably serializes), and
-`ReferenceResolutionTest` (id-first, slug-second, project-scoped).
+suffix allocation and the room it is kept in), `CycleDetectionTest` (the walk on
+the chain, diamond, and safe-edge shapes), `StoreNeverArbitratesTest` (every
+schema rule a caller can reach is refused by validation first, and a rejection
+from the store travels as a fault in the service), `WriteServiceGuardTest` (the
+rules nothing underneath the service would catch), `WriteServiceInputTest`
+(caller text the store could not hold), `EnumCodesTest` in `:contract` (codes
+against the changelog map), `WriteLockTest` (the locked row provably
+serializes), `TransactionNestingTest` (neither discipline may be entered from
+inside another), and `ReferenceResolutionTest` (id-first, slug-second,
+project-scoped).
+
+`ConstraintTranslationTest` and `AdvisoryLockTest` are named in earlier drafts
+of this table and do not exist. The first was dropped with the translator it
+tested — validation decides before the store is asked, so there is nothing to
+translate — and the second was renamed `WriteLockTest` when the advisory lock
+became a locked row.

@@ -62,11 +62,14 @@ worse than no rule here — rigor is added later when real usage justifies it.
   vocabulary: an item may be `cancelled` and then deleted, or deleted while
   still `todo`. Cancelling retires work that was real and keeps it in sight;
   deleting removes it.
-- **Deleting an epic takes its children with it**, and deleting a project takes
-  everything in it — releases, items, blocker edges, document rows. The whole
-  branch goes at once, which is what abandoning a branch of work means. The
-  project cascade is the schema's; an epic's children are removed by the write
-  path, because the parent link deliberately does not cascade.
+- **Deleting an epic takes its children with it**, together with the documents
+  attached to any of them; deleting a project takes everything in it — releases,
+  items, blocker edges, document rows. The whole branch goes at once, which is
+  what abandoning a branch of work means. The project cascade is the schema's;
+  an epic's children and the document rows are removed by the write path,
+  because neither link cascades — every cascade in the schema starts at
+  `project`, so what a delete reaches is stated rather than traced through a
+  graph of foreign keys.
 - **A deleted row gives up its slug**, because the row holding it is gone.
   Uniqueness stays a plain whole-table rule, and a name is free the moment the
   thing named stops existing.
@@ -104,8 +107,13 @@ worse than no rule here — rigor is added later when real usage justifies it.
   (that type *and* that status). Asking for open work is the everyday question,
   and one call returns it in one correct ordering.
 - The `parent` filter names an epic, or the reserved value for **no epic at
-  all** — the way to ask for the leaves sitting directly on the project, which
-  omitting the filter (meaning "any parent") cannot express.
+  all** — the way to ask for what sits directly on the project, which omitting
+  the filter (meaning "any parent") cannot express. It matches everything with
+  no epic above it: the project-level leaves, and the project's epics, which
+  never have a parent either. Narrowing it with a type is how either half is
+  asked for on its own; excluding the epics here would instead make "the
+  top-level epics" unaskable, since parts of a filter narrow each other and can
+  never widen.
 
 **`blocked_by` integrity.**
 - Blockers are **leaves in the same project** (cross-epic within a project is allowed;

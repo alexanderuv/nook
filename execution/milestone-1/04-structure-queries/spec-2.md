@@ -73,8 +73,10 @@ statuses widens the result, adding the type narrows it.
    against the project.
 2. `list_items` is called with the parent filter set to the reserved value
    meaning no epic.
-**Outcome:** exactly the three project-level bugs come back, and none of the
-children of either epic.
+3. The same call is repeated with a type of `bug`.
+**Outcome:** the first call returns everything with no epic above it — the three
+project-level bugs and both epics, which have no parent either — and none of the
+children of either epic. Adding the type narrows that to exactly the three bugs.
 
 ### SCEN4 — Reviewing what a release contains
 
@@ -281,8 +283,9 @@ because a deleted blocker no longer holds anything up.
 - **AC12** (REQ15, EDGE4) — Given two epics with children and three
   project-level bugs, when `list_items` filters by the first epic, then only
   its children come back; when it filters by the no-parent value, then the
-  three bugs come back; and when it filters by the no-parent value with type
-  `epic`, then both epics come back.
+  three bugs and both epics come back; when it filters by the no-parent value
+  with type `bug`, then exactly the three bugs come back; and when it filters by
+  the no-parent value with type `epic`, then both epics come back.
 - **AC13** (REQ16, EDGE5) — Given two epics in release `v1`, one in `v2`, and
   leaves under all three, when `list_items` filters by `v1`, then exactly the
   two epics come back; and when it filters by `v1` with type `task`, then it

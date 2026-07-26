@@ -112,9 +112,22 @@ cycle or a duplicate slug.
 
 - **REQ1** — The write path MUST provide exactly these mutating operations:
   `create_project`, `create_item`, `update_item`, `set_item_blocked_by`,
-  `create_release`, `update_release`, `assign_epic_to_release`.
-- **REQ2** — The write path MUST NOT provide any operation that hard-deletes a
-  project, item, release, or dependency edge.
+  `create_release`, `update_release`, `assign_epic_to_release`, `delete_item`,
+  `delete_project`.
+- **REQ2** — Deleting MUST remove the rows: no mark, no trash, and no operation
+  by which a deleted row could be asked for or brought back. `delete_item` MUST
+  also remove an epic's children and the documents attached to any of them;
+  `delete_project` MUST remove everything the project contains. There is
+  deliberately no operation that deletes a release or a single dependency edge —
+  a release is detached with `assign_epic_to_release`, and blocker edges change
+  only by whole-set replacement through `set_item_blocked_by`.
+
+  > REQ1 and REQ2 originally named seven operations and forbade hard deletion
+  > outright. Deletion was added during milestone 1 and the reversal is recorded
+  > in `plan.md`; these two requirements are the amended ones. See
+  > [docs/04](../../../docs/04-work-item-model.md) for the deletion rules
+  > themselves, and the note there about the git cleanup a delete will owe once
+  > documents have content.
 - **REQ3** — When a reference string parses as a UUID, the system MUST resolve
   it as an id; otherwise it MUST resolve it as a slug within the target
   project.
@@ -127,7 +140,9 @@ cycle or a duplicate slug.
 - **REQ6** — When an operation fails, the store MUST be left exactly as it was
   before the call — no partial effect.
 - **REQ7** — When an operation succeeds, its effect MUST be applied exactly
-  once, and it MUST return the full entity it created or changed.
+  once, and it MUST return the full entity it created or changed. The two
+  deletes return nothing: once the call commits, the entity does not exist, so
+  there is none left to hand back.
 
 ### Projects
 
@@ -276,8 +291,8 @@ cycle or a duplicate slug.
 ## Acceptance criteria
 
 - **AC1** (REQ1, REQ2) — The write path's public surface offers exactly the
-  seven listed mutations and no operation that removes a project, item,
-  release, or dependency edge from the store.
+  nine listed mutations, and no operation that removes a release or a single
+  dependency edge from the store.
 - **AC2** (REQ7, REQ8, REQ9, REQ15, REQ19) — Given a running core service,
   when `create_project("Search Revamp!")` is called, then it returns the full
   project entity with slug `search-revamp`, `artifactRepoUrl` unset, and a
@@ -326,8 +341,9 @@ cycle or a duplicate slug.
   it fails with `validation_failed`; and when a `cancelled` leaf is set to
   `todo` and its description edited, then both calls succeed.
 - **AC14** (REQ2, REQ25) — Given a `done` task, when its status is set to
-  `todo`, then the call succeeds — and no sequence of catalog calls can make
-  the task's row cease to exist.
+  `todo`, then the call succeeds; and when it is deleted, its row ceases to
+  exist and every later reference to it — by slug or by id — is `not_found`,
+  with no operation by which it could be asked for again.
 - **AC15** (REQ28, REQ29) — Given a bug that blocks another task, when its
   type is set to `chore`, then it succeeds; when its type is set to `epic`,
   then it fails with `validation_failed`; and after its dependency edges are

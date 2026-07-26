@@ -85,15 +85,23 @@ there are three surfaces over one contract:
 - **Structure (project-scoped):** `create_item(type, name, slug?, description?, parentRef?, releaseRef?)`
   — `type` is `epic`/`task`/`bug`/`chore`; for a leaf, an omitted `parentRef` makes a
   project-level item, and `releaseRef` applies to epics,
-  `update_item(ref, {name?, slug?, description?, status?, type?, parentRef?, releaseRef?})` —
+  `update_item(ref, {name?, slug?, description?, status?, type?, parentRef?})` —
   setting/clearing `parentRef` reparents a leaf; supplying `slug` is the rename
-  (a name change alone never re-derives the slug),
+  (a name change alone never re-derives the slug); an epic's release is moved by
+  `assign_epic_to_release` and not from here, so that the one thing that changes
+  it is the one operation named for it,
   `set_item_blocked_by(itemRef, blockerRefs[])` — **replaces** the item's blocker set
   (not incremental add/remove), `create_release(name, slug?, description?, targetDate?)`,
   `update_release(ref, {name?, slug?, description?, status?, targetDate?})`,
   `assign_epic_to_release(epicRef, releaseRef?)`, `get_item(ref)`,
-  `list_items(filter)`, `get_ready_items()`. Filter grammar and containment/status
-  rules per [04](./04-structure-semantics.md).
+  `list_items(filter)`, `get_ready_items()`,
+  `delete_item(ref)` — removes the row, an epic's children, and the documents
+  attached to any of them; returns nothing, since nothing is left to return.
+  Filter grammar, containment/status rules, and what a delete reaches per
+  [04](./04-structure-semantics.md).
+- **Instance-level, continued:** `delete_project(ref)` — removes the project and
+  everything inside it. Both deletes are permanent: nothing is marked, and no
+  argument, filter, or operation can ask for what is gone.
 - **Documents:** `read_doc`, `doc_outline`, `write_doc` (creates by scope +
   kind — document paths are derived, never chosen; replaces by `docRef`),
   `replace_section`, `prepend_to_section`, `append_to_section`, `apply_patch`,

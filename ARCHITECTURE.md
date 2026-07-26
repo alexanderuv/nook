@@ -25,7 +25,9 @@ for the roadmap and build order. A compact record of the decisions behind the de
 [Appendix A](#appendix-a--decisions-and-alternatives-considered) so the body can
 stay conceptual.
 
-Status: settled in design, pre-implementation.
+Status: settled in design. Milestone 1 is under way — the core service's
+structure layer (schema, write path, read path) is built; the adapters, the
+document layer, and the artifact store are not.
 
 ---
 
@@ -244,11 +246,23 @@ the agent's working directory.
 Concentrating all state in the core service is what makes the single-writer
 guarantee concrete: exactly one process ever touches a project's git repository, so
 there is no cross-process contention to coordinate. The core serializes its own
-writes to a given project with a simple **in-process, per-project mutex** — no
-distributed lock, no lock files. Postgres tolerates the core's concurrent
-connections natively. (An earlier design made the web app and MCP server peers that
-both wrote through a shared library; that required a cross-process lock on the git
-clone, and centralizing the writer removed it — see Appendix A.)
+**git** writes to a given project with a simple **in-process, per-project mutex** —
+no distributed lock, no lock files. (An earlier design made the web app and MCP
+server peers that both wrote through a shared library; that required a
+cross-process lock on the git clone, and centralizing the writer removed it — see
+Appendix A.)
+
+Structure writes take their turns in the database instead, by locking a row:
+each one opens a transaction and selects its scope's row `FOR UPDATE` before
+reading anything it will write against — the project's own row for writes inside
+a project, and a dedicated row for the one scope no row represents, the
+instance-wide space of project handles. A lock the database holds, rather than
+one this process holds, is what keeps the guarantee true of the store rather
+than of a particular process: it is released by the transaction ending, it
+covers the reads a decision was made on, and a second core process would queue
+behind it rather than proceed in parallel. It is also plain standard SQL, which
+an engine-specific advisory lock would not have been. See
+[docs/05](./docs/05-project-and-ops.md).
 
 Nothing above the store talks to git or the filesystem directly. Everything goes
 through an **`ArtifactStore`** interface, which exposes reading, writing, history,
@@ -276,7 +290,8 @@ cloned from an existing source** — details in [`docs/05`](./docs/05-project-an
                      ┌───────────────────────────────────────┐
                      │           core service                 │
                      │  sole store owner · single write path  │
-                     │  · in-process per-project write mutex   │
+                     │  · git: in-process per-project mutex    │
+                     │  · structure: locked row per scope      │
                      │  ┌──────────────────┐  ┌────────────┐  │
                      │  │  Structure (SQL) │  │ArtifactStore│ │
                      │  └────────┬─────────┘  └──────┬──────┘  │
@@ -435,9 +450,12 @@ invariants directly in the schema:
 - **Every item is owned by its project; its parent is optional.** The item carries
   `project_id` directly (so a project-level leaf still has a project) and a nullable
   `parent_id` (a self-reference); a composite foreign key ties the parent to the item's
-  own project, same as releases. The `project → item` cascade is the single delete path
-  (the parent link is integrity-only, `NO ACTION`), so there is one clean cascade path
-  on every engine. The `type` (`epic` / `task` / `bug` / `chore`) is the whole
+  own project, same as releases. Every cascade in the schema starts at `project` and
+  nowhere else — the parent link is integrity-only, `NO ACTION` — so what a delete
+  reaches is read off one table's foreign keys rather than traced through a graph of
+  them. An epic's children and the documents attached to them are removed by the
+  write path, which states that reach instead of deriving it. The `type`
+  (`epic` / `task` / `bug` / `chore`) is the whole
   classification — a bug is an item of type `bug`, not a separate entity — and
   containment (only epics parent; leaves never nest) is enforced by the single-writer
   core service.
@@ -563,7 +581,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | Storage split | Structure in a relational DB; document content in git (§3.1). | *Pure DB* — would re-implement versioning, diffs, and document storage that git gives for free. *Pure git* — would make every cross-item query a hand-rolled file scan. |
 | Doc history | Versioned, forward-only artifact repo, not coupled to code branches (§3.2). | *Docs embedded in the code repo, branching with it* — with a global structure DB this guarantees skew (a task exists globally while its document is branch-local). |
 | Topology | Nook is a service; the git-backed `ArtifactStore` is server-managed and synced to a hosted remote (§3.3). | *Colocated `.nook/` working copy embedded in each project checkout* — only justified for a purely local tool, and it reopens the direct-file-edit hazard. |
-| App topology | A **core service** owns the stores and the single write path; the web app and MCP server are thin adapter apps calling its internal RPC API. The core is the sole git writer, serialized by an in-process per-project mutex (§3.3). | *Peer apps over a shared `:core` library* — first chosen, then reversed: two writer processes forced a cross-process lock on the git clone; centralizing the writer removed it. *One combined app* — couples two very different client surfaces. *MCP proxies the web backend* — makes web "primary" and MCP secondary. |
+| App topology | A **core service** owns the stores and the single write path; the web app and MCP server are thin adapter apps calling its internal RPC API. The core is the sole git writer, serialized by an in-process per-project mutex; structure writes serialize on a locked database row instead (§3.3). | *Peer apps over a shared `:core` library* — first chosen, then reversed: two writer processes forced a cross-process lock on the git clone; centralizing the writer removed it. *One combined app* — couples two very different client surfaces. *MCP proxies the web backend* — makes web "primary" and MCP secondary. |
 | Data access | JetBrains Exposed — Kotlin-native, no codegen build step (§7). | *jOOQ* — its codegen keeps the schema as the single source of truth, but adds a generation step to the build for little gain at this scale. *Raw JDBC* — untyped, more room for query errors. |
 | Consistency | Single authorized write path + git-recoverable drift + `fsck` (§4.1). | *Rely on preventing out-of-band writes* — impossible to guarantee; the design tolerates drift instead. |
 | Document API | Granular, anchor-addressed edits (§4.2). | *Read-whole / write-whole* — token-wasteful and lost-update-prone. *Line-number addressing* — drifts on any edit above. |
