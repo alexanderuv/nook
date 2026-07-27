@@ -94,10 +94,21 @@ worse than no rule here — rigor is added later when real usage justifies it.
   appending a numeric suffix (`-2`, `-3`, …) on collision. The caller may supply an
   explicit slug instead — a colliding explicit slug is refused (`conflict`), never
   suffixed.
-- Rename is allowed: it is an **explicit slug change** through `update_item` (a
-  name edit alone never re-derives the slug — references stay stable), and it
-  updates the slug in the DB **and** performs a `git mv` of the document path
-  through the single write path (§4.3), so both stores move together.
+- Rename is allowed **for items and releases**: it is an **explicit slug change**
+  through `update_item` / `update_release` (a name edit alone never re-derives the
+  slug — references stay stable), and it updates the slug in the DB **and**
+  performs a `git mv` of the document path through the single write path (§4.3),
+  so both stores move together.
+- **A project's slug is fixed at creation and never changes.** It may be supplied
+  or derived when the project is made, and after that no operation alters it — a
+  later `update_project` may change the name and description, never the slug. A
+  project slug is the outermost thing anything addresses: it names the MCP
+  endpoint an agent connects to ([01](./01-interface-contracts.md)), which lives
+  in a checked-in client configuration, and it heads every document path in the
+  artifact repo. A rename would break addresses written down outside Nook, which
+  Nook cannot find or fix. Deleting a project does free its slug, so a later
+  project may take it — which is why anything holding a project across time holds
+  its id rather than its slug.
 
 **Queries — minimal.**
 - `list_items` filters by type, status, parent (and, for epics, release), and

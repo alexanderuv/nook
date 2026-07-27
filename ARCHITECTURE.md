@@ -409,11 +409,15 @@ The initial surface (signatures firm up against the schema):
 
 - **Structure tools** — `create_item(type, …)`, `update_item` (the one way an item
   changes, its release and its whole blocker set included), `create_release`,
-  `update_release`, `get_item`, `list_items(filter)`, and `delete_item`, plus the
-  instance-level `create_project` / `get_project` / `list_projects` /
-  `delete_project`. "What is ready to work on" is not an operation of its own: it
-  is one `list_items` call combining the leaf types, status `todo`, and nothing
-  blocking ([docs/01](docs/01-interface-contracts.md)).
+  `update_release`, `get_item`, `list_items(filter)`, and `delete_item` — the seven
+  that act inside the bound project, and the whole of this surface. The four
+  instance-level operations (`create_project` / `get_project` / `list_projects` /
+  `delete_project`) are **not** tools: a project is created and disposed of by a
+  person on the web surface, and an agent is handed one to work in, so nothing
+  here lets an agent reach past the project its connection names
+  ([docs/01](docs/01-interface-contracts.md)). "What is ready to work on" is not an
+  operation of its own either: it is one `list_items` call combining the leaf
+  types, status `todo`, and nothing blocking.
 - **Document tools** — `read_doc(ref, {section?})`, `doc_outline`, `write_doc`
   (whole replace / regenerate), `replace_section`, `prepend_to_section`,
   `append_to_section`, `apply_patch`, `doc_history`. Full contracts in

@@ -30,9 +30,11 @@ is the only wire shape Nook has of its own:
   differently-shaped one.
 - **MCP** (external-agent surface, in `:mcp-server`) is the one translation that
   cannot be avoided, because its shape is dictated by someone else's specification:
-  the operations become **tools**, and tenets and documents become **resources**
-  (§5). Skills are **not** exposed here — they are system-level, distributed to the
-  agent's environment, and run agent-side, calling these tools to persist
+  the **seven project-scoped operations** become **tools**, and tenets and documents
+  become **resources** (§5). It serves a *part* of the catalog, not all of it — the
+  four instance-level operations are web-only (see project scoping below). Skills
+  are **not** exposed here — they are system-level, distributed to the agent's
+  environment, and run agent-side, calling these tools to persist
   ([03](./03-skills-and-tenets.md)).
 
 > The web API first mirrored the operations in a shape of its own — the project in
@@ -50,6 +52,27 @@ is the only wire shape Nook has of its own:
   segment**: the endpoint is mounted at `/mcp/{projectRef}`. So project-scoped tools
   do **not** take a `projectId` argument — it comes from the connection, and the MCP
   server supplies it when it calls the operation. (§3.3, §5)
+- **Projects themselves are not on the MCP surface.** None of `create_project`,
+  `get_project`, `list_projects`, `delete_project` is a tool: a project is created
+  and disposed of by a person on the web surface, and an agent is handed one to work
+  in. So an agent cannot reach past the project its connection names, and cannot
+  name a project anywhere — the connection is the only thing that says which one
+  applies. Project slugs never change ([04](./04-structure-semantics.md)), so the
+  address an agent client is configured with keeps naming the same project.
+- **The connection tells the agent which project it is for.** A client's
+  configuration is not something the agent itself reads, so on opening a connection
+  the MCP server resolves the `{projectRef}` through `get_project` and reports that
+  project's id, slug, name and description to the client. The agent can therefore
+  say what it is working on without a tool for it. The server holds the resolved
+  **id** for the life of the connection, since a deleted project frees its slug for
+  a later one to take.
+- **No clear project means no connection.** If the path names a project that does
+  not exist, names none at all, or the core cannot be reached to resolve it, the
+  **opening exchange fails** — so the client reports the server as unavailable and
+  the agent sees no Nook tools, rather than a working-looking server whose every
+  call fails. A misconfigured address is therefore visible where it was written,
+  not as tool errors mid-session; the answer names the project that was asked for,
+  which is what makes an unexpanded configuration placeholder self-diagnosing.
 - **The web API names the project inside the request**, exactly as the core's
   connection does, and serves every operation at one address. It is not
   path-scoped — there is no `/api/{projectRef}/…` — and the four instance-level
@@ -93,12 +116,16 @@ is the only wire shape Nook has of its own:
 - create / update / get return the **full entity**; `list_*` return arrays of the
   same, **newest-first**, **no pagination** in v1 (added as a cursor later).
 
-### Operation catalog (one set, reached as MCP tools or over the web API)
+### Operation catalog (one set, reached over the web API, its project-scoped part as MCP tools)
 
-Eleven operations: four acting on the whole instance, seven inside one project.
+Eleven operations: four acting on the whole instance, seven inside one project. All
+eleven are reachable over the web API; the seven project-scoped ones are also the
+MCP tool surface.
 
-- **Instance-level:** `create_project`, `get_project`, `list_projects`,
-  `delete_project(ref)` — the last removes the project and everything inside it.
+- **Instance-level (web API only):** `create_project`, `get_project`,
+  `list_projects`, `delete_project(ref)` — the last removes the project and
+  everything inside it. A project's slug is fixed at creation
+  ([04](./04-structure-semantics.md)); `update_project` is not in the catalog.
 - **Structure (project-scoped):** `create_item(type, name, slug?, description?, parentRef?, releaseRef?)`
   — `type` is `epic`/`task`/`bug`/`chore`; for a leaf, an omitted `parentRef` makes a
   project-level item, and `releaseRef` applies to epics,
