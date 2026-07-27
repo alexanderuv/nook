@@ -436,11 +436,18 @@ operations.
   loopback refuses a call on every other address this machine has while answering
   on loopback (AC20, EDGE18, FIND10).
 
-- [ ] **STEP11** — Close the epic: confirm the database boundary check still
+- [x] **STEP11** — Close the epic: confirm the database boundary check still
   passes for `:contract` now that it carries a web client, and that neither front
   door nor the calling library resolves a database dependency (AC22, REQ30); run
   `./gradlew check` on a clean checkout; push for the continuous-integration run;
   verify: green locally and in that run, with the new tests visibly executed.
+  The boundary check passes for all three of `:contract`, `:mcp-server` and
+  `:web-app`, re-run from nothing rather than from a previous result. The clean
+  checkout was a working tree of the commit itself, which also establishes that
+  nothing the build needs was left untracked. Locally that tree runs green with
+  the fourteen doubled suites present as twenty-eight result files; the
+  continuous-integration run over the same commit is green in 2m 47s with both
+  test tasks executed rather than taken from a cache.
 
 ## What the build changed about this plan
 

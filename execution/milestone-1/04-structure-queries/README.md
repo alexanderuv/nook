@@ -104,30 +104,30 @@ planning artifacts):
 | Criterion | Test |
 | --- | --- |
 | AC1 | `ReadServiceSurfaceTest` — the public surface is exactly the four reads; every one of the four reads leaves every stored row and timestamp untouched |
-| AC2 | `ReadServiceItemTest` — an item resolves by handle and by id, and never across a project boundary |
+| AC2 | `ReadServiceItemBehavior` — an item resolves by handle and by id, and never across a project boundary |
 | AC3 | `ReadServiceSurfaceTest` — a failing read is always validation_failed or not_found, never a write's verdict |
-| AC4 | `ReadServiceItemTest` — a fetched item carries every field, its parent, and its whole blocker set |
-| AC5 | `ReadServiceListingTest` — a project holding no items lists an empty array rather than failing; `ReadServiceProjectTest` — an instance holding no projects lists an empty array rather than failing |
-| AC6 | `ReadServiceListingTest` — an identical call returns an identical order, same-instant rows included |
-| AC7 | `ReadServiceListingTest` — no filter returns every item in the project |
-| AC8 | `ReadServiceListingTest` — several values inside a part widen it |
-| AC9 | `ReadServiceListingTest` — several parts narrow each other |
-| AC10 | `ReadServiceListingTest` — a value outside its vocabulary is refused, even in a project holding nothing; a part supplied with no values at all is refused rather than answered emptily |
-| AC11 | `ReadServiceListingTest` — the same value supplied twice changes nothing |
-| AC12 | `ReadServiceListingTest` — the parent part matches an epic, or the absence of one |
-| AC13 | `ReadServiceListingTest` — the release part matches an item's own assignment, so no leaf ever matches |
-| AC14 | `ReadServiceListingTest` — a parent value naming something that is not an epic is a caller mistake |
-| AC15 | `ReadServiceListingTest` — deleted items are absent, and a project emptied by deletion looks like one that never held anything; `ReadServiceSurfaceTest` — no read takes anything but a reference and a filter |
-| AC16 | `ReadServiceListingTest` — a deleted branch leaves the listing entirely, and filtering by it is not found |
-| AC17 | `ReadServiceItemTest` — a handle taken over by a new item resolves to it, and the old id to nothing |
-| AC18 | `ReadServiceHeldUpTest` — the composed question returns exactly the unblocked todo leaves, and nothing else; a project whose every leaf is done offers nothing; adding the parent part asks the same question inside one epic; answers come back newest created first, carrying their blocker sets |
-| AC19 | `ReadServiceHeldUpTest` — the part implies no type and no status of its own; a deleted todo leaf is offered nowhere |
+| AC4 | `ReadServiceItemBehavior` — a fetched item carries every field, its parent, and its whole blocker set |
+| AC5 | `ReadServiceListingBehavior` — a project holding no items lists an empty array rather than failing; `ReadServiceProjectBehavior` — an instance holding no projects lists an empty array rather than failing |
+| AC6 | `ReadServiceListingBehavior` — an identical call returns an identical order, same-instant rows included |
+| AC7 | `ReadServiceListingBehavior` — no filter returns every item in the project |
+| AC8 | `ReadServiceListingBehavior` — several values inside a part widen it |
+| AC9 | `ReadServiceListingBehavior` — several parts narrow each other |
+| AC10 | `ReadServiceListingBehavior` — a value outside its vocabulary is refused, even in a project holding nothing; a part supplied with no values at all is refused rather than answered emptily |
+| AC11 | `ReadServiceListingBehavior` — the same value supplied twice changes nothing |
+| AC12 | `ReadServiceListingBehavior` — the parent part matches an epic, or the absence of one |
+| AC13 | `ReadServiceListingBehavior` — the release part matches an item's own assignment, so no leaf ever matches |
+| AC14 | `ReadServiceListingBehavior` — a parent value naming something that is not an epic is a caller mistake |
+| AC15 | `ReadServiceListingBehavior` — deleted items are absent, and a project emptied by deletion looks like one that never held anything; `ReadServiceSurfaceTest` — no read takes anything but a reference and a filter |
+| AC16 | `ReadServiceListingBehavior` — a deleted branch leaves the listing entirely, and filtering by it is not found |
+| AC17 | `ReadServiceItemBehavior` — a handle taken over by a new item resolves to it, and the old id to nothing |
+| AC18 | `ReadServiceHeldUpBehavior` — the composed question returns exactly the unblocked todo leaves, and nothing else; a project whose every leaf is done offers nothing; adding the parent part asks the same question inside one epic; answers come back newest created first, carrying their blocker sets |
+| AC19 | `ReadServiceHeldUpBehavior` — the part implies no type and no status of its own; a deleted todo leaf is offered nowhere |
 | AC20 | `ReadServiceSurfaceTest` — readiness is nowhere in the surface, the entities, or the vocabulary |
-| AC21 | `ReadServiceProjectTest` — the listing shows the live projects newest first, and the deleted one nowhere; a project is fetched by its handle without any project being bound first; a deleted project is not found by its id or by its handle |
-| AC22 | `ReadServiceConcurrencyTest` — a listing taken while another caller writes always shows fully committed items |
+| AC21 | `ReadServiceProjectBehavior` — the listing shows the live projects newest first, and the deleted one nowhere; a project is fetched by its handle without any project being bound first; a deleted project is not found by its id or by its handle |
+| AC22 | `ReadServiceListingDuringWriteBehavior` — a listing taken while another caller writes always shows fully committed items |
 
 The deletion rules, which no spec numbers, are executed rule by rule in
-`WriteServiceDeleteTest`: the row is gone from the store rather than marked in
+`WriteServiceDeleteBehavior`: the row is gone from the store rather than marked in
 it; an epic takes its children, an item takes its blocker edges from both ends,
 and a project takes everything in it; a freed handle is reusable at once,
 explicitly and by derivation; status and deletion are independent in both
@@ -153,10 +153,21 @@ combination of ordinary filter parts on `list_items` — the leaf types, status
 `todo`, and a new part asking whether anything unfinished is holding the item
 up. The prose above records what was built on the day and is left as it was;
 the table's rows are pointers and were re-aimed at the tests that carry those
-rules now, in `ReadServiceHeldUpTest`. Two of its cases exist only because the
+rules now, in `ReadServiceHeldUpBehavior`. Two of its cases exist only because the
 question is composed rather than named: adding the parent part asks it inside
 one epic, and the part stops at the project it is asked in. The `ready_item`
 view is still in the schema and is now read by nothing — whether it should be
 dropped is an open decision, and until it is taken the declaration lives with
 `ReadTransactionTest`, which needs a view to prove that a read-only transaction
 refuses a write a view would otherwise pass through.
+
+The suites this table names end in `Behavior` rather than `Test` because each
+now holds its assertions once, as an abstract suite, beside the two concrete
+classes that run them: once against the operations inside the core's own
+process, and once across the connection the following epic built. Not one
+assertion was edited in the move. `ReadServiceConcurrencyTest` is the exception
+and is why AC22's row now names something else: two of its three checks drive
+the read path's transaction directly and stayed in-process, while the third —
+which asks the same thing through the operations — became
+`ReadServiceListingDuringWriteBehavior` and runs both ways, so what AC22 asks
+for is now answered across the connection as well as inside it.

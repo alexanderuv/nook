@@ -42,38 +42,39 @@ planning artifacts):
 | Criterion | Test |
 | --- | --- |
 | AC1 | `WriteServiceSurfaceTest` — the public surface is exactly the seven mutations |
-| AC2 | `WriteServiceCreateTest` — create_project derives the slug, returns the full entity, and suffixes a name collision; a new release starts planned and a new item starts todo |
-| AC3 | `WriteServiceCreateTest` — create_project derives the slug, returns the full entity, and suffixes a name collision |
-| AC4 | `WriteServiceCreateTest` — an unknown item type is rejected |
-| AC5 | `WriteServiceCreateTest` — a leaf parents under an epic and a parentless leaf sits at project level |
-| AC6 | `WriteServiceCreateTest` — a leaf cannot parent, an epic cannot be parented, and a leaf cannot join a release |
-| AC7 | `WriteServiceCreateTest` — derived slugs take suffixes in sequence |
-| AC8 | `WriteServiceCreateTest` — derivation skips over an explicitly claimed suffix to the first free one |
-| AC9 | `WriteServiceUpdateTest` — a taken explicit slug conflicts on create, and supplying an item's own slug is a no-op |
-| AC10 | `WriteServiceCreateTest` — unusable names and slugs are rejected, and an explicit slug saves an unusable name |
-| AC11 | `WriteServiceUpdateTest` — renaming changes the name but never the slug, by slug or by id |
-| AC12 | `WriteServiceUpdateTest` — an explicit slug change moves resolution to the new slug and retires the old |
-| AC13 | `WriteServiceUpdateTest` — statuses move freely in the vocabulary, cascade to nothing, and reject outside values |
-| AC14 | `WriteServiceUpdateTest` — a done task reopens and its row never ceases to exist |
-| AC15 | `WriteServiceUpdateTest` — leaf types interchange freely but an edge-holding leaf cannot become an epic until cleared |
-| AC16 | `WriteServiceUpdateTest` — an epic with children cannot become a leaf until they are reparented; an epic in a release cannot become a leaf until it is unassigned |
-| AC17 | `WriteServiceUpdateTest` — reparenting keeps the slug and blockers, clearing goes project-level, and same-parent is accepted |
-| AC18 | `WriteServiceBlockerTest` — the supplied set replaces the whole set, deduplicated, and empty clears it; an update that changes other fields leaves the blocker set alone |
-| AC19 | `WriteServiceBlockerTest` — blockers must be same-project leaves that exist |
-| AC20 | `WriteServiceBlockerTest` — a chain-closing set is rejected as a cycle and stores nothing |
-| AC21 | `WriteServiceReleaseTest` — a past target date is accepted, updates follow the vocabulary, and outside values are rejected |
-| AC22 | `WriteServiceReleaseTest` — assignment applies to epics only and no status locks it; an update that says nothing about the release leaves the assignment alone |
-| AC23 | `WriteServiceCycleRaceTest` — of two simultaneous half-loop writers, exactly one succeeds and no loop is ever stored |
-| AC24 | `WriteServiceSlugRaceTest` — two simultaneous creators of the same name always both succeed with distinct slugs |
-| AC25 | `WriteServiceUpdateTest` — a failed update is one structured error and changes nothing |
+| AC2 | `WriteServiceCreateBehavior` — create_project derives the slug, returns the full entity, and suffixes a name collision; a new release starts planned and a new item starts todo |
+| AC3 | `WriteServiceCreateBehavior` — create_project derives the slug, returns the full entity, and suffixes a name collision |
+| AC4 | `WriteServiceCreateBehavior` — an unknown item type is rejected |
+| AC5 | `WriteServiceCreateBehavior` — a leaf parents under an epic and a parentless leaf sits at project level |
+| AC6 | `WriteServiceCreateBehavior` — a leaf cannot parent, an epic cannot be parented, and a leaf cannot join a release |
+| AC7 | `WriteServiceCreateBehavior` — derived slugs take suffixes in sequence |
+| AC8 | `WriteServiceCreateBehavior` — derivation skips over an explicitly claimed suffix to the first free one |
+| AC9 | `WriteServiceUpdateBehavior` — a taken explicit slug conflicts on create, and supplying an item's own slug is a no-op |
+| AC10 | `WriteServiceCreateBehavior` — unusable names and slugs are rejected, and an explicit slug saves an unusable name |
+| AC11 | `WriteServiceUpdateBehavior` — renaming changes the name but never the slug, by slug or by id |
+| AC12 | `WriteServiceUpdateBehavior` — an explicit slug change moves resolution to the new slug and retires the old |
+| AC13 | `WriteServiceUpdateBehavior` — statuses move freely in the vocabulary, cascade to nothing, and reject outside values |
+| AC14 | `WriteServiceUpdateBehavior` — a done task reopens and its row never ceases to exist |
+| AC15 | `WriteServiceUpdateBehavior` — leaf types interchange freely but an edge-holding leaf cannot become an epic until cleared |
+| AC16 | `WriteServiceUpdateBehavior` — an epic with children cannot become a leaf until they are reparented; an epic in a release cannot become a leaf until it is unassigned |
+| AC17 | `WriteServiceUpdateBehavior` — reparenting keeps the slug and blockers, clearing goes project-level, and same-parent is accepted |
+| AC18 | `WriteServiceBlockerBehavior` — the supplied set replaces the whole set, deduplicated, and empty clears it; an update that changes other fields leaves the blocker set alone |
+| AC19 | `WriteServiceBlockerBehavior` — blockers must be same-project leaves that exist |
+| AC20 | `WriteServiceBlockerBehavior` — a chain-closing set is rejected as a cycle and stores nothing |
+| AC21 | `WriteServiceReleaseBehavior` — a past target date is accepted, updates follow the vocabulary, and outside values are rejected |
+| AC22 | `WriteServiceReleaseBehavior` — assignment applies to epics only and no status locks it; an update that says nothing about the release leaves the assignment alone |
+| AC23 | `WriteServiceCycleRaceBehavior` — of two simultaneous half-loop writers, exactly one succeeds and no loop is ever stored |
+| AC24 | `WriteServiceSlugRaceBehavior` — two simultaneous creators of the same name always both succeed with distinct slugs |
+| AC25 | `WriteServiceUpdateBehavior` — a failed update is one structured error and changes nothing |
 
 The supporting units: `SlugsTest` (derivation, explicit-slug validation,
 suffix allocation and the room it is kept in), `CycleDetectionTest` (the walk on
 the chain, diamond, and safe-edge shapes), `StoreNeverArbitratesTest` (every
 schema rule a caller can reach is refused by validation first, and a rejection
-from the store travels as a fault in the service), `WriteServiceGuardTest` (the
-rules nothing underneath the service would catch), `WriteServiceInputTest`
-(caller text the store could not hold), `EnumCodesTest` in `:contract` (codes
+from the store travels as a fault in the service), `WriteServiceGuardBehavior` (the
+rules nothing underneath the service would catch), `WriteServiceInputBehavior`
+(caller text the store could not hold) and `WriteServiceLimitsTest` (the widths
+those limits are taken from), `EnumCodesTest` in `:contract` (codes
 against the changelog map), `WriteLockTest` (the locked row provably
 serializes), `TransactionNestingTest` (neither discipline may be entered from
 inside another), and `ReferenceResolutionTest` (id-first, slug-second,
@@ -92,6 +93,17 @@ it was; the table's rows are pointers and were re-aimed at the tests that
 carry those rules now, which is also where the case a field has and an
 operation did not — an update that never mentions the field — is covered. Two
 tests exercise the rule the fold introduced, that both fields are read against
-the type the item ends up with: `WriteServiceBlockerTest` — the target must be
-a leaf once the update lands, whatever it is now; and `WriteServiceReleaseTest`
+the type the item ends up with: `WriteServiceBlockerBehavior` — the target must be
+a leaf once the update lands, whatever it is now; and `WriteServiceReleaseBehavior`
 — the target must be an epic once the update lands, whatever it is now.
+
+The suites this table names end in `Behavior` rather than `Test` because each
+now holds its assertions once, as an abstract suite, beside the two concrete
+classes that run them: once against the operations inside the core's own
+process, and once across the connection the following epic built. Not one
+assertion was edited in the move — that is the point of it, since an assertion
+changed while a suite was being made to run twice would hide whether the
+connection or the change broke something. `WriteServiceInputBehavior` kept the
+checks about caller text and spun off the two that read column widths and call
+nothing at all; those became `WriteServiceLimitsTest` and stay in-process,
+being a property of the store rather than of an operation.
