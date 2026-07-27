@@ -8,38 +8,52 @@ from ARCHITECTURE.md §5; this spec pins the contracts.
 
 ## Decided
 
-### One operation set, three surfaces
+### One operation set, one wire shape
 
 The **core service** defines the operation set once and exposes it as an internal
-RPC API; the two adapter apps translate their protocol into calls on it (§3.3). So
-there are three surfaces over one contract:
+RPC API; the two adapter apps reach everything through it (§3.3). That API's
+**request and reply shape is defined once**, in the shared contract library, and it
+is the only wire shape Nook has of its own:
 
-- **MCP** (external-agent surface, in `:mcp-server`) exposes the operations as
-  **tools**, plus tenets and documents as **resources** (§5). Skills are **not**
-  exposed here — they
-  are system-level, distributed to the agent's environment, and run agent-side, calling
-  these tools to persist ([03](./03-skills-and-tenets.md)).
-- The **web app's RPC API** (human/UI surface, in `:web-app`) **mirrors the same
-  operations** in RPC style — same capabilities, one shared set of DTOs. Mirroring is
-  pragmatic, not a hard 1:1 rule: an operation is mirrored where it makes sense, and
-  a few extra plain reads may be added for the UI. This RPC surface also backs the web
-  app's **embedded authoring agent** ([06](./06-web-ui.md)): that agent runs skills and
-  persists through these same RPC operations rather than making a second trip out
-  through MCP. REST was rejected: Nook's surface is action-heavy and internal, so RPC
-  keeps one contract instead of a second, differently-shaped one.
 - The **core service's internal RPC API** is the shared backing both adapters call;
-  it is not public. The adapters hold no store access of their own.
+  it is not public, and the adapters hold no store access of their own.
+- The **web app's RPC API** (human/UI surface, in `:web-app`) **serves that same
+  shape** rather than a second one of its own: it forwards a call to the core and
+  hands back the reply, adding the access gate, HTTPS, and the UI in front of it —
+  not a translation. So there is one contract to learn, one place a shape changes,
+  and no second design to keep in step. A few extra plain reads may be added for the
+  UI; they are ordinary operations in the same shape. This surface also backs the
+  web app's **embedded authoring agent** ([06](./06-web-ui.md)): that agent runs
+  skills and persists through these same operations rather than making a second trip
+  out through MCP. REST was rejected for the same reason the second shape now is:
+  Nook's surface is action-heavy, so RPC keeps one contract instead of a second,
+  differently-shaped one.
+- **MCP** (external-agent surface, in `:mcp-server`) is the one translation that
+  cannot be avoided, because its shape is dictated by someone else's specification:
+  the operations become **tools**, and tenets and documents become **resources**
+  (§5). Skills are **not** exposed here — they are system-level, distributed to the
+  agent's environment, and run agent-side, calling these tools to persist
+  ([03](./03-skills-and-tenets.md)).
+
+> The web API first mirrored the operations in a shape of its own — the project in
+> a path segment, the outcome in an HTTP status number — which meant two designs
+> over one catalog: two places to change a field, two ways for one refusal to
+> arrive, and a second contract for the UI to be written against. Serving the core's
+> own shape removes the second design rather than keeping two in step. What it gives
+> up is HTTP-native semantics on the web API, which the error model below takes up.
 
 ### Transport & project scoping
 
 - **Transport is HTTP / streamable** for MCP in v1 (a shared, running endpoint),
   not stdio. Both apps are HTTP servers.
-- **Project is bound per connection**, selected by a **`{projectRef}` path
-  segment** — the MCP endpoint is mounted at `/mcp/{projectRef}` and RPC routes at
-  `/api/{projectRef}/...`. Instance-level operations (create/list/get **project**)
-  are unscoped: `/api/projects`, etc.
-- So project-scoped tools do **not** take a `projectId` argument — it comes from the
-  connection. (§3.3, §5)
+- **MCP binds a project per connection**, selected by a **`{projectRef}` path
+  segment**: the endpoint is mounted at `/mcp/{projectRef}`. So project-scoped tools
+  do **not** take a `projectId` argument — it comes from the connection, and the MCP
+  server supplies it when it calls the operation. (§3.3, §5)
+- **The web API names the project inside the request**, exactly as the core's
+  connection does, and serves every operation at one address. It is not
+  path-scoped — there is no `/api/{projectRef}/…` — and the four instance-level
+  operations name no project at all.
 - v1 is localhost, no auth (§8). stdio transport is deferred.
 
 ### Entity references
@@ -79,7 +93,7 @@ there are three surfaces over one contract:
 - create / update / get return the **full entity**; `list_*` return arrays of the
   same, **newest-first**, **no pagination** in v1 (added as a cursor later).
 
-### Operation catalog (mirrored across MCP tools and RPC)
+### Operation catalog (one set, reached as MCP tools or over the web API)
 
 Eleven operations: four acting on the whole instance, seven inside one project.
 
@@ -122,16 +136,27 @@ marked, and no argument, filter, or operation can ask for what is gone.
   `generate_task_plan`, and `author_manifesto` are local skills an agent runs — an
   external MCP client, or the web app's embedded authoring agent
   ([06](./06-web-ui.md)) — achieving their effect by calling the structure and
-  document operations above (over MCP tools or the mirrored RPC, respectively; e.g.
+  document operations above (over MCP tools or the web API, respectively; e.g.
   `split_epic` drives repeated `create_item` calls). See
   [03](./03-skills-and-tenets.md).
 
 ### Error model
 
-- Failures return a **structured error**: on MCP, a tool result with `isError` and a
-  payload `{ code, message, details? }`. Codes: `validation_failed`, `not_found`,
-  `conflict` (e.g. slug collision), `cycle` (blocked-by). The RPC API maps the same
-  codes to HTTP status (`400` / `404` / `409`).
+- **A reply names its own ending** — an answer, a refusal, or a breakdown — in the
+  body, rather than leaving it to the HTTP status number. Every reply Nook produces
+  comes back under one status, so the number is not the thing that says what
+  happened. The same rule holds on the internal connection and on the web API,
+  because they are the same shape.
+- A **refusal** carries `{ code, message, details? }`. Codes: `validation_failed`,
+  `not_found`, `conflict` (e.g. slug collision), `cycle` (blocked-by). A
+  **breakdown** carries no code, because there is nothing for the caller to fix.
+- **MCP maps a refusal onto a tool result** with `isError` and that same payload —
+  the one translation MCP's own specification forces.
+
+> Replaced: the web API previously mapped the four codes onto `400` / `404` / `409`.
+> Two of them shared `409`, and a route matching nothing answered `404` with an
+> empty body — so the number could not decide what a reply was, while the body
+> already could.
 
 ### Resources (MCP)
 

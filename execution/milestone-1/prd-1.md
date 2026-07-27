@@ -45,10 +45,14 @@ every other milestone stacks on this layer.
   `todo`, and nothing blocking — the loop exercises all four item
   types and both parented and project-level leaves; observed in an end-to-end
   script run against local Postgres, passing 100% unattended.
-- **GOAL2** — surface parity: 11 of 11 catalog operations (4 instance-level +
-  7 project-scoped, per spec 01) behave identically over MCP and the web API —
-  same DTOs, same error codes; observed in a contract test suite run against both
-  surfaces.
+- **GOAL2** — one contract, checked wherever it can drift: all 11 catalog
+  operations (4 instance-level + 7 project-scoped, per spec 01) reach the same
+  verdict — same entity, same refusal code, same change to the store — called
+  inside the core, called across the internal connection, called over the web API,
+  and called as an MCP tool; observed by running one contract suite against all
+  four. MCP is the only one of the four that translates, so that is where this goal
+  earns its keep; the web API forwards the core's own shape, so its run is the
+  guard against it quietly starting to reshape.
 - **GOAL3** — rule coverage: 100% of the Decided bullets in specs 04 and 01
   that name a structure behavior map to at least one named test; observed in
   the test suite.
@@ -76,15 +80,17 @@ every other milestone stacks on this layer.
   default ordering. *Why:* GOAL1 — the readiness question is the loop's payoff,
   and it is these filters combined rather than an operation of its own.
 - **REQ5 · P0** — The internal RPC API: the operation catalog exposed once by
-  the core service for both adapters. *Why:* GOAL2, GOAL4 — one contract, two
-  translators.
+  the core service for both adapters. *Why:* GOAL2, GOAL4 — one contract, reached
+  the same way by both front doors.
 - **REQ6 · P0** — The MCP server: streamable HTTP at `/mcp/{projectRef}`,
   project bound per connection, the catalog as tools, UUID-or-slug references,
   structured errors (`validation_failed` / `not_found` / `conflict` / `cycle`).
   *Why:* GOAL1 — the agent surface is the north-star path.
-- **REQ7 · P0** — The web API: the same operations mirrored in RPC style at
-  `/api/{projectRef}/…` (instance-level at `/api/projects`), shared DTOs, error
-  codes mapped to 400/404/409. *Why:* GOAL2.
+- **REQ7 · P0** — The web API: `:web-app` serves the core's own request and reply
+  shape outward — one address, the operation and the project named inside the
+  request, the reply naming its own ending — rather than a second shape of its own.
+  *Why:* GOAL2 — one contract, with the UI written against the same shape the agent
+  surface calls.
 - **REQ8 · P1** — Actor plumbing: every mutation records `created_by` /
   `updated_by` as subject strings (local default `system`); projects carry a
   server-populated, read-only `owner_subject`. *Why:* GOAL3 — spec'd behavior,

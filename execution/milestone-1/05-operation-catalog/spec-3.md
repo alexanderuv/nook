@@ -8,8 +8,10 @@ adapter apps — the agent-facing MCP server and the web app — reach anything 
 core owns. The design documents call it the internal RPC API
 ([ARCHITECTURE §3.3](../../../ARCHITECTURE.md), [05 — Project bootstrapping &
 ops](../../../docs/05-project-and-ops.md)); it is internal because nothing
-outside those two apps calls it, and because it is not the surface either app
-shows the world. [PRD-1](../prd-1.md) REQ5 asks for the operation catalog to be
+outside those two apps calls the core directly. Its *shape* is not private,
+though: the web app serves this same request and reply shape outward rather than
+inventing a second one ([01](../../../docs/01-interface-contracts.md)), so what
+this spec pins is also what the web API shows the world. [PRD-1](../prd-1.md) REQ5 asks for the operation catalog to be
 exposed **once** by the core and reached by both adapters, so that the two
 surfaces of milestone 1 are two translators over one contract rather than two
 contracts.
@@ -28,7 +30,7 @@ load-bearing: that crossing the connection changes nothing — not what a caller
 asked for, not what came back, and not the verdict in between.
 
 This epic builds **both halves**: the core's answering side, and one calling
-library that both adapters use. That is what makes PRD-1's parity goal
+library that both adapters use. That is what makes PRD-1's one-contract goal
 structural rather than hopeful — the two adapters cannot read a reply
 differently if there is only one piece of code that reads it.
 
@@ -48,10 +50,12 @@ Out of scope:
 - **The rules the operations enforce** — handles, containment, status
   vocabulary, cycles, filtering, ordering, readiness. Those are specs 1 and 2;
   this spec requires only that they arrive intact.
-- **The MCP tool surface** — epic 06 — and **the web HTTP API** — epic 07. Each
-  translates its own protocol into calls on this connection; the shapes, tool
-  names, and status codes either one shows the outside world are that epic's
-  business, not this one's.
+- **The MCP tool surface** — epic 06 — and **the web HTTP API** — epic 07. The MCP
+  server translates its own protocol into calls on this connection, and its tool
+  names and result shapes are that epic's business. The web app serves this
+  connection's own shape outward instead of a shape of its own, so what that epic
+  adds is the access gate, HTTPS, and the UI — not a translation. Neither epic's
+  outward surface is decided here.
 - **Who the caller is.** Nothing on this connection carries a caller's identity
   in this milestone; how a subject travels from an adapter to the core arrives
   with epic 08 alongside the fields that store it.
@@ -139,7 +143,7 @@ adapter being restarted.
 what says whether the write landed. Giving up is a report about the wait, not a
 statement that the work did not happen.
 
-### SCEN6 — Two adapter processes write at the same moment
+### SCEN6 — Two callers write at the same moment
 
 **Initiator:** the MCP server and the web app, serving two people at once.
 **Flow:**
@@ -264,8 +268,17 @@ starting up and calling an address nobody chose.
 
 ### Several callers at once
 
-- **REQ23** — The core MUST serve calls from several adapter processes at the
-  same time, and MUST NOT make one call wait on an unrelated one.
+These requirements first said "two adapter processes". What they are about is
+the core serving several callers at once over the connection — and the core
+cannot tell whether two callers sit in one program or in two, so keeping them
+in separate programs is not a property the connection has to get right. What
+genuinely differs between the two adapters is how each turns its own protocol
+into a call, and that is each adapter's own work, tested where it is built. So
+these requirements say "callers", and the checks below drive several callers
+across the connection.
+
+- **REQ23** — The core MUST serve several callers at the same time, and MUST
+  NOT make one call wait on an unrelated one.
 - **REQ24** — The store's guarantees under callers writing at once MUST hold
   when those writers arrive across the connection: the store MUST NOT come to
   hold a loop of items waiting on each other in a circle, nor two entities
@@ -323,10 +336,10 @@ starting up and calling an address nobody chose.
   `validation_failed`. Both halves of the connection are built together, so an
   unknown field is a defect to surface, not a difference to absorb — and
   ignoring one would silently drop something a caller meant.
-- **EDGE15** — Two adapter processes creating an item of the same name at the
-  same moment: both succeed, with different handles.
-- **EDGE16** — Two adapter processes each writing one half of a two-step
-  dependency loop: exactly one commits, the other is refused as a cycle.
+- **EDGE15** — Two callers creating an item of the same name at the same
+  moment: both succeed, with different handles.
+- **EDGE16** — Two callers each writing one half of a two-step dependency
+  loop: exactly one commits, the other is refused as a cycle.
 - **EDGE17** — A slow call and a fast call in flight together: the fast one is
   answered without waiting for the slow one.
 - **EDGE18** — A well-formed call arriving from another machine: not served.
@@ -384,12 +397,12 @@ starting up and calling an address nobody chose.
 - **AC11** (REQ14) — Given a fault deliberately planted inside the core, when an
   operation hits it, then the caller receives a breakdown carrying none of the
   four codes, and the caller can tell it apart from every refusal.
-- **AC12** (REQ15, REQ21, REQ22, EDGE8, EDGE9, EDGE19) — Given an adapter
-  started while the core is not running, when it calls, then the call fails
-  within 30 seconds as a breakdown distinguishable from a fault inside the core;
-  when the core is then started and the same adapter calls again, then the call
-  succeeds; and when the core is stopped mid-call and restarted, then that call
-  is a breakdown and the next call succeeds — with no adapter restart at any
+- **AC12** (REQ15, REQ21, REQ22, EDGE8, EDGE9, EDGE19) — Given a caller built
+  while the core is not running, when it calls, then the call fails within 30
+  seconds as a breakdown distinguishable from a fault inside the core; when the
+  core is then started and the same caller calls again, then the call succeeds;
+  and when the core is stopped mid-call and restarted, then that call is a
+  breakdown and the next call succeeds — with the caller never rebuilt at any
   point.
 - **AC13** (REQ16, REQ17, EDGE11, EDGE12, EDGE13, EDGE14) — Given a request
   naming an unknown operation, one whose contents cannot be read, a
@@ -409,27 +422,27 @@ starting up and calling an address nobody chose.
   with the edges it was written with, or not there at all — never a row missing
   its edges.
 - **AC17** (REQ23, EDGE17) — Given one call the core is made to answer slowly
-  and a second call made from another adapter process while the first is in
-  flight, when both are made, then the second is answered before the first.
-- **AC18** (REQ24, EDGE15, EDGE16) — Given two adapter processes calling at
-  once, when both create an item of the same name (repeated 100 times) and when
-  each writes one half of a two-step dependency loop (repeated 100 times), then
+  and a second call made by another caller while the first is in flight, when
+  both are made, then the second is answered before the first.
+- **AC18** (REQ24, EDGE15, EDGE16) — Given two callers calling at once, when
+  both create an item of the same name (repeated 100 times) and when each
+  writes one half of a two-step dependency loop (repeated 100 times), then
   every run of the first leaves two items with different handles, and every run
   of the second leaves exactly one commit, one `cycle` refusal, and no loop in
   the store.
-- **AC19** (REQ25) — Given one adapter process repeatedly listing a project
-  while another repeatedly creates items in it (repeated 100 times), then every
+- **AC19** (REQ25) — Given one caller repeatedly listing a project while
+  another repeatedly creates items in it (repeated 100 times), then every
   listing returns only fully committed items, each complete with its blocker
   set, and no call fails.
 - **AC20** (REQ26, REQ27, EDGE18) — Given a running core, when a well-formed
   call is made from the same machine with no credential, then it is served; and
   when the same call is made to the core's address from another machine, then it
   is not served and the store is unchanged.
-- **AC21** (REQ28, REQ29, EDGE20) — Given the core and an adapter configured
-  with addresses from outside the program, when both start and a call is made,
-  then it succeeds; and when either process is started with its address unset,
-  then it stops with a message naming the missing setting rather than starting
-  on a default.
+- **AC21** (REQ28, REQ29, EDGE20) — Given the core and a calling program
+  configured with addresses from outside the program, when both start and a
+  call is made, then it succeeds; and when either is started with its address
+  unset, then it stops with a message naming the missing setting rather than
+  starting on a default.
 - **AC22** (REQ30) — Given the build's dependency graph, when the adapters and
   the calling library are checked, then none of them resolves a database or
   persistence dependency.

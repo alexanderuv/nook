@@ -12,7 +12,7 @@ exact per-skill contracts firm up against [01](./01-interface-contracts.md) and 
 **Two worlds — the operation set for state, a local cache for skills/tenets.**
 - Every stateful interaction with structure (epics/tasks/releases) and documents flows
   through Nook's **operation set** — exposed as **MCP tools** to external agents and as
-  the mirrored **web RPC** to the UI and its embedded authoring agent (§5,
+  the **web RPC** to the UI and its embedded authoring agent (§5,
   [06](./06-web-ui.md)). That is the only way state changes.
 - **Skills and tenets are consumed agent-side** — by any agent, an external MCP client
   or the web app's embedded agent — from an **ephemeral local cache** materialized into
