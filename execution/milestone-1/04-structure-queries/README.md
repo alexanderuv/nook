@@ -103,7 +103,7 @@ planning artifacts):
 
 | Criterion | Test |
 | --- | --- |
-| AC1 | `ReadServiceSurfaceTest` — the public surface is exactly the five reads; every one of the five reads leaves every stored row and timestamp untouched |
+| AC1 | `ReadServiceSurfaceTest` — the public surface is exactly the four reads; every one of the four reads leaves every stored row and timestamp untouched |
 | AC2 | `ReadServiceItemTest` — an item resolves by handle and by id, and never across a project boundary |
 | AC3 | `ReadServiceSurfaceTest` — a failing read is always validation_failed or not_found, never a write's verdict |
 | AC4 | `ReadServiceItemTest` — a fetched item carries every field, its parent, and its whole blocker set |
@@ -120,9 +120,9 @@ planning artifacts):
 | AC15 | `ReadServiceListingTest` — deleted items are absent, and a project emptied by deletion looks like one that never held anything; `ReadServiceSurfaceTest` — no read takes anything but a reference and a filter |
 | AC16 | `ReadServiceListingTest` — a deleted branch leaves the listing entirely, and filtering by it is not found |
 | AC17 | `ReadServiceItemTest` — a handle taken over by a new item resolves to it, and the old id to nothing |
-| AC18 | `ReadServiceReadinessTest` — exactly the unblocked todo leaves come back, and nothing else; a project whose every leaf is done offers nothing |
-| AC19 | `ReadServiceReadinessTest` — a deleted todo leaf is offered nowhere |
-| AC20 | `ReadServiceReadinessTest` — ready leaves come back newest created first, carrying their blocker sets; `ReadServiceSurfaceTest` — the readiness question takes no filter at all |
+| AC18 | `ReadServiceHeldUpTest` — the composed question returns exactly the unblocked todo leaves, and nothing else; a project whose every leaf is done offers nothing; adding the parent part asks the same question inside one epic; answers come back newest created first, carrying their blocker sets |
+| AC19 | `ReadServiceHeldUpTest` — the part implies no type and no status of its own; a deleted todo leaf is offered nowhere |
+| AC20 | `ReadServiceSurfaceTest` — readiness is nowhere in the surface, the entities, or the vocabulary |
 | AC21 | `ReadServiceProjectTest` — the listing shows the live projects newest first, and the deleted one nowhere; a project is fetched by its handle without any project being bound first; a deleted project is not found by its id or by its handle |
 | AC22 | `ReadServiceConcurrencyTest` — a listing taken while another caller writes always shows fully committed items |
 
@@ -140,10 +140,23 @@ read transaction refused by the database, through a table and through the view
 alike, and the same write accepted outside one — so the refusal is the
 transaction's doing), `ReferenceResolutionTest` (id-first, slug-second,
 project-scoped, and nothing found once the row is removed), and
-`WriteServiceSurfaceTest` (exactly nine mutations; no command carrying a field
+`WriteServiceSurfaceTest` (exactly seven mutations; no command carrying a field
 that could ask for a deleted row back, since a way back would arrive as a
 parameter long before it arrived as an operation; and both deletes returning
 nothing), and `WriteLockTest` (a second writer provably waits on both the
 project row and the instance lock row, a project that is not there is
 `not_found` rather than an unlocked pass, and a missing lock row is reported as
 a broken schema instead of silently forfeiting the turn).
+
+What this epic shipped as five reads is now four: `get_ready_items` became a
+combination of ordinary filter parts on `list_items` — the leaf types, status
+`todo`, and a new part asking whether anything unfinished is holding the item
+up. The prose above records what was built on the day and is left as it was;
+the table's rows are pointers and were re-aimed at the tests that carry those
+rules now, in `ReadServiceHeldUpTest`. Two of its cases exist only because the
+question is composed rather than named: adding the parent part asks it inside
+one epic, and the part stops at the project it is asked in. The `ready_item`
+view is still in the schema and is now read by nothing — whether it should be
+dropped is an open decision, and until it is taken the declaration lives with
+`ReadTransactionTest`, which needs a view to prove that a read-only transaction
+refuses a write a view would otherwise pass through.

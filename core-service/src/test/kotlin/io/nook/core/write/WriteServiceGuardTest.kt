@@ -5,7 +5,6 @@ import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
 import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
-import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
@@ -83,7 +82,7 @@ class WriteServiceGuardTest {
         service.createItem(project.slug, CreateItem(type = "task", name = "A leaf"))
 
         val failure = assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.setItemBlockedBy(project.slug, "the-epic", SetItemBlockedBy(listOf("a-leaf")))
+            service.updateItem(project.slug, "the-epic", UpdateItem(blockedBy = FieldChange.Set(listOf("a-leaf"))))
         }
         assertEquals(
             true,
@@ -120,7 +119,7 @@ class WriteServiceGuardTest {
         val project = service.createProject(CreateProject("Both Ends Of An Edge"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Upstream"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Downstream"))
-        service.setItemBlockedBy(project.slug, "downstream", SetItemBlockedBy(listOf("upstream")))
+        service.updateItem(project.slug, "downstream", UpdateItem(blockedBy = FieldChange.Set(listOf("upstream"))))
 
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
             service.updateItem(project.slug, "downstream", UpdateItem(type = FieldChange.Set("epic")))
@@ -129,7 +128,7 @@ class WriteServiceGuardTest {
             service.updateItem(project.slug, "upstream", UpdateItem(type = FieldChange.Set("epic")))
         }
 
-        service.setItemBlockedBy(project.slug, "downstream", SetItemBlockedBy(emptyList()))
+        service.updateItem(project.slug, "downstream", UpdateItem(blockedBy = FieldChange.Set(emptyList())))
         assertEquals(
             "epic",
             service.updateItem(project.slug, "downstream", UpdateItem(type = FieldChange.Set("epic"))).type.label,

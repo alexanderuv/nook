@@ -6,6 +6,7 @@ import io.nook.contract.ItemType
 import io.nook.contract.ParentFilter
 import io.nook.contract.Project
 import io.nook.contract.ProjectItem
+import io.nook.core.db.ItemDependencyTable
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
@@ -27,6 +28,8 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.inSubQuery
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.notInList
+import org.jetbrains.exposed.v1.core.notInSubQuery
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.Query
@@ -34,7 +37,7 @@ import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 /**
- * The read path: the five ways structure leaves the store, and the only ones.
+ * The read path: the four ways structure leaves the store, and the only ones.
  *
  * Every operation opens one read-only transaction reading a single moment (see
  * [readTransaction]) and takes no lock. Nothing here writes, so nothing here can
@@ -76,26 +79,6 @@ class ReadService(private val db: Database) {
         withBlockerSets(
             ProjectItemTable.selectAll()
                 .where(itemsOf(projectId) and matchOf(projectId, filter))
-                .newestFirst(ProjectItemTable.createdAt, ProjectItemTable.id)
-                .toList(),
-        )
-    }
-
-    /**
-     * The project's ready leaves, straight from the readiness view. No filter:
-     * "what can be worked on" is one question, and narrowing it is what
-     * [listItems] is for.
-     *
-     * The view decides which items are ready and `project_item` supplies what
-     * each one is, so the row-to-entity mapping stays in one place.
-     */
-    fun getReadyItems(projectRef: String): List<ProjectItem> = readTransaction(db) {
-        val projectId = resolveProject(projectRef)[ProjectTable.id]
-        val readyIds = ReadyItemView.select(ReadyItemView.id)
-            .where { ReadyItemView.projectId eq projectId }
-        withBlockerSets(
-            ProjectItemTable.selectAll()
-                .where(ProjectItemTable.id inSubQuery readyIds)
                 .newestFirst(ProjectItemTable.createdAt, ProjectItemTable.id)
                 .toList(),
         )
@@ -157,8 +140,36 @@ class ReadService(private val db: Database) {
                 }
                 add(ProjectItemTable.releaseId inList releaseIds)
             }
+            filter.heldUp?.let { add(heldUpMatch(projectId, it)) }
         }
         return parts.reduceOrNull { narrowed, part -> narrowed and part } ?: Op.TRUE
+    }
+
+    /**
+     * Held up, or not: whether the item has a blocker that is neither `done`
+     * nor `cancelled`. Answered from the dependency edges as they stand when the
+     * question is asked — there is no stored readiness, and this part carries no
+     * opinion about type or status, so it narrows alongside the others rather
+     * than smuggling in a definition of its own.
+     *
+     * `not held up` is the complement rather than a second query, which is what
+     * makes an item with no blockers at all come back: it is in no edge, so it is
+     * in neither the subquery nor, therefore, the items it selects. Both columns
+     * involved are non-null, so `NOT IN` cannot swallow a row on a null.
+     */
+    private fun heldUpMatch(projectId: Uuid, heldUp: Boolean): Op<Boolean> {
+        val unfinished = ProjectItemTable.select(ProjectItemTable.id)
+            .where {
+                itemsOf(projectId) and
+                    (ProjectItemTable.status notInList setOf(ItemStatus.DONE.code, ItemStatus.CANCELLED.code))
+            }
+        val blockedByUnfinished = ItemDependencyTable.select(ItemDependencyTable.itemId)
+            .where { ItemDependencyTable.dependsOnId inSubQuery unfinished }
+        return if (heldUp) {
+            ProjectItemTable.id inSubQuery blockedByUnfinished
+        } else {
+            ProjectItemTable.id notInSubQuery blockedByUnfinished
+        }
     }
 
     /** Any of the named epics, or no epic at all — whichever the caller supplied. */

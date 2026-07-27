@@ -56,13 +56,13 @@ planning artifacts):
 | AC13 | `WriteServiceUpdateTest` — statuses move freely in the vocabulary, cascade to nothing, and reject outside values |
 | AC14 | `WriteServiceUpdateTest` — a done task reopens and its row never ceases to exist |
 | AC15 | `WriteServiceUpdateTest` — leaf types interchange freely but an edge-holding leaf cannot become an epic until cleared |
-| AC16 | `WriteServiceUpdateTest` — an epic with children or a release assignment cannot become a leaf until detached |
+| AC16 | `WriteServiceUpdateTest` — an epic with children cannot become a leaf until they are reparented; an epic in a release cannot become a leaf until it is unassigned |
 | AC17 | `WriteServiceUpdateTest` — reparenting keeps the slug and blockers, clearing goes project-level, and same-parent is accepted |
-| AC18 | `WriteServiceBlockerTest` — the supplied set replaces the whole set, deduplicated, and empty clears it |
+| AC18 | `WriteServiceBlockerTest` — the supplied set replaces the whole set, deduplicated, and empty clears it; an update that changes other fields leaves the blocker set alone |
 | AC19 | `WriteServiceBlockerTest` — blockers must be same-project leaves that exist |
 | AC20 | `WriteServiceBlockerTest` — a chain-closing set is rejected as a cycle and stores nothing |
 | AC21 | `WriteServiceReleaseTest` — a past target date is accepted, updates follow the vocabulary, and outside values are rejected |
-| AC22 | `WriteServiceReleaseTest` — assignment applies to epics only and no status locks it |
+| AC22 | `WriteServiceReleaseTest` — assignment applies to epics only and no status locks it; an update that says nothing about the release leaves the assignment alone |
 | AC23 | `WriteServiceCycleRaceTest` — of two simultaneous half-loop writers, exactly one succeeds and no loop is ever stored |
 | AC24 | `WriteServiceSlugRaceTest` — two simultaneous creators of the same name always both succeed with distinct slugs |
 | AC25 | `WriteServiceUpdateTest` — a failed update is one structured error and changes nothing |
@@ -84,3 +84,14 @@ of this table and do not exist. The first was dropped with the translator it
 tested — validation decides before the store is asked, so there is nothing to
 translate — and the second was renamed `WriteLockTest` when the advisory lock
 became a locked row.
+
+What this epic shipped as nine mutations is now seven: `set_item_blocked_by`
+and `assign_epic_to_release` became the `blockedBy` and `releaseRef` fields of
+`update_item`. The prose above records what was built on the day and is left as
+it was; the table's rows are pointers and were re-aimed at the tests that
+carry those rules now, which is also where the case a field has and an
+operation did not — an update that never mentions the field — is covered. Two
+tests exercise the rule the fold introduced, that both fields are read against
+the type the item ends up with: `WriteServiceBlockerTest` — the target must be
+a leaf once the update lands, whatever it is now; and `WriteServiceReleaseTest`
+— the target must be an epic once the update lands, whatever it is now.

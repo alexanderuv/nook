@@ -3,8 +3,9 @@ package io.nook.core.write
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.ErrorCode
-import io.nook.contract.SetItemBlockedBy
+import io.nook.contract.FieldChange
 import io.nook.contract.StructuredErrorException
+import io.nook.contract.UpdateItem
 import io.nook.core.db.EmbeddedPostgresSupport
 import java.util.concurrent.Callable
 import java.util.concurrent.CyclicBarrier
@@ -40,7 +41,10 @@ class WriteServiceCycleRaceTest {
                         Callable {
                             barrier.await(10, TimeUnit.SECONDS)
                             runCatching {
-                                service.setItemBlockedBy(project.slug, item, SetItemBlockedBy(listOf(blocker)))
+                                service.updateItem(
+                                    project.slug, item,
+                                    UpdateItem(blockedBy = FieldChange.Set(listOf(blocker))),
+                                )
                             }
                         },
                     )

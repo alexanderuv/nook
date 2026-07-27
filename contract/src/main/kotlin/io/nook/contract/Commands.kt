@@ -36,7 +36,18 @@ public data class CreateItem(
 
 /**
  * Partially updates an item: every field defaults to keeping the stored
- * value. Setting [parentRef] to null moves the item to project level.
+ * value. This is the one way an item changes, whatever the field.
+ *
+ * Setting [parentRef] to null moves the item to project level; setting
+ * [releaseRef] to null takes an epic out of every release. [blockedBy]
+ * replaces the whole blocker set rather than adding to it — an empty list
+ * clears it — and duplicates within it collapse to one edge.
+ *
+ * The last two are gated on what the item *will be* once this command lands,
+ * not on what it is now: [releaseRef] applies to an epic and [blockedBy] to a
+ * leaf, so a command supplying either alongside a [type] that contradicts it is
+ * refused. That keeps each field's rule readable off this one command, and it
+ * is why the guards on a type change need not reason about them.
  */
 public data class UpdateItem(
     public val name: FieldChange<String> = FieldChange.Keep,
@@ -45,14 +56,8 @@ public data class UpdateItem(
     public val status: FieldChange<String> = FieldChange.Keep,
     public val type: FieldChange<String> = FieldChange.Keep,
     public val parentRef: FieldChange<String?> = FieldChange.Keep,
-)
-
-/**
- * Replaces an item's whole blocker set with [blockerRefs], deduplicated.
- * An empty list clears every blocker.
- */
-public data class SetItemBlockedBy(
-    public val blockerRefs: List<String>,
+    public val releaseRef: FieldChange<String?> = FieldChange.Keep,
+    public val blockedBy: FieldChange<List<String>> = FieldChange.Keep,
 )
 
 /** Creates a release in a project. A null [slug] means: derive it from [name]. */
@@ -73,12 +78,4 @@ public data class UpdateRelease(
     public val description: FieldChange<String?> = FieldChange.Keep,
     public val status: FieldChange<String> = FieldChange.Keep,
     public val targetDate: FieldChange<LocalDate?> = FieldChange.Keep,
-)
-
-/**
- * Puts an epic into the release named by [releaseRef], or takes it out of
- * any release when [releaseRef] is null.
- */
-public data class AssignEpicToRelease(
-    public val releaseRef: String? = null,
 )

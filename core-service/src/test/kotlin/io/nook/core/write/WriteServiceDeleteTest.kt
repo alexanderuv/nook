@@ -5,7 +5,6 @@ import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
 import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
-import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import io.nook.core.db.DocumentTable
@@ -122,8 +121,8 @@ class WriteServiceDeleteTest {
         val blocker = service.createItem(project.slug, CreateItem(type = "task", name = "Blocker"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Blocked"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Downstream"))
-        service.setItemBlockedBy(project.slug, "blocked", SetItemBlockedBy(listOf("blocker")))
-        service.setItemBlockedBy(project.slug, "downstream", SetItemBlockedBy(listOf("blocker")))
+        service.updateItem(project.slug, "blocked", UpdateItem(blockedBy = FieldChange.Set(listOf("blocker"))))
+        service.updateItem(project.slug, "downstream", UpdateItem(blockedBy = FieldChange.Set(listOf("blocker"))))
 
         service.deleteItem(project.slug, "blocker")
 
@@ -182,7 +181,7 @@ class WriteServiceDeleteTest {
         val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Epic"))
         val leaf = service.createItem(project.slug, CreateItem(type = "task", name = "Leaf", parentRef = "epic"))
         val blocker = service.createItem(project.slug, CreateItem(type = "bug", name = "Loose"))
-        service.setItemBlockedBy(project.slug, "leaf", SetItemBlockedBy(listOf("loose")))
+        service.updateItem(project.slug, "leaf", UpdateItem(blockedBy = FieldChange.Set(listOf("loose"))))
 
         service.deleteProject(project.slug)
 

@@ -206,8 +206,9 @@ because a deleted blocker no longer holds anything up.
   one of them is `done` or `cancelled`. A deleted blocker takes its edge with
   it, so it holds nothing up.
 - **REQ22** — The held-up part MUST apply to any item and MUST NOT imply a type
-  or a status of its own: an epic with an unfinished blocker matches it exactly
-  as a leaf would.
+  or a status of its own: an epic MUST be answered by it — as not held up, since
+  it carries no blockers — rather than left out of it, and a `done` item with an
+  unfinished blocker MUST count as held up like any other.
 - **REQ23** — The held-up part MUST narrow alongside the other parts like any
   other, so that asking for the leaf types, status `todo`, and not held up is
   how a caller asks what is ready to work on — and adding the parent part asks
@@ -331,10 +332,20 @@ because a deleted blocker no longer holds anything up.
   every leaf is then set `done`, then the same call returns an empty array; and
   when the parent part naming one epic is added, then only that epic's share of
   the answer comes back.
-- **AC19** (REQ22, EDGE11) — Given an epic blocked by an unfinished item and a
-  `todo` leaf with no blockers that is then deleted, when `list_items` asks for
-  items that are held up with no type part, then the epic comes back; and when
-  any listing is taken, then the deleted leaf appears in none of them.
+- **AC19** (REQ22, EDGE11) — Given an epic with no blockers, a `done` bug
+  blocked by an `in_progress` leaf, and a `todo` leaf with no blockers that is
+  then deleted, when `list_items` asks for items that are not held up with no
+  type part, then the epic comes back; when it asks for items that are held up
+  with no status part, then the `done` bug comes back; and when any listing is
+  taken, then the deleted leaf appears in none of them.
+
+  > This criterion originally named an epic with an unfinished blocker, a state
+  > the write path forbids in two places at once: an epic takes no blockers
+  > ([spec-1](../03-core-write-path/spec-1.md) REQ32), and a leaf holding edges
+  > cannot be promoted into one (REQ29). What REQ22 rules out is the part
+  > carrying a clause of its own, and the two constructible halves above are
+  > where such a clause would show — a type clause would drop the epic, a status
+  > clause would drop the `done` bug.
 - **AC20** (REQ24) — The read path offers no readiness operation; no entity
   carries a stored readiness field; and `list_items` rejects `ready` as a status
   value with `validation_failed`, since it is not in the vocabulary.

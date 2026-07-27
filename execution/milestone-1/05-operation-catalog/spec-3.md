@@ -20,8 +20,8 @@ The catalog is **eleven operations**: the seven mutations of
 instance and seven inside one project. (Three operations were folded away while
 this spec was being written — release assignment and blocker replacement became
 fields of `update_item`, and readiness became a combination of listing filters;
-both sibling specs carry a note recording it, and the core service still holds
-the older shape in code.) What each one *does* is settled by those two specs
+both sibling specs carry a note recording it.) What each one *does* is settled
+by those two specs
 and by [01 — Interface contracts](../../../docs/01-interface-contracts.md); this
 spec never restates a rule of theirs. It requires something narrower and
 load-bearing: that crossing the connection changes nothing — not what a caller

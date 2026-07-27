@@ -131,7 +131,10 @@ shared shapes in `:contract`:
   review, because the payload becomes a wire shape in epic 05 anyway and a
   grouped class absorbs future field additions without changing every call
   site. Each service operation now takes the references that address its
-  target as parameters and one command as the payload.)
+  target as parameters and one command as the payload. Two of those classes are
+  since gone: `SetItemBlockedBy` and `AssignEpicToRelease` became the
+  `blockedBy` and `releaseRef` fields of `UpdateItem`, which is the shape the
+  grouped class was chosen for.)
 
 - **One write-service class** in `:core-service` as the single entry point,
   exposing exactly the seven operations. Every operation follows the same

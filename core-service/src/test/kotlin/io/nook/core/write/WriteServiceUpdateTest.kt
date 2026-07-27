@@ -1,6 +1,5 @@
 package io.nook.core.write
 
-import io.nook.contract.AssignEpicToRelease
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
@@ -8,7 +7,6 @@ import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
 import io.nook.contract.ItemStatus
 import io.nook.contract.ItemType
-import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import kotlin.test.Test
@@ -142,7 +140,10 @@ class WriteServiceUpdateTest {
         val project = service.createProject(CreateProject("Leaf Conversions"))
         val bug = service.createItem(project.slug, CreateItem(type = "bug", name = "Blocking bug"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Waiting task"))
-        service.setItemBlockedBy(project.slug, "waiting-task", SetItemBlockedBy(listOf("blocking-bug")))
+        service.updateItem(
+            project.slug, "waiting-task",
+            UpdateItem(blockedBy = FieldChange.Set(listOf("blocking-bug"))),
+        )
 
         val chore = service.updateItem(project.slug, bug.slug, UpdateItem(type = FieldChange.Set("chore")))
         assertEquals(ItemType.CHORE, chore.type)
@@ -151,7 +152,7 @@ class WriteServiceUpdateTest {
             service.updateItem(project.slug, bug.slug, UpdateItem(type = FieldChange.Set("epic")))
         }
 
-        service.setItemBlockedBy(project.slug, "waiting-task", SetItemBlockedBy(emptyList()))
+        service.updateItem(project.slug, "waiting-task", UpdateItem(blockedBy = FieldChange.Set(emptyList())))
         val promoted = service.updateItem(project.slug, bug.slug, UpdateItem(type = FieldChange.Set("epic")))
         assertEquals(ItemType.EPIC, promoted.type)
     }
@@ -182,14 +183,14 @@ class WriteServiceUpdateTest {
         val project = service.createProject(CreateProject("Epic Demotion Release"))
         val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Released epic"))
         service.createRelease(project.slug, CreateRelease("v1"))
-        service.assignEpicToRelease(project.slug, epic.slug, AssignEpicToRelease("v1"))
+        service.updateItem(project.slug, epic.slug, UpdateItem(releaseRef = FieldChange.Set("v1")))
 
         val failure = assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
             service.updateItem(project.slug, epic.slug, UpdateItem(type = FieldChange.Set("task")))
         }
         assertEquals(true, failure.error.message.contains("release"), failure.error.message)
 
-        service.assignEpicToRelease(project.slug, epic.slug, AssignEpicToRelease(null))
+        service.updateItem(project.slug, epic.slug, UpdateItem(releaseRef = FieldChange.Set(null)))
         val demoted = service.updateItem(project.slug, epic.slug, UpdateItem(type = FieldChange.Set("task")))
         assertEquals(ItemType.TASK, demoted.type)
     }
@@ -201,9 +202,9 @@ class WriteServiceUpdateTest {
         val epicB = service.createItem(project.slug, CreateItem(type = "epic", name = "Epic B"))
         val blocker = service.createItem(project.slug, CreateItem(type = "task", name = "The blocker"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Add search", parentRef = epicA.slug))
-        val withBlocker = service.setItemBlockedBy(
+        val withBlocker = service.updateItem(
             project.slug, "add-search",
-            SetItemBlockedBy(listOf(blocker.slug)),
+            UpdateItem(blockedBy = FieldChange.Set(listOf(blocker.slug))),
         )
         assertEquals(setOf(blocker.id), withBlocker.blockedBy)
 

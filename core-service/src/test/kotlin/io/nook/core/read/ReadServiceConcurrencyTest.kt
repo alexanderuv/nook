@@ -2,8 +2,9 @@ package io.nook.core.read
 
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
+import io.nook.contract.FieldChange
 import io.nook.contract.ItemFilter
-import io.nook.contract.SetItemBlockedBy
+import io.nook.contract.UpdateItem
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.store.blockerSetsOf
@@ -66,9 +67,9 @@ class ReadServiceConcurrencyTest {
 
             val other = Thread {
                 writes.createItem(project.slug, CreateItem(type = "task", name = "Late blocker"))
-                writes.setItemBlockedBy(
+                writes.updateItem(
                     project.slug, "waiting-leaf",
-                    SetItemBlockedBy(listOf("late-blocker")),
+                    UpdateItem(blockedBy = FieldChange.Set(listOf("late-blocker"))),
                 )
             }
             other.start()
@@ -121,9 +122,9 @@ class ReadServiceConcurrencyTest {
                 runCatching {
                     writes.createItem(project.slug, CreateItem(type = "task", name = "Blocked $round"))
                     writes.createItem(project.slug, CreateItem(type = "task", name = "Blocker $round"))
-                    writes.setItemBlockedBy(
+                    writes.updateItem(
                         project.slug, "blocked-$round",
-                        SetItemBlockedBy(listOf("blocker-$round")),
+                        UpdateItem(blockedBy = FieldChange.Set(listOf("blocker-$round"))),
                     )
                 }.onFailure { synchronized(failures) { failures += it } }
             }

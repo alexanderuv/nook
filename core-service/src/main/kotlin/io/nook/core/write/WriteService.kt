@@ -1,6 +1,5 @@
 package io.nook.core.write
 
-import io.nook.contract.AssignEpicToRelease
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
@@ -11,7 +10,6 @@ import io.nook.contract.Project
 import io.nook.contract.ProjectItem
 import io.nook.contract.Release
 import io.nook.contract.ReleaseStatus
-import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
 import io.nook.core.db.DocumentTable
@@ -46,10 +44,15 @@ import org.jetbrains.exposed.v1.jdbc.update
 
 /**
  * The single write path: every mutation of the structure store goes through
- * one of the nine public operations below. Each takes the references that
+ * one of the seven public operations below. Each takes the references that
  * address its target as parameters and the payload as a command data class
  * from the contract. Blocker edges change only by whole-set replacement, never
  * through any public delete.
+ *
+ * [updateItem] is the one way an item changes, whatever the field — its
+ * release and its blockers included. Both were once operations of their own,
+ * which had the catalog saying that a release is a field when an epic is
+ * created and an operation once it exists.
  *
  * Every operation runs as one fresh transaction that locks a row before
  * touching anything — the project's own row, or the instance-wide lock row
@@ -160,6 +163,31 @@ class WriteService(private val db: Database) {
                 is FieldChange.Set -> parentRef.value?.let { epicIdOf(projectId, it) }
             }
 
+            // The two fields whose rule depends on what the item is: a release
+            // belongs to an epic, blockers to a leaf. Both are read against the
+            // type the item will carry once this command lands, so that a command
+            // supplying either alongside a contradicting type change is refused
+            // rather than half-applied — and so that the type guards below, which
+            // cannot both apply at once, need not reason about them.
+            val targetReleaseId = when (val releaseRef = command.releaseRef) {
+                FieldChange.Keep -> row[ProjectItemTable.releaseId]
+                is FieldChange.Set -> {
+                    if (targetType != ItemType.EPIC) {
+                        validationFailed("release assignment applies to epics only")
+                    }
+                    releaseRef.value?.let { resolveRelease(projectId, it)[ReleaseTable.id] }
+                }
+            }
+            val newBlockerIds = when (val blockedBy = command.blockedBy) {
+                FieldChange.Keep -> null
+                is FieldChange.Set -> {
+                    if (!targetType.isLeaf) {
+                        validationFailed("blockers apply to leaves; this update would leave the item an epic")
+                    }
+                    resolveBlockers(projectId, itemId, blockedBy.value)
+                }
+            }
+
             // A reference to the item itself clears every other guard here on the
             // strength of the type this very update is replacing: epicIdOf reads
             // the stored row, which still says `epic`, while the demotion checks
@@ -193,6 +221,7 @@ class WriteService(private val db: Database) {
                 }
             }
 
+            if (newBlockerIds != null) replaceBlockerSet(itemId, newBlockerIds)
             ProjectItemTable.update({ ProjectItemTable.id eq itemId }) {
                 if (newName != null) it[ProjectItemTable.name] = newName
                 if (newSlug != null) it[ProjectItemTable.slug] = newSlug
@@ -200,38 +229,7 @@ class WriteService(private val db: Database) {
                 if (newStatus != null) it[ProjectItemTable.status] = newStatus.code
                 if (command.type is FieldChange.Set) it[ProjectItemTable.type] = targetType.code
                 if (command.parentRef is FieldChange.Set) it[ProjectItemTable.parentId] = targetParentId
-                it[ProjectItemTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
-            }
-            loadItem(itemId)
-        }
-
-    fun setItemBlockedBy(projectRef: String, itemRef: String, command: SetItemBlockedBy): ProjectItem =
-        writeTransaction(db) {
-            val projectId = lockedProjectId(projectRef)
-            val row = resolveItem(projectId, itemRef)
-            val itemId = row[ProjectItemTable.id]
-            if (row[ProjectItemTable.type] == ItemType.EPIC.code) {
-                validationFailed("blockers apply to leaves; the target item is an epic")
-            }
-            val blockerIds = command.blockerRefs.map { ref ->
-                val blocker = resolveItem(projectId, ref)
-                if (blocker[ProjectItemTable.type] == ItemType.EPIC.code) {
-                    validationFailed("a blocker must be a leaf; \"$ref\" is an epic")
-                }
-                blocker[ProjectItemTable.id]
-            }.toSet()
-            if (itemId in blockerIds) validationFailed("an item cannot block itself")
-            if (wouldCreateCycle(projectBlockerEdges(projectId), itemId, blockerIds)) {
-                cycleRejected("the supplied blockers would close a dependency loop")
-            }
-            ItemDependencyTable.deleteWhere { ItemDependencyTable.itemId eq itemId }
-            blockerIds.forEach { blockerId ->
-                ItemDependencyTable.insert {
-                    it[ItemDependencyTable.itemId] = itemId
-                    it[ItemDependencyTable.dependsOnId] = blockerId
-                }
-            }
-            ProjectItemTable.update({ ProjectItemTable.id eq itemId }) {
+                if (command.releaseRef is FieldChange.Set) it[ProjectItemTable.releaseId] = targetReleaseId
                 it[ProjectItemTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
             }
             loadItem(itemId)
@@ -289,21 +287,6 @@ class WriteService(private val db: Database) {
                 it[ReleaseTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
             }
             loadRelease(releaseId)
-        }
-
-    fun assignEpicToRelease(projectRef: String, epicRef: String, command: AssignEpicToRelease): ProjectItem =
-        writeTransaction(db) {
-            val projectId = lockedProjectId(projectRef)
-            val row = resolveItem(projectId, epicRef)
-            if (row[ProjectItemTable.type] != ItemType.EPIC.code) {
-                validationFailed("release assignment applies to epics only")
-            }
-            val releaseId = command.releaseRef?.let { resolveRelease(projectId, it)[ReleaseTable.id] }
-            ProjectItemTable.update({ ProjectItemTable.id eq row[ProjectItemTable.id] }) {
-                it[ProjectItemTable.releaseId] = releaseId
-                it[ProjectItemTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
-            }
-            loadItem(row[ProjectItemTable.id])
         }
 
     /**
@@ -368,6 +351,44 @@ class WriteService(private val db: Database) {
 
     /** Locks the project named by [projectRef] and returns its id. */
     private fun lockedProjectId(projectRef: String): Uuid = lockProject(projectRef)[ProjectTable.id]
+
+    /**
+     * The blocker set a `blockedBy` field asks for, as ids: every reference
+     * resolved in the project, duplicates collapsed by the set, and the two
+     * refusals a set can earn on its own — a blocker that is not a leaf, and a
+     * set that would close a dependency loop.
+     *
+     * The loop check reads the project's edges as they stand before the
+     * replacement and asks the pure walk what the replacement would do, which
+     * is only trustworthy because the project's row is already locked: no
+     * concurrent writer can add the other half of a loop between the reading
+     * and the writing.
+     */
+    private fun resolveBlockers(projectId: Uuid, itemId: Uuid, refs: List<String>): Set<Uuid> {
+        val blockerIds = refs.map { ref ->
+            val blocker = resolveItem(projectId, ref)
+            if (blocker[ProjectItemTable.type] == ItemType.EPIC.code) {
+                validationFailed("a blocker must be a leaf; \"$ref\" is an epic")
+            }
+            blocker[ProjectItemTable.id]
+        }.toSet()
+        if (itemId in blockerIds) validationFailed("an item cannot block itself")
+        if (wouldCreateCycle(projectBlockerEdges(projectId), itemId, blockerIds)) {
+            cycleRejected("the supplied blockers would close a dependency loop")
+        }
+        return blockerIds
+    }
+
+    /** Replaces [itemId]'s outgoing edges with exactly [blockerIds]. */
+    private fun replaceBlockerSet(itemId: Uuid, blockerIds: Set<Uuid>) {
+        ItemDependencyTable.deleteWhere { ItemDependencyTable.itemId eq itemId }
+        blockerIds.forEach { blockerId ->
+            ItemDependencyTable.insert {
+                it[ItemDependencyTable.itemId] = itemId
+                it[ItemDependencyTable.dependsOnId] = blockerId
+            }
+        }
+    }
 
     /** Resolves [ref] to an epic in the project, or fails: leaves cannot parent. */
     private fun epicIdOf(projectId: Uuid, ref: String): Uuid {

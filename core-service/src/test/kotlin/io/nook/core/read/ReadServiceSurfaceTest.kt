@@ -10,7 +10,6 @@ import io.nook.contract.ParentFilter
 import io.nook.contract.Project
 import io.nook.contract.ProjectItem
 import io.nook.contract.Release
-import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import io.nook.core.db.EmbeddedPostgresSupport
@@ -27,14 +26,15 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
- * Closes the read surface: five operations, no way to reach a deleted row, and
- * no effect on the store.
+ * Closes the read surface: four operations, no way to reach a deleted row, no
+ * way to ask about readiness, and no effect on the store.
  *
- * The second of those is an assertion about absence, which is worth stating out
- * loud precisely because absence is easy to erode: an "include deleted" flag
- * would look like a small kindness on any one operation and would quietly undo
- * the rule that deletion is final. There is no such argument, and nothing a
- * caller can hold reports itself deleted either.
+ * Two of those are assertions about absence, which are worth stating out loud
+ * precisely because absence is easy to erode. An "include deleted" flag would
+ * look like a small kindness on any one operation and would quietly undo the
+ * rule that deletion is final. A readiness operation would look like a
+ * shorthand for three filter parts and would take back the thing composing them
+ * bought: the same question asked inside one epic.
  */
 class ReadServiceSurfaceTest {
 
@@ -48,9 +48,9 @@ class ReadServiceSurfaceTest {
             .filterNot { it.isSynthetic }
 
     @Test
-    fun `the public surface is exactly the five reads`() {
+    fun `the public surface is exactly the four reads`() {
         assertEquals(
-            setOf("getProject", "listProjects", "getItem", "listItems", "getReadyItems"),
+            setOf("getProject", "listProjects", "getItem", "listItems"),
             publicMethodsOf(ReadService::class.java).map { it.name }.toSet(),
         )
     }
@@ -81,20 +81,36 @@ class ReadServiceSurfaceTest {
     }
 
     @Test
-    fun `the readiness question takes no filter at all`() {
-        val readyItems = publicMethodsOf(ReadService::class.java).single { it.name == "getReadyItems" }
+    fun `readiness is nowhere in the surface, the entities, or the vocabulary`() {
+        // The three shapes it could take, each ruled out where it would appear.
+        val readinessOperations = publicMethodsOf(ReadService::class.java)
+            .map { it.name }
+            .filter { it.contains("ready", ignoreCase = true) }
+        assertEquals(emptyList(), readinessOperations)
 
-        assertEquals(listOf(String::class.java), readyItems.parameterTypes.toList())
+        val readinessFields = listOf(ItemFilter::class.java, ProjectItem::class.java)
+            .flatMap { type -> type.declaredFields.map { "${type.simpleName}.${it.name}" } }
+            .filter { it.contains("ready", ignoreCase = true) }
+        assertEquals(emptyList(), readinessFields)
+
+        val project = writes.createProject(CreateProject("No Such Status"))
+        val rejected = assertFailsWith<StructuredErrorException> {
+            reads.listItems(project.slug, ItemFilter(statuses = listOf("ready")))
+        }
+        assertEquals(ErrorCode.VALIDATION_FAILED, rejected.error.code)
     }
 
     @Test
-    fun `every one of the five reads leaves every stored row and timestamp untouched`() {
+    fun `every one of the four reads leaves every stored row and timestamp untouched`() {
         val project = writes.createProject(CreateProject("Reads Change Nothing"))
         writes.createRelease(project.slug, CreateRelease("v1"))
         writes.createItem(project.slug, CreateItem(type = "epic", name = "An epic", releaseRef = "v1"))
         writes.createItem(project.slug, CreateItem(type = "task", name = "A blocker", parentRef = "an-epic"))
         writes.createItem(project.slug, CreateItem(type = "task", name = "A leaf", parentRef = "an-epic"))
-        writes.setItemBlockedBy(project.slug, "a-leaf", SetItemBlockedBy(listOf("a-blocker")))
+        writes.updateItem(
+            project.slug, "a-leaf",
+            UpdateItem(blockedBy = FieldChange.Set(listOf("a-blocker"))),
+        )
         writes.createItem(project.slug, CreateItem(type = "bug", name = "Doomed"))
         writes.deleteItem(project.slug, "doomed")
 
@@ -104,7 +120,7 @@ class ReadServiceSurfaceTest {
         reads.listProjects()
         reads.getItem(project.slug, "a-leaf")
         reads.listItems(project.slug, ItemFilter(types = listOf("task"), statuses = listOf("todo")))
-        reads.getReadyItems(project.slug)
+        reads.listItems(project.slug, ItemFilter(heldUp = false))
 
         assertEquals(before, snapshot())
     }
@@ -129,7 +145,7 @@ class ReadServiceSurfaceTest {
             { reads.listItems(project.slug, ItemFilter(parents = listOf(ParentFilter.Epic("a-leaf")))) },
             { reads.listItems(project.slug, ItemFilter(parents = listOf(ParentFilter.Epic("gone")))) },
             { reads.listItems(project.slug, ItemFilter(releases = listOf("no-such-release"))) },
-            { reads.getReadyItems("no-such-project") },
+            { reads.listItems("no-such-project", ItemFilter(heldUp = false)) },
         )
 
         attempts.forEach { attempt ->

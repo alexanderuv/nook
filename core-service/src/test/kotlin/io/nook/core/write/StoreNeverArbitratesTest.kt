@@ -5,7 +5,6 @@ import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
 import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
-import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
@@ -92,9 +91,9 @@ class StoreNeverArbitratesTest {
             )
         }
         assertFailsWithCode(ErrorCode.NOT_FOUND) {
-            service.setItemBlockedBy(
+            service.updateItem(
                 here.slug, "local-leaf",
-                SetItemBlockedBy(listOf(Uuid.random().toString())),
+                UpdateItem(blockedBy = FieldChange.Set(listOf(Uuid.random().toString()))),
             )
         }
     }
@@ -105,7 +104,7 @@ class StoreNeverArbitratesTest {
         service.createItem(project.slug, CreateItem(type = "task", name = "Alone"))
 
         assertFailsWithCode(ErrorCode.VALIDATION_FAILED) {
-            service.setItemBlockedBy(project.slug, "alone", SetItemBlockedBy(listOf("alone")))
+            service.updateItem(project.slug, "alone", UpdateItem(blockedBy = FieldChange.Set(listOf("alone"))))
         }
     }
 
@@ -115,9 +114,9 @@ class StoreNeverArbitratesTest {
         service.createItem(project.slug, CreateItem(type = "task", name = "Blocker"))
         service.createItem(project.slug, CreateItem(type = "task", name = "Blocked"))
 
-        val blocked = service.setItemBlockedBy(
+        val blocked = service.updateItem(
             project.slug, "blocked",
-            SetItemBlockedBy(listOf("blocker", "blocker")),
+            UpdateItem(blockedBy = FieldChange.Set(listOf("blocker", "blocker"))),
         )
         assertEquals(1, blocked.blockedBy.size)
     }

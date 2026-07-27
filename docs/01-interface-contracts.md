@@ -111,8 +111,9 @@ marked, and no argument, filter, or operation can ask for what is gone.
 > were already fields on `create_item`, so the catalog was saying that a release
 > is a field at creation and an operation at update; the third was a compound
 > notion — leaf, `todo`, nothing holding it up — that the filter can express by
-> composition once it can ask about blockers at all. The core service still
-> carries the older shape in code; closing that gap is its own piece of work.
+> composition once it can ask about blockers at all. Folding the third bought
+> something the operation could not offer: the same question narrowed to one
+> epic, by adding the parent part to the same call.
 - **Documents:** `read_doc`, `doc_outline`, `write_doc` (creates by scope +
   kind — document paths are derived, never chosen; replaces by `docRef`),
   `replace_section`, `prepend_to_section`, `append_to_section`, `apply_patch`,

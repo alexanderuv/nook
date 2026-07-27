@@ -1,7 +1,7 @@
 package io.nook.contract
 
 /**
- * The filter of an item listing: four independent parts, each of them
+ * The filter of an item listing: five independent parts, each of them
  * optional. Parts narrow each other — an item is returned only when it matches
  * every part supplied — while the values inside a part widen it, matching any
  * one of them.
@@ -9,6 +9,12 @@ package io.nook.contract
  * A null part is how a caller says "don't filter on this". An empty list is
  * something else entirely: asking to match any of nothing, which the service
  * rejects rather than answering with a silent empty result.
+ *
+ * Combining parts is how a caller asks a compound question, and the compound
+ * question this milestone exists for is what to work on next: the leaf types,
+ * status `todo`, and [heldUp] false. Adding a parent narrows the same question
+ * to one epic. There is no readiness operation, because there is nothing left
+ * for one to do.
  *
  * There is deliberately nothing here that asks for deleted rows, and nothing
  * that could: deleting removes the row, so a listing has nothing to reach past
@@ -26,6 +32,21 @@ public data class ItemFilter(
      * epic carries one, so a leaf matches no release value.
      */
     public val releases: List<String>? = null,
+    /**
+     * Whether anything unfinished is holding the item up: true for an item with
+     * a blocker that is neither `done` nor `cancelled`, false for one with no
+     * blockers or none left unfinished.
+     *
+     * A boolean rather than a list, because the question has two answers rather
+     * than a set of values — a part asking for both would be the same as not
+     * asking.
+     *
+     * It carries no clause of its own about type or status. An epic is answered
+     * by it rather than left out of it — as not held up, since an epic takes no
+     * blockers — and a `done` item with an unfinished blocker is held up like
+     * any other.
+     */
+    public val heldUp: Boolean? = null,
 )
 
 /** One value of the parent part: a named epic, or the reserved "no epic at all". */

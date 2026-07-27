@@ -3,10 +3,11 @@ package io.nook.core.read
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.ErrorCode
+import io.nook.contract.FieldChange
 import io.nook.contract.ItemStatus
 import io.nook.contract.ItemType
-import io.nook.contract.SetItemBlockedBy
 import io.nook.contract.StructuredErrorException
+import io.nook.contract.UpdateItem
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.write.WriteService
 import kotlin.test.Test
@@ -61,9 +62,9 @@ class ReadServiceItemTest {
                 parentRef = "search",
             ),
         )
-        writes.setItemBlockedBy(
+        writes.updateItem(
             project.slug, "add-search",
-            SetItemBlockedBy(listOf("blocker-one", "blocker-two")),
+            UpdateItem(blockedBy = FieldChange.Set(listOf("blocker-one", "blocker-two"))),
         )
 
         val fetched = reads.getItem(project.slug, "add-search")
