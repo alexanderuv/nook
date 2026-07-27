@@ -89,6 +89,37 @@ For each question:
   question — make the judgment call yourself and declare it at the pre-write
   gate. A question whose intent the user has to reverse-engineer reads as
   random, however well-phrased its options are.
+- **Never ask an open question.** Every question arrives as a brief: what is
+  being decided, what the evidence says, two to four concrete options, and a
+  recommendation — never a blank prompt that hands the framing back ("how should
+  refusals work?", "what should the goals be?", "anything I'm missing?"). The
+  finding-out is yours; only the decision is theirs. Think of briefing a chief
+  executive on a call that turns on the market: you bring the market, they bring
+  the judgment — you do not send them off to survey it. So a question the user
+  cannot answer without first going and researching it is a question you have not
+  finished preparing. If you cannot name two candidates, you have not read enough
+  to ask yet — go back to the sources. Where the answer space is genuinely
+  continuous — a number, a name, a sentence — bound it anyway: offer the two or
+  three values the prior art points at, and let the user overwrite one.
+- **Your options bound your homework, not their answer.** The user may answer
+  with something no option named — a constraint you did not know about, an
+  approach you missed, a flat rejection of the premise. That is their call to
+  make and it is not a failure to follow instructions; treat it as new evidence
+  about the problem, and never as a reason to hand the question back. What it
+  changes is only where the next round of work falls: still on you. Go find out
+  what their answer costs and what else it moves, then come back with that —
+  which is the bullet below.
+- **Options come from prior art, and the question names it.** Ground every
+  option in something already settled somewhere. Look first inside the project:
+  what it decided in a comparable place, how a sibling document handled the same
+  section, what an earlier epic did and what that cost. When the project is
+  silent, look to projects of the same kind — the library being used, a
+  comparable tool, the convention its ecosystem already follows. Then put that
+  source *in the question*, with what it established, so the user decides
+  against evidence rather than against your taste: "epic 05 stood up a scratch
+  build and deleted it afterwards" or "the protocol's own reference client sends
+  the older shape unless told otherwise". A question with no prior art behind it
+  was asked too early.
 - **A changed plan is announced, not implied.** When the user's answer rules
   out every option as presented — they lack the tool, reject the premise, or
   name a constraint no option accounted for — whatever you substitute is a
@@ -123,8 +154,10 @@ For each question:
   (spec-altitude detail in a PRD, architecture in a manifesto) gets flagged
   and parked — offer to note it as input for that other document, don't
   absorb it.
-- Use `AskUserQuestion` when the answer space is a small fixed set; prose
-  otherwise.
+- `AskUserQuestion` carries any question whose options fit its dialog, which
+  after the closed-question rule is nearly all of them. Use prose only when an
+  option needs more room than the dialog gives it — and name the candidate
+  answers there too.
 - **Open questions are exhausted by interviewing, not deposited.** As long as
   an open question remains that the user could settle, the interview
   continues — an open-questions entry is reserved for what the user *also*
