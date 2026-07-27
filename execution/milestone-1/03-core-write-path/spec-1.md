@@ -5,8 +5,8 @@
 This spec is the requirements contract for every mutation the core service
 performs — the single write path that [PRD-1](../prd-1.md) REQ3 mandates. It
 pins the testable behavior of seven operations: `create_project`,
-`create_item`, `update_item`, `set_item_blocked_by`, `create_release`,
-`update_release`, and `assign_epic_to_release`, enforcing the rules settled in
+`delete_project`, `create_item`, `update_item`, `delete_item`,
+`create_release`, and `update_release`, enforcing the rules settled in
 [04 — Structure semantics](../../../docs/04-structure-semantics.md) and the
 error model of [01 — Interface contracts](../../../docs/01-interface-contracts.md).
 The concurrency requirements are motivated by this epic's
@@ -18,8 +18,7 @@ their inputs, effects, error behavior, and behavior under concurrent callers.
 
 Out of scope:
 
-- **Reads** (`get_item`, `list_items`, `get_ready_items`, `get_project`,
-  `list_projects`) — epic 04.
+- **Reads** (`get_item`, `list_items`, `get_project`, `list_projects`) — epic 04.
 - **The internal RPC exposure of these operations** — epic 05; **MCP and web
   adapters** — epics 06/07. This spec's "caller" is whatever invokes the core
   service in-process.
@@ -40,8 +39,8 @@ caller of the core service).
 1. `create_project("Search revamp")`.
 2. `create_release("v1")`, then `create_item` for an epic, two tasks under the
    epic, and a project-level bug with no parent.
-3. `assign_epic_to_release` puts the epic in the release.
-4. `set_item_blocked_by` makes the second task wait on the first.
+3. `update_item` puts the epic in the release.
+4. A second `update_item` makes the second task wait on the first.
 **Outcome:** every entity exists with a derived slug, items start in `todo`
 and the release in `planned`, the bug hangs directly off the project, and the
 dependency edge is recorded.
@@ -111,21 +110,26 @@ cycle or a duplicate slug.
 ### Operations and errors
 
 - **REQ1** — The write path MUST provide exactly these mutating operations:
-  `create_project`, `create_item`, `update_item`, `set_item_blocked_by`,
-  `create_release`, `update_release`, `assign_epic_to_release`, `delete_item`,
-  `delete_project`.
+  `create_project`, `delete_project`, `create_item`, `update_item`,
+  `delete_item`, `create_release`, `update_release`.
 - **REQ2** — Deleting MUST remove the rows: no mark, no trash, and no operation
   by which a deleted row could be asked for or brought back. `delete_item` MUST
   also remove an epic's children and the documents attached to any of them;
   `delete_project` MUST remove everything the project contains. There is
   deliberately no operation that deletes a release or a single dependency edge —
-  a release is detached with `assign_epic_to_release`, and blocker edges change
-  only by whole-set replacement through `set_item_blocked_by`.
+  a release is detached by setting `update_item`'s `releaseRef` to nothing, and
+  blocker edges change only by whole-set replacement through the same
+  operation's `blockedBy` field.
 
-  > REQ1 and REQ2 originally named seven operations and forbade hard deletion
-  > outright. Deletion was added during milestone 1 and the reversal is recorded
-  > in `plan.md`; these two requirements are the amended ones. See
-  > [docs/04](../../../docs/04-work-item-model.md) for the deletion rules
+  > These requirements have been amended twice. REQ1 and REQ2 originally named
+  > seven operations and forbade hard deletion outright; deletion was added
+  > during milestone 1, and that reversal is recorded in `plan.md`. Later,
+  > `set_item_blocked_by` and `assign_epic_to_release` were folded into
+  > `update_item` as its `blockedBy` and `releaseRef` fields — the reasoning is
+  > recorded in [docs/01](../../../docs/01-interface-contracts.md), and the
+  > requirements below keep their original numbers so that citations elsewhere
+  > still resolve. See
+  > [docs/04](../../../docs/04-structure-semantics.md) for the deletion rules
   > themselves, and the note there about the git cleanup a delete will owe once
   > documents have content.
 - **REQ3** — When a reference string parses as a UUID, the system MUST resolve
@@ -223,9 +227,9 @@ cycle or a duplicate slug.
 
 ### Blockers
 
-- **REQ31** — `set_item_blocked_by(itemRef, blockerRefs[])` MUST replace the
-  item's entire blocker set with the supplied set; an empty list MUST clear
-  it.
+- **REQ31** — `update_item`'s `blockedBy` field MUST replace the item's entire
+  blocker set with the supplied set; an empty list MUST clear it, and omitting
+  the field MUST leave the set exactly as it was.
 - **REQ32** — The target item and every blocker MUST be leaves in the same
   project, and an item MUST NOT block itself; violations MUST fail with
   `validation_failed`.
@@ -241,9 +245,10 @@ cycle or a duplicate slug.
 - **REQ36** — `update_release` MUST support changing `name`, `slug`,
   `description`, `status`, and `targetDate`, following the same
   partial-update, slug, and status rules as items (REQ16–REQ17, REQ19–REQ25).
-- **REQ37** — `assign_epic_to_release(epicRef, releaseRef?)` MUST assign the
-  epic when `releaseRef` is supplied and unassign it when omitted or null; a
-  target that is not an epic MUST fail with `validation_failed`.
+- **REQ37** — `update_item`'s `releaseRef` field MUST assign the epic when a
+  release is supplied and unassign it when set to null; omitting the field MUST
+  leave the assignment exactly as it was. Supplying it for an item that is not
+  an epic MUST fail with `validation_failed`.
 - **REQ38** — Release assignment and reassignment MUST be accepted whatever
   the status of the release or the epic — `released` locks nothing.
 
@@ -274,9 +279,9 @@ cycle or a duplicate slug.
   whether `updatedAt` advances is don't care — no behavior may depend on it.
 - **EDGE8** — Setting status, type, or parent to its current value: succeeds
   (any-to-any includes same-to-same).
-- **EDGE9** — `set_item_blocked_by` including the item itself:
+- **EDGE9** — A `blockedBy` set including the item itself:
   `validation_failed` (self-block).
-- **EDGE10** — `set_item_blocked_by` re-supplying the existing set: succeeds,
+- **EDGE10** — A `blockedBy` set re-supplying the existing one: succeeds,
   set unchanged.
 - **EDGE11** — Unassigning an epic that is in no release: succeeds as a no-op.
 - **EDGE12** — `targetDate` in the past on create or update: accepted —
@@ -291,7 +296,7 @@ cycle or a duplicate slug.
 ## Acceptance criteria
 
 - **AC1** (REQ1, REQ2) — The write path's public surface offers exactly the
-  nine listed mutations, and no operation that removes a release or a single
+  seven listed mutations, and no operation that removes a release or a single
   dependency edge from the store.
 - **AC2** (REQ7, REQ8, REQ9, REQ15, REQ19) — Given a running core service,
   when `create_project("Search Revamp!")` is called, then it returns the full
@@ -358,17 +363,17 @@ cycle or a duplicate slug.
   project-level; and when it is reparented to its current parent, the call
   succeeds.
 - **AC18** (REQ31, REQ34, EDGE7, EDGE9, EDGE10) — Given leaf `b` blocked by
-  `{a}`, when `set_item_blocked_by(b, [c, c, d])` is called, then `b`'s
-  blockers are exactly `{c, d}`; when called with `[]`, then the set is
-  empty; when called with `[b]`, then it fails with `validation_failed`; when
-  called re-supplying the current set, then it succeeds; and
-  `update_item(b, {})` succeeds without changing any field.
+  `{a}`, when `update_item(b, {blockedBy: [c, c, d]})` is called, then `b`'s
+  blockers are exactly `{c, d}`; when `blockedBy` is `[]`, then the set is
+  empty; when it is `[b]`, then it fails with `validation_failed`; when it
+  re-supplies the current set, then it succeeds; and `update_item(b, {})`
+  succeeds without changing any field, blockers included.
 - **AC19** (REQ4, REQ32) — Given projects P1 and P2 each holding leaves and an
-  epic, when `set_item_blocked_by` in P1 names an epic, a P2 leaf's slug, or
+  epic, when a `blockedBy` set in P1 names an epic, a P2 leaf's slug, or
   a random UUID, then the epic case fails `validation_failed` and both
   unresolvable cases fail `not_found`.
 - **AC20** (REQ6, REQ33, EDGE13) — Given the chain where `b` is blocked by
-  `a` and `c` is blocked by `b`, when `set_item_blocked_by(a, [c])` is
+  `a` and `c` is blocked by `b`, when `update_item(a, {blockedBy: [c]})` is
   called, then it fails with the `cycle` error and `a`'s blocker set is still
   empty.
 - **AC21** (REQ35, REQ36, REQ25, EDGE12) — Given a release created with a past
@@ -376,10 +381,11 @@ cycle or a duplicate slug.
   then it succeeds; and when status is set to `shipped`, then it fails with
   `validation_failed`.
 - **AC22** (REQ37, REQ38, EDGE11) — Given a `released` release R1 and release
-  R2, when an epic is assigned to R1, reassigned to R2, and unassigned via a
-  null `releaseRef`, then all three calls succeed; when the same calls target
-  a task, then each fails with `validation_failed`; and when an unassigned
-  epic is unassigned again, then it succeeds.
+  R2, when `update_item` assigns an epic to R1, reassigns it to R2, and then
+  sets `releaseRef` to null, then all three calls succeed; when the same calls
+  target a task, then each fails with `validation_failed`; when an unassigned
+  epic is unassigned again, then it succeeds; and when an update omits
+  `releaseRef` entirely, then the epic's release is untouched.
 - **AC23** (REQ39, EDGE15) — Given leaves `x` and `y` and two concurrent
   callers where one sets `x` blocked by `{y}` and the other sets `y` blocked
   by `{x}`, when both run to completion (repeated 100 times), then in every
@@ -405,8 +411,8 @@ cycle or a duplicate slug.
 - **project-level leaf** — a leaf with no parent epic, hanging directly off
   the project.
 - **blocker set** — the set of leaves an item is blocked by, stored as
-  dependency edges; replaced whole by `set_item_blocked_by`, never
-  incrementally edited.
+  dependency edges; replaced whole through `update_item`'s `blockedBy` field,
+  never incrementally edited.
 - **derived slug** — the identifier the system computes from a name (REQ19);
   **explicit slug** — one the caller supplies verbatim.
 - **status vocabulary** — the closed set of statuses an entity kind allows;

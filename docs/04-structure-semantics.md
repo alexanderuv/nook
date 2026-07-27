@@ -43,7 +43,8 @@ worse than no rule here — rigor is added later when real usage justifies it.
   `planned/in_progress/released/cancelled`).
 - No transition graph is enforced in v1 — `done` may reopen, `cancelled` may
   reactivate. A state machine is deferred until real policy is known.
-- "Blocked" remains derived (the `ready_item` view), never a stored status.
+- "Blocked" remains derived, never a stored status: it is a question the listing
+  answers from the dependency edges, not a value written on the row.
 
 **Transition side effects — none.**
 - Status changes are independent. An epic may be `done` while its leaves are still open
@@ -73,9 +74,9 @@ worse than no rule here — rigor is added later when real usage justifies it.
 - **A deleted row gives up its slug**, because the row holding it is gone.
   Uniqueness stays a plain whole-table rule, and a name is free the moment the
   thing named stops existing.
-- **A deleted item stops blocking**, because its edges go with it. The
-  `ready_item` view needs no clause about deletion: what is gone cannot hold
-  anything up, and cannot itself be ready.
+- **A deleted item stops blocking**, because its edges go with it. The blocker
+  filter needs no clause about deletion: what is gone cannot hold anything up,
+  and cannot itself be listed.
 
 > **Open — the git side of deletion.** Git is not part of the DB's `ON DELETE
 > CASCADE`, so once documents exist, removing a row will leave documents nothing
@@ -99,9 +100,15 @@ worse than no rule here — rigor is added later when real usage justifies it.
   through the single write path (§4.3), so both stores move together.
 
 **Queries — minimal.**
-- `list_items` filters by type, status, and parent (and, for epics, release); the
-  `ready` notion is `get_ready_items` (leaves only). Default sort is newest-first
-  (`created_at` desc). Free-text search is deferred.
+- `list_items` filters by type, status, parent (and, for epics, release), and
+  whether anything unfinished is holding the item up. Default sort is
+  newest-first (`created_at` desc). Free-text search is deferred.
+- **There is no "ready" operation and no "ready" value.** What used to be
+  `get_ready_items` is one `list_items` call composing three ordinary parts: the
+  leaf types, status `todo`, and nothing blocking. Readiness is a question a
+  caller asks by combining filters, not a concept the system carries — which is
+  also what makes "what is ready *in this epic*" askable, by adding the parent
+  part to the same call.
 - Each filter accepts **several values at once** (`status` of `todo` *or*
   `in_progress` in one call), and naming several filters **narrows** the result
   (that type *and* that status). Asking for open work is the everyday question,
@@ -118,8 +125,10 @@ worse than no rule here — rigor is added later when real usage justifies it.
 **`blocked_by` integrity.**
 - Blockers are **leaves in the same project** (cross-epic within a project is allowed;
   cross-project is not). Self-block is already barred by the schema `CHECK`.
-- Cycles are prevented at the application level: `set_item_blocked_by` rejects an
-  edge that would create a cycle.
+- The blocker set is **replaced whole** through `update_item`'s `blockedBy` field;
+  there is no add-one or remove-one.
+- Cycles are prevented at the application level: an update supplying a
+  `blockedBy` set that would close a loop is rejected.
 
 **Releases — loose buckets.**
 - A release is an optional grouping; epics may be assigned and reassigned freely.

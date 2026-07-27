@@ -39,7 +39,9 @@ call):
 1. **Project** — create a project (fresh repo or clone an existing one,
    [05](./05-project-and-ops.md)) and select/switch between projects.
 2. **Browse & triage** — a project overview; list epics, releases, and tasks; filter by
-   status and type; the **"what's ready to work on"** list (`get_ready_items`).
+   status and type; the **"what's ready to work on"** list, which is that same
+   listing with the leaf types, status `todo`, and nothing blocking
+   ([01](./01-interface-contracts.md)).
 3. **Author a document — free-form, agent-assisted.** The generalized flow is *authoring
    a document*; a document may be any kind (manifesto, plan, RFC, design doc, tenet). The
    human either drives the embedded agent to draft it — via the matching skill

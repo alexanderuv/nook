@@ -41,12 +41,13 @@ every other milestone stacks on this layer.
 
 - **GOAL1 (north star)** — the provable loop: over MCP alone, create a project,
   epics, leaves, a release, and blocker edges, then get exactly the open,
-  unblocked leaves from `get_ready_items` — the loop exercises all four item
+  unblocked leaves from one `list_items` call asking for the leaf types, status
+  `todo`, and nothing blocking — the loop exercises all four item
   types and both parented and project-level leaves; observed in an end-to-end
   script run against local Postgres, passing 100% unattended.
-- **GOAL2** — surface parity: 12 of 12 catalog operations (3 instance-level +
-  9 structure, per spec 01) behave identically over MCP and the web API — same
-  DTOs, same error codes; observed in a contract test suite run against both
+- **GOAL2** — surface parity: 11 of 11 catalog operations (4 instance-level +
+  7 project-scoped, per spec 01) behave identically over MCP and the web API —
+  same DTOs, same error codes; observed in a contract test suite run against both
   surfaces.
 - **GOAL3** — rule coverage: 100% of the Decided bullets in specs 04 and 01
   that name a structure behavior map to at least one named test; observed in
@@ -70,9 +71,10 @@ every other milestone stacks on this layer.
   vocabulary, slug derivation/uniqueness/override, cancel-not-delete,
   cycle-rejecting `blocked_by` replacement, releases as loose buckets. *Why:*
   GOAL1, GOAL3.
-- **REQ4 · P0** — Queries: `list_items` filtering by type, status, parent, and
-  release; `get_ready_items` from the `ready_item` view; newest-first default
-  ordering. *Why:* GOAL1 — the readiness query is the loop's payoff.
+- **REQ4 · P0** — Queries: `list_items` filtering by type, status, parent,
+  release, and whether anything unfinished is holding an item up; newest-first
+  default ordering. *Why:* GOAL1 — the readiness question is the loop's payoff,
+  and it is these filters combined rather than an operation of its own.
 - **REQ5 · P0** — The internal RPC API: the operation catalog exposed once by
   the core service for both adapters. *Why:* GOAL2, GOAL4 — one contract, two
   translators.

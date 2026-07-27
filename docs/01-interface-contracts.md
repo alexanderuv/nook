@@ -81,27 +81,38 @@ there are three surfaces over one contract:
 
 ### Operation catalog (mirrored across MCP tools and RPC)
 
-- **Instance-level:** `create_project`, `get_project`, `list_projects`.
+Eleven operations: four acting on the whole instance, seven inside one project.
+
+- **Instance-level:** `create_project`, `get_project`, `list_projects`,
+  `delete_project(ref)` — the last removes the project and everything inside it.
 - **Structure (project-scoped):** `create_item(type, name, slug?, description?, parentRef?, releaseRef?)`
   — `type` is `epic`/`task`/`bug`/`chore`; for a leaf, an omitted `parentRef` makes a
   project-level item, and `releaseRef` applies to epics,
-  `update_item(ref, {name?, slug?, description?, status?, type?, parentRef?})` —
-  setting/clearing `parentRef` reparents a leaf; supplying `slug` is the rename
-  (a name change alone never re-derives the slug); an epic's release is moved by
-  `assign_epic_to_release` and not from here, so that the one thing that changes
-  it is the one operation named for it,
-  `set_item_blocked_by(itemRef, blockerRefs[])` — **replaces** the item's blocker set
-  (not incremental add/remove), `create_release(name, slug?, description?, targetDate?)`,
+  `update_item(ref, {name?, slug?, description?, status?, type?, parentRef?, releaseRef?, blockedBy?})`,
+  `create_release(name, slug?, description?, targetDate?)`,
   `update_release(ref, {name?, slug?, description?, status?, targetDate?})`,
-  `assign_epic_to_release(epicRef, releaseRef?)`, `get_item(ref)`,
-  `list_items(filter)`, `get_ready_items()`,
+  `get_item(ref)`, `list_items(filter)`,
   `delete_item(ref)` — removes the row, an epic's children, and the documents
   attached to any of them; returns nothing, since nothing is left to return.
   Filter grammar, containment/status rules, and what a delete reaches per
   [04](./04-structure-semantics.md).
-- **Instance-level, continued:** `delete_project(ref)` — removes the project and
-  everything inside it. Both deletes are permanent: nothing is marked, and no
-  argument, filter, or operation can ask for what is gone.
+
+`update_item` is the one way an item changes, whatever the field. Supplying
+`slug` is the rename (a name change alone never re-derives the slug); setting or
+clearing `parentRef` reparents a leaf; setting or clearing `releaseRef` puts an
+epic in a release or takes it out; and `blockedBy` **replaces** the item's whole
+blocker set rather than adding to it. Both deletes are permanent: nothing is
+marked, and no argument, filter, or operation can ask for what is gone.
+
+> Three operations were folded away after the write and read paths were first
+> built: `assign_epic_to_release` and `set_item_blocked_by` became the
+> `releaseRef` and `blockedBy` fields of `update_item`, and `get_ready_items`
+> became a combination of ordinary filter parts on `list_items`. The first two
+> were already fields on `create_item`, so the catalog was saying that a release
+> is a field at creation and an operation at update; the third was a compound
+> notion — leaf, `todo`, nothing holding it up — that the filter can express by
+> composition once it can ask about blockers at all. The core service still
+> carries the older shape in code; closing that gap is its own piece of work.
 - **Documents:** `read_doc`, `doc_outline`, `write_doc` (creates by scope +
   kind — document paths are derived, never chosen; replaces by `docRef`),
   `replace_section`, `prepend_to_section`, `append_to_section`, `apply_patch`,

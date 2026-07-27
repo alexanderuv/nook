@@ -3,9 +3,9 @@
 ## Overview & scope
 
 This spec is the requirements contract for every read the core service
-performs — the five ways a caller gets structure back out of the store. It
-pins the testable behavior of `get_project`, `list_projects`, `get_item`,
-`list_items`, and `get_ready_items`, enforcing the query rules settled in
+performs — the four ways a caller gets structure back out of the store. It
+pins the testable behavior of `get_project`, `list_projects`, `get_item`, and
+`list_items`, enforcing the query rules settled in
 [04 — Structure semantics](../../../docs/04-structure-semantics.md) and the
 reference and error model of
 [01 — Interface contracts](../../../docs/01-interface-contracts.md).
@@ -20,9 +20,17 @@ Throughout, a *slug* is an item's handle: the short lowercase name derived
 from its title (`Add search` becomes `add-search`) that appears in paths and
 can be used anywhere an id can.
 
-In scope: the five reads above, invoked directly on the core service — their
+In scope: the four reads above, invoked directly on the core service — their
 inputs, their results, their ordering, their error behavior, and how they
 treat rows that have been deleted.
+
+> This spec originally pinned five reads, the fifth being a `get_ready_items`
+> operation. It was folded into `list_items` as a filter part, so that "what is
+> ready to work on" is a combination a caller composes — and can narrow to one
+> epic — rather than a compound rule the surface carries; the reasoning is
+> recorded in [docs/01](../../../docs/01-interface-contracts.md). The
+> requirements below keep their original numbers so that citations elsewhere
+> still resolve.
 
 Out of scope:
 
@@ -50,10 +58,12 @@ Out of scope:
    release.
 2. One task is `done`, one is `todo` but waits on the `done` one, and one is
    `todo` waiting on a task that is still `in_progress`.
-3. The agent calls `get_ready_items`.
+3. The agent calls `list_items`, asking for the leaf types, status `todo`, and
+   nothing holding them up.
 **Outcome:** it gets back the bug and the task whose blocker is finished — the
 open leaves nothing is holding up — newest first, and neither the epic nor the
-task still waiting.
+task still waiting. Adding the parent part to the same call would have asked
+the same question inside one epic.
 
 ### SCEN2 — A developer narrows a long listing
 
@@ -117,10 +127,10 @@ full.
 **Flow:**
 1. An epic with four tasks is deleted, which deletes the four tasks with it.
 2. A plain listing is taken.
-3. `get_ready_items` is called, and a task that had been blocked by one of the
-   four is checked.
+3. The ready combination is asked for, and a task that had been blocked by one
+   of the four is checked.
 **Outcome:** neither the epic nor any of its four tasks appears in the
-listing; none of them is ready; and the task outside the branch is now ready,
+listing; none of them comes back as ready; and the task outside the branch does,
 because a deleted blocker no longer holds anything up.
 
 ## Requirements
@@ -128,8 +138,7 @@ because a deleted blocker no longer holds anything up.
 ### The read surface
 
 - **REQ1** — The read path MUST provide exactly these operations:
-  `get_project`, `list_projects`, `get_item`, `list_items`,
-  `get_ready_items`.
+  `get_project`, `list_projects`, `get_item`, `list_items`.
 - **REQ2** — A read MUST NOT change anything in the store — no row written, no
   timestamp advanced.
 - **REQ3** — When a reference string parses as a UUID, the system MUST resolve
@@ -157,12 +166,15 @@ because a deleted blocker no longer holds anything up.
 ### Listing items
 
 - **REQ10** — `list_items` MUST accept a filter made of these parts, each of
-  them optional: type, status, parent, and release.
+  them optional: type, status, parent, release, and whether anything unfinished
+  is holding the item up.
 - **REQ11** — When no filter part is supplied, `list_items` MUST return every
   item in the project.
 - **REQ12** — Each of the type, status, parent, and release parts MUST accept
   one or more values, and an item MUST match that part when it matches any one
-  of the supplied values.
+  of the supplied values. The held-up part is the exception: the question has
+  two answers rather than a set of values, so it MUST accept exactly one of
+  them.
 - **REQ13** — When several parts are supplied, an item MUST be returned only
   when it matches every one of them.
 - **REQ14** — When a type or status value lies outside its vocabulary
@@ -187,16 +199,23 @@ because a deleted blocker no longer holds anything up.
 - **REQ20** — `get_item` and `get_project` MUST fail with `not_found` when the
   reference names a row that has been deleted, whether it is an id or a slug.
 
-### Readiness
+### Being held up
 
-- **REQ21** — `get_ready_items` MUST return exactly the leaves of the project
-  that are `todo` and every one of whose blockers is `done` or `cancelled`. A
-  deleted blocker takes its edge with it, so it holds nothing up.
-- **REQ22** — `get_ready_items` MUST NOT return an epic, whatever its status
-  or contents.
-- **REQ23** — `get_ready_items` MUST NOT return an item that has been deleted.
-- **REQ24** — `get_ready_items` MUST take no filter, and MUST order its result
-  the same way every other listing is ordered.
+- **REQ21** — An item MUST count as held up when any of its blockers is neither
+  `done` nor `cancelled`, and as not held up when it has no blockers or every
+  one of them is `done` or `cancelled`. A deleted blocker takes its edge with
+  it, so it holds nothing up.
+- **REQ22** — The held-up part MUST apply to any item and MUST NOT imply a type
+  or a status of its own: an epic with an unfinished blocker matches it exactly
+  as a leaf would.
+- **REQ23** — The held-up part MUST narrow alongside the other parts like any
+  other, so that asking for the leaf types, status `todo`, and not held up is
+  how a caller asks what is ready to work on — and adding the parent part asks
+  the same question inside one epic.
+- **REQ24** — There MUST be no other way to ask that question: no readiness
+  operation, no stored readiness column, and no `ready` value in the status
+  vocabulary. Readiness is a combination a caller composes, not a thing the
+  system carries.
 
 ### Projects
 
@@ -227,11 +246,11 @@ because a deleted blocker no longer holds anything up.
   that item's id: `not_found` either way.
 - **EDGE9** — A slug freed by a delete and then taken by a new item: the slug
   resolves to the new item, and the old id resolves to nothing.
-- **EDGE10** — A `todo` leaf whose only blocker has been deleted: ready.
-- **EDGE11** — A `todo` leaf that is itself deleted: not ready, and absent
-  from every listing.
-- **EDGE12** — `get_ready_items` in a project whose every leaf is `done`: an
-  empty array.
+- **EDGE10** — A `todo` leaf whose only blocker has been deleted: not held up.
+- **EDGE11** — A `todo` leaf that is itself deleted: absent from every listing,
+  whatever the filter asks for.
+- **EDGE12** — The ready combination in a project whose every leaf is `done`:
+  an empty array.
 - **EDGE13** — A listing in a project whose every item has been deleted: an
   empty array, indistinguishable from a project that never held anything.
 - **EDGE14** — Two items created in the same instant: the same order on every
@@ -244,9 +263,9 @@ because a deleted blocker no longer holds anything up.
 
 ## Acceptance criteria
 
-- **AC1** (REQ1, REQ2) — The read path's public surface offers exactly the five
+- **AC1** (REQ1, REQ2) — The read path's public surface offers exactly the four
   listed operations; and given a project holding items, a release, and blocker
-  edges, when every one of the five is called, then every stored row and every
+  edges, when every one of the four is called, then every stored row and every
   stored timestamp is exactly what it was beforehand.
 - **AC2** (REQ3, REQ4, EDGE7) — Given item `add-search` in project P1, when
   `get_item` is called with its slug, with its id, with the id of an item in
@@ -304,17 +323,21 @@ because a deleted blocker no longer holds anything up.
   has since been taken by a new live item, when `get_item` is called with
   `add-search`, then it returns the new live item; and when it is called with
   the deleted item's id, then it fails with `not_found`.
-- **AC18** (REQ21, REQ22, EDGE10, EDGE12) — Given an epic, a `todo` leaf with
+- **AC18** (REQ21, REQ23, EDGE10, EDGE12) — Given an epic, a `todo` leaf with
   no blockers, a `todo` leaf whose blockers are one `done` and one since
-  deleted, a `todo` leaf blocked by an `in_progress` item, and a `done` leaf, when
-  `get_ready_items` is called, then exactly the first two `todo` leaves come
-  back; and when every leaf is then set `done`, then it returns an empty array.
-- **AC19** (REQ23, EDGE11) — Given a `todo` leaf with no blockers that is then
-  deleted, when `get_ready_items` is called, then it does not appear; and when
-  a plain listing is taken, then it does not appear there either.
-- **AC20** (REQ24) — Given a project with ready leaves created in sequence,
-  when `get_ready_items` is called, then it accepts no filter argument and
-  returns its result newest-created first.
+  deleted, a `todo` leaf blocked by an `in_progress` item, and a `done` leaf,
+  when `list_items` asks for the leaf types, status `todo`, and not held up,
+  then exactly the first two `todo` leaves come back, newest-created first; when
+  every leaf is then set `done`, then the same call returns an empty array; and
+  when the parent part naming one epic is added, then only that epic's share of
+  the answer comes back.
+- **AC19** (REQ22, EDGE11) — Given an epic blocked by an unfinished item and a
+  `todo` leaf with no blockers that is then deleted, when `list_items` asks for
+  items that are held up with no type part, then the epic comes back; and when
+  any listing is taken, then the deleted leaf appears in none of them.
+- **AC20** (REQ24) — The read path offers no readiness operation; no entity
+  carries a stored readiness field; and `list_items` rejects `ready` as a status
+  value with `validation_failed`, since it is not in the vocabulary.
 - **AC21** (REQ25, REQ26) — Given three projects and a fourth since deleted on
   the instance, when `list_projects` is called, then it returns exactly the
   three, newest first; when `get_project` is called with one of their slugs,
@@ -327,7 +350,7 @@ because a deleted blocker no longer holds anything up.
 
 ## Definitions
 
-- **read path** — the five operations of REQ1, taken together; the only way
+- **read path** — the four operations of REQ1, taken together; the only way
   structure leaves the store.
 - **deleted row** — a row that has been removed from the store. Nothing of it
   remains: no read returns it, no reference resolves to it, and it is
@@ -339,8 +362,8 @@ because a deleted blocker no longer holds anything up.
   within the scope that applies (a project for items and releases, the
   instance for projects).
 - **filter part** — one named piece of a listing's filter (type, status,
-  parent, release); parts narrow each other and the values inside a part widen
-  it.
+  parent, release, held up); parts narrow each other and the values inside a
+  part widen it.
 - **leaf** — an item of type `task`, `bug`, or `chore`; **epic** — an item of
   type `epic`, which parents leaves and is never itself parented.
 - **project-level leaf** — a leaf with no parent epic, hanging directly off the
@@ -348,8 +371,10 @@ because a deleted blocker no longer holds anything up.
 - **blocker set** — the items an item is blocked by; a blocker counts as
   resolved when it is `done` or `cancelled`. Deleting a blocker removes the edge
   along with it, so it stops appearing in the set at all.
-- **ready leaf** — a leaf that is `todo` with every blocker resolved; readiness
-  is computed, never stored as a status.
+- **held up** — having at least one blocker that is neither `done` nor
+  `cancelled`. **Ready** is not a thing this contract defines: it is the name
+  people give one combination of filter parts — the leaf types, status `todo`,
+  and not held up — computed when asked, never stored and never a status.
 - **structured error** — the `{code, message, details?}` failure payload; on
   reads, only `validation_failed` and `not_found` occur.
 
@@ -361,9 +386,11 @@ because a deleted blocker no longer holds anything up.
 - **ASM2** — Deleting a branch reaches every row under it — an epic's children,
   and everything inside a project — so no row is left pointing at something
   gone; if false: REQ19 fails and a listing can return an orphan.
-- **ASM3** — The `ready_item` view as the changelog already builds it is the
-  readiness rule, unchanged; if false: REQ21 and REQ23 rest on application code
-  that re-implements the view, and the two will drift.
+- **ASM3** — The held-up part is answered from the dependency edges when the
+  question is asked, not from the `ready_item` view the changelog builds; if
+  false: that view's own idea of leaf-and-`todo` rides along invisibly with
+  every use of the part, and combining it with the other parts stops meaning
+  what it says.
 - **ASM4** — Reads run against the same database as writes, with no cache in
   between; if false: REQ2's no-change guarantee still holds, but the ordering
   and committed-state guarantees of REQ8, REQ9, and EDGE15 no longer follow

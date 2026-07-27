@@ -407,11 +407,13 @@ rather than repeating a project id on every call.
 
 The initial surface (signatures firm up against the schema):
 
-- **Structure tools** — `create_item(type, …)`, `update_item`, `set_item_blocked_by`,
-  `create_release`, `assign_epic_to_release`, `get_item`, `list_items(filter)`, and
-  `get_ready_items()` (leaves that are open and unblocked — the "what is ready to work
-  on" query), plus the instance-level `create_project` / `get_project` /
-  `list_projects`.
+- **Structure tools** — `create_item(type, …)`, `update_item` (the one way an item
+  changes, its release and its whole blocker set included), `create_release`,
+  `update_release`, `get_item`, `list_items(filter)`, and `delete_item`, plus the
+  instance-level `create_project` / `get_project` / `list_projects` /
+  `delete_project`. "What is ready to work on" is not an operation of its own: it
+  is one `list_items` call combining the leaf types, status `todo`, and nothing
+  blocking ([docs/01](docs/01-interface-contracts.md)).
 - **Document tools** — `read_doc(ref, {section?})`, `doc_outline`, `write_doc`
   (whole replace / regenerate), `replace_section`, `prepend_to_section`,
   `append_to_section`, `apply_patch`, `doc_history`. Full contracts in
@@ -465,8 +467,12 @@ invariants directly in the schema:
 - **The document pointer is `(path, current_version)`** — the current git commit
   only. History lives in git and is read through the `ArtifactStore`, never
   duplicated in the database.
-- **Readiness is derived, not stored.** A `ready_item` view computes it from
-  dependencies (leaf items only), so readiness can never drift from actual blockers.
+- **Readiness is derived, not stored** — and the model carries no notion of it at
+  all. "Ready" is what a caller gets by asking a listing for leaves that are
+  `todo` with nothing unfinished holding them up, computed from the dependency
+  edges when the question is asked, so it can never drift from actual blockers.
+  (The first changelog also builds a `ready_item` view, which no operation now
+  reads.)
 - **The project is the tenancy root.** It carries an `owner_subject` (the owning
   subject, distinct from the `created_by` audit actor), single-valued in v1. Every
   other entity is already project-scoped, so per-owner isolation is a filter later, not
@@ -560,8 +566,9 @@ rule is to simplify every part rather than skip any.
 - **Status transitions** are free within the vocabulary in v1 — no enforced state
   machine, so `done` may reopen and `cancelled` may reactivate; a transition graph is
   deferred until real policy is known ([docs/04](./docs/04-structure-semantics.md)).
-- **Cycle prevention for `blocked_by`** *is* enforced in v1: `set_item_blocked_by`
-  rejects an edge that would create a cycle ([docs/04](./docs/04-structure-semantics.md)).
+- **Cycle prevention for `blocked_by`** *is* enforced in v1: an `update_item`
+  supplying a blocker set that would close a loop is rejected
+  ([docs/04](./docs/04-structure-semantics.md)).
 
 **Open — at implementation, not design:**
 
@@ -589,6 +596,7 @@ them, for traceability. The body above explains the resulting design; this is th
 | Hierarchy | Instance → Project → (Release) → Project item, with `blocked_by` between leaves (§2.1). | *Epic→task only* — leaves "what's ready" unanswerable. *Adding subtasks* — contradicts atomic-task framing. |
 | Item model | Epic, task, bug, and chore are one typed `project_item` (single `type` axis; containment in the write path). A document is project-scoped with an optional `item_id` link, not an exclusive project/epic/task arc (§2.1, §6). | *Separate epic and task tables* — duplicate operations and a three-way document owner arc. *Two axes (level + category)* — the type already carries container-vs-leaf; a second column is redundant. *Dynamic / EAV properties (stored property definitions + data types)* — discards the typed columns, FK integrity, and cheap queries §3.1 is built on, to make a fixed, known type set "flexible" it doesn't need to be. |
 | Bugs & parent-less leaves | A bug is a project item of `type=bug`; a leaf's parent epic is optional, so a bug can hang off the project directly (§2.1, §6). | *A separate Bug entity* — duplicates the leaf's plan/status/blocked-by machinery. *Forcing every bug under an epic* — needs a catch-all "Bugs" epic, an artificial parent. |
+| Catalog shape | Eleven operations: one `update_item` carries every change to an item, including its release and its whole blocker set, and readiness is a combination of listing filters ([docs/01](./docs/01-interface-contracts.md)). | *A dedicated operation per relationship* (`assign_epic_to_release`, `set_item_blocked_by`) — first chosen for "one operation named for the one thing that changes it", then reversed: `create_item` already took a release and a parent as plain fields, so the catalog said a release was a field at creation and an operation at update. *A `get_ready_items` operation* — reversed with them: readiness as its own call bakes a compound rule (leaf, `todo`, unblocked) into the surface, cannot be narrowed to one epic, and re-states as an operation what filters can compose. |
 | Skills | System-level, Nook-canonical and versioned; distributed into the agent's environment as a local cache, layered append-only (shipped base + project overlays), agent-first (§2.3, [docs/03](./docs/03-skills-and-tenets.md)). | *Override/replace base* — lets projects drift from upstream. *Skills as project artifacts in the artifact repo* — skills are general operating instructions, not per-project content. *Server-side-only inference* — makes Nook own model keys and become an inference product prematurely. |
 | Skill invocation | Local skills the agent runs; a skill returns instructions the agent executes by calling Nook's operation tools (§5, [docs/03](./docs/03-skills-and-tenets.md)). | *Skills as Nook-served MCP tools/prompts* — first chosen, then reversed: a skill whose definition is distributed and agent-run can't also be a server-served tool without Nook reading it back at runtime; the operation tools it calls carry the state. *Server-side composition engine* — unnecessary once composition is agent-side. |
 | Web agent surface | The web app hosts an embedded authoring agent whose Nook-owned harness is preloaded with the skill/tenet cache; it runs skills and persists through the web RPC operations, so skills are triggerable from the UI without a second store owner (§3.3, §5, [docs/06](./docs/06-web-ui.md)). | *Web app is human-only, skills agent-only in v1* — would bar authoring-agent flows (author manifesto, split epic) from the human surface. *Web agent as its own MCP client* — a needless hop for an agent co-located with the web app that can call the core directly. |
