@@ -15,10 +15,16 @@ zonkyPostgres = "2.2.2"
 zonkyPostgresBinaries = "17.10.0"
 
 [libraries]
-# Consumed by build-logic only, to put the Kotlin Gradle plugin on the convention-plugin classpath.
+# Consumed by build-logic only, to put the Kotlin Gradle plugins on the convention-plugin classpath.
+# The serialization plugin belongs there rather than in the module that needs it: a module
+# declaring it gets a buildscript classpath of its own, which loads the Kotlin plugin twice.
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kotlin-serialization-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-serialization", version.ref = "kotlin" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
+ktor-server-cio = { module = "io.ktor:ktor-server-cio", version.ref = "ktor" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
 exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
 exposed-java-time = { module = "org.jetbrains.exposed:exposed-java-time", version.ref = "exposed" }
@@ -32,6 +38,3 @@ zonky-embedded-postgres = { module = "io.zonky.test:embedded-postgres", version.
 zonky-postgres-binaries-bom = { module = "io.zonky.test.postgres:embedded-postgres-binaries-bom", version.ref = "zonkyPostgresBinaries" }
 # Apple-silicon binaries; not in Zonky's default platform set. Version comes from the BOM.
 zonky-postgres-binaries-darwin-arm64v8 = { module = "io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8" }
-
-[plugins]
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

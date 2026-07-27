@@ -1,5 +1,7 @@
 package io.nook.contract
 
+import kotlinx.serialization.Serializable
+
 /**
  * The filter of an item listing: five independent parts, each of them
  * optional. Parts narrow each other — an item is returned only when it matches
@@ -19,7 +21,12 @@ package io.nook.contract
  * There is deliberately nothing here that asks for deleted rows, and nothing
  * that could: deleting removes the row, so a listing has nothing to reach past
  * in the first place.
+ *
+ * A part that is not being filtered on is absent from the wire, while a part
+ * with no values is an empty list — so the two stay apart across the connection
+ * without anything being written by hand for them.
  */
+@Serializable
 public data class ItemFilter(
     /** Item types by label: `epic`, `task`, `bug`, `chore`. */
     public val types: List<String>? = null,
@@ -50,6 +57,7 @@ public data class ItemFilter(
 )
 
 /** One value of the parent part: a named epic, or the reserved "no epic at all". */
+@Serializable(with = ParentFilterSerializer::class)
 public sealed interface ParentFilter {
 
     /**

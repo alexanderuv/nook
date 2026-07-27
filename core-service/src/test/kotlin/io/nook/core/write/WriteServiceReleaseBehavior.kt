@@ -10,12 +10,12 @@ import io.nook.contract.ReleaseStatus
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
+import io.nook.core.catalog.CatalogBehavior
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * The release operations against the running service: creation with an
@@ -27,12 +27,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
  * exercise it there — including the case a field has and an operation did not:
  * an update that never mentions the release.
  */
-class WriteServiceReleaseTest {
-
-    private companion object {
-        val db by lazy { Database.connect(io.nook.core.db.EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
-    }
+abstract class WriteServiceReleaseBehavior : CatalogBehavior() {
 
     private fun assertFailsWithCode(code: ErrorCode, block: () -> Unit): StructuredErrorException {
         val failure = assertFailsWith<StructuredErrorException> { block() }
@@ -139,4 +134,12 @@ class WriteServiceReleaseTest {
             service.createRelease(projectOne.slug, CreateRelease("Other", slug = "v1"))
         }
     }
+}
+
+class WriteServiceReleaseInProcessTest : WriteServiceReleaseBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceReleaseAcrossConnectionTest : WriteServiceReleaseBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }

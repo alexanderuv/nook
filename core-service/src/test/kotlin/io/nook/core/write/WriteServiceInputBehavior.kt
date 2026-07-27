@@ -7,8 +7,8 @@ import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
+import io.nook.core.catalog.CatalogBehavior
 import io.nook.core.db.DocumentTable
-import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
@@ -19,8 +19,8 @@ import kotlin.test.assertTrue
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.VarCharColumnType
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 /**
  * Ordinary caller mistakes about the size and content of text, all of which the
@@ -34,12 +34,9 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
  * only to report as a fault in the service. Either way a caller asking for
  * something slightly too long would be told the service is broken.
  */
-class WriteServiceInputTest {
+abstract class WriteServiceInputBehavior : CatalogBehavior() {
 
     private companion object {
-        val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
-
         /** A NUL, built from its code point: the character itself is invisible in source. */
         val NUL = Char(0)
     }
@@ -49,45 +46,6 @@ class WriteServiceInputTest {
         assertEquals(code, failure.error.code)
         return failure
     }
-
-    /**
-     * The limits the write path enforces are the widths the schema actually has.
-     * Read from the declarations rather than repeated here: two numbers that
-     * must agree and are written down twice will disagree eventually, and the
-     * failure would be a caller error reported as an internal fault.
-     */
-    @Test
-    fun `the enforced limits are the column widths of everything the write path names`() {
-        assertEquals(setOf(MAX_NAME_LENGTH), widthsOf(written, "name"))
-        assertEquals(setOf(MAX_SLUG_LENGTH), widthsOf(written, "slug"))
-    }
-
-    /**
-     * The one name column these limits do not cover, recorded rather than
-     * rounded off. A document's name is narrower than every other, and no
-     * operation writes one yet — so when documents get a write path, [
-     * MAX_NAME_LENGTH] is the wrong bound for them and this is the test that
-     * says so out loud.
-     */
-    @Test
-    fun `a document name is narrower than the rest and will need a bound of its own`() {
-        val documentName = widthsOf(arrayOf(DocumentTable), "name").single()
-
-        assertTrue(
-            documentName < MAX_NAME_LENGTH,
-            "document.name is $documentName, which the write path's limit of $MAX_NAME_LENGTH now covers; " +
-                "if the widths have been made equal, fold this back into the test above",
-        )
-    }
-
-    /** Every table whose rows the write path creates, and therefore names. */
-    private val written = arrayOf(ProjectTable, ProjectItemTable, ReleaseTable)
-
-    private fun widthsOf(tables: Array<out Table>, columnName: String): Set<Int> =
-        tables.flatMap { table -> table.columns }
-            .filter { it.name == columnName }
-            .mapNotNull { (it.columnType as? VarCharColumnType)?.colLength }
-            .toSet()
 
     @Test
     fun `a name wider than its column is a caller error, not a fault in the service`() {
@@ -204,7 +162,7 @@ class WriteServiceInputTest {
         // Nothing was written under a handle nobody could name again.
         assertEquals(
             0L,
-            org.jetbrains.exposed.v1.jdbc.transactions.transaction(db) {
+            transaction(db) {
                 ProjectTable.selectAll().where {
                     ProjectTable.slug eq "3f2a8c1e-4b6d-4b0a-9f3e-2d1c0b9a8f7e"
                 }.count() +
@@ -212,6 +170,61 @@ class WriteServiceInputTest {
                         ProjectItemTable.slug eq "3f2a8c1e-4b6d-4b0a-9f3e-2d1c0b9a8f7e"
                     }.count()
             },
+        )
+    }
+}
+
+class WriteServiceInputInProcessTest : WriteServiceInputBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceInputAcrossConnectionTest : WriteServiceInputBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
+}
+
+/**
+ * The two checks that read the schema instead of calling an operation, and so
+ * run in the core's own process alone: a limit is a property of the
+ * declarations, and driving one across the connection would say nothing more.
+ */
+class WriteServiceLimitsTest {
+
+    /** Every table whose rows the write path creates, and therefore names. */
+    private val written = arrayOf(ProjectTable, ProjectItemTable, ReleaseTable)
+
+    private fun widthsOf(tables: Array<out Table>, columnName: String): Set<Int> =
+        tables.flatMap { table -> table.columns }
+            .filter { it.name == columnName }
+            .mapNotNull { (it.columnType as? VarCharColumnType)?.colLength }
+            .toSet()
+
+    /**
+     * The limits the write path enforces are the widths the schema actually has.
+     * Read from the declarations rather than repeated here: two numbers that
+     * must agree and are written down twice will disagree eventually, and the
+     * failure would be a caller error reported as an internal fault.
+     */
+    @Test
+    fun `the enforced limits are the column widths of everything the write path names`() {
+        assertEquals(setOf(MAX_NAME_LENGTH), widthsOf(written, "name"))
+        assertEquals(setOf(MAX_SLUG_LENGTH), widthsOf(written, "slug"))
+    }
+
+    /**
+     * The one name column these limits do not cover, recorded rather than
+     * rounded off. A document's name is narrower than every other, and no
+     * operation writes one yet — so when documents get a write path, [
+     * MAX_NAME_LENGTH] is the wrong bound for them and this is the test that
+     * says so out loud.
+     */
+    @Test
+    fun `a document name is narrower than the rest and will need a bound of its own`() {
+        val documentName = widthsOf(arrayOf(DocumentTable), "name").single()
+
+        assertTrue(
+            documentName < MAX_NAME_LENGTH,
+            "document.name is $documentName, which the write path's limit of $MAX_NAME_LENGTH now covers; " +
+                "if the widths have been made equal, fold this back into the test above",
         )
     }
 }

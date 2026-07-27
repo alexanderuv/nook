@@ -9,6 +9,7 @@ application {
 dependencies {
     implementation(project(":contract"))
     implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.cio)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.java.time)

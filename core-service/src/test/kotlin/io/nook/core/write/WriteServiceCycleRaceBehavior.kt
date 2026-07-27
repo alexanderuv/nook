@@ -6,7 +6,7 @@ import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
-import io.nook.core.db.EmbeddedPostgresSupport
+import io.nook.core.catalog.CatalogBehavior
 import java.util.concurrent.Callable
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
@@ -14,7 +14,6 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * The cycle race: two callers simultaneously write the two halves of what
@@ -22,12 +21,10 @@ import org.jetbrains.exposed.v1.jdbc.Database
  * end with exactly one success and one cycle rejection — the store never
  * holds a loop.
  */
-class WriteServiceCycleRaceTest {
+abstract class WriteServiceCycleRaceBehavior : CatalogBehavior() {
 
     @Test
     fun `of two simultaneous half-loop writers, exactly one succeeds and no loop is ever stored`() {
-        val db = Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase())
-        val service = WriteService(db)
         val pool = Executors.newFixedThreadPool(2)
         try {
             repeat(100) { round ->
@@ -36,12 +33,14 @@ class WriteServiceCycleRaceTest {
                 service.createItem(project.slug, CreateItem(type = "task", name = "y"))
 
                 val barrier = CyclicBarrier(2)
-                val outcomes = listOf("x" to "y", "y" to "x").map { (item, blocker) ->
+                val halves = listOf("x" to "y", "y" to "x") zip listOf(service, otherService)
+                val outcomes = halves.map { (half, caller) ->
+                    val (item, blocker) = half
                     pool.submit(
                         Callable {
                             barrier.await(10, TimeUnit.SECONDS)
                             runCatching {
-                                service.updateItem(
+                                caller.updateItem(
                                     project.slug, item,
                                     UpdateItem(blockedBy = FieldChange.Set(listOf(blocker))),
                                 )
@@ -70,4 +69,12 @@ class WriteServiceCycleRaceTest {
             pool.shutdownNow()
         }
     }
+}
+
+class WriteServiceCycleRaceInProcessTest : WriteServiceCycleRaceBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceCycleRaceAcrossConnectionTest : WriteServiceCycleRaceBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }

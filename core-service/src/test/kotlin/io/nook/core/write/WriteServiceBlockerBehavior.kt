@@ -7,12 +7,12 @@ import io.nook.contract.FieldChange
 import io.nook.contract.ItemType
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
+import io.nook.core.catalog.CatalogBehavior
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * update_item's blockedBy field: whole-set replacement with dedup, the
@@ -23,12 +23,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
  * breaks: an update that says nothing about blockers must leave the set exactly
  * as it found it, not clear it.
  */
-class WriteServiceBlockerTest {
-
-    private companion object {
-        val db by lazy { Database.connect(io.nook.core.db.EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
-    }
+abstract class WriteServiceBlockerBehavior : CatalogBehavior() {
 
     private fun assertFailsWithCode(code: ErrorCode, block: () -> Unit): StructuredErrorException {
         val failure = assertFailsWith<StructuredErrorException> { block() }
@@ -176,4 +171,12 @@ class WriteServiceBlockerTest {
 
         assertEquals("Alone", reload(project.slug, "alone").name)
     }
+}
+
+class WriteServiceBlockerInProcessTest : WriteServiceBlockerBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceBlockerAcrossConnectionTest : WriteServiceBlockerBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }

@@ -8,26 +8,18 @@ import io.nook.contract.ItemStatus
 import io.nook.contract.ItemType
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
-import io.nook.core.db.EmbeddedPostgresSupport
-import io.nook.core.write.WriteService
+import io.nook.core.catalog.CatalogBehavior
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * Fetching one item: how a reference is resolved, what comes back, and what
  * happens when the reference names something out of reach.
  */
-class ReadServiceItemTest {
-
-    private companion object {
-        val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val writes by lazy { WriteService(db) }
-        val reads by lazy { ReadService(db) }
-    }
+abstract class ReadServiceItemBehavior : CatalogBehavior() {
 
     private fun assertNotFound(block: () -> Unit) {
         val failure = assertFailsWith<StructuredErrorException> { block() }
@@ -36,24 +28,24 @@ class ReadServiceItemTest {
 
     @Test
     fun `an item resolves by handle and by id, and never across a project boundary`() {
-        val here = writes.createProject(CreateProject("Fetch Here"))
-        val elsewhere = writes.createProject(CreateProject("Fetch Elsewhere"))
-        val item = writes.createItem(here.slug, CreateItem(type = "task", name = "Add search"))
-        val foreign = writes.createItem(elsewhere.slug, CreateItem(type = "task", name = "Not yours"))
+        val here = service.createProject(CreateProject("Fetch Here"))
+        val elsewhere = service.createProject(CreateProject("Fetch Elsewhere"))
+        val item = service.createItem(here.slug, CreateItem(type = "task", name = "Add search"))
+        val foreign = service.createItem(elsewhere.slug, CreateItem(type = "task", name = "Not yours"))
 
-        assertEquals(item, reads.getItem(here.slug, "add-search"))
-        assertEquals(item, reads.getItem(here.slug, item.id.toString()))
-        assertNotFound { reads.getItem(here.slug, foreign.id.toString()) }
-        assertNotFound { reads.getItem(here.slug, Uuid.random().toString()) }
+        assertEquals(item, service.getItem(here.slug, "add-search"))
+        assertEquals(item, service.getItem(here.slug, item.id.toString()))
+        assertNotFound { service.getItem(here.slug, foreign.id.toString()) }
+        assertNotFound { service.getItem(here.slug, Uuid.random().toString()) }
     }
 
     @Test
     fun `a fetched item carries every field, its parent, and its whole blocker set`() {
-        val project = writes.createProject(CreateProject("Full Entity"))
-        val epic = writes.createItem(project.slug, CreateItem(type = "epic", name = "Search"))
-        val firstBlocker = writes.createItem(project.slug, CreateItem(type = "task", name = "Blocker one"))
-        val secondBlocker = writes.createItem(project.slug, CreateItem(type = "task", name = "Blocker two"))
-        val item = writes.createItem(
+        val project = service.createProject(CreateProject("Full Entity"))
+        val epic = service.createItem(project.slug, CreateItem(type = "epic", name = "Search"))
+        val firstBlocker = service.createItem(project.slug, CreateItem(type = "task", name = "Blocker one"))
+        val secondBlocker = service.createItem(project.slug, CreateItem(type = "task", name = "Blocker two"))
+        val item = service.createItem(
             project.slug,
             CreateItem(
                 type = "task",
@@ -62,12 +54,12 @@ class ReadServiceItemTest {
                 parentRef = "search",
             ),
         )
-        writes.updateItem(
+        service.updateItem(
             project.slug, "add-search",
             UpdateItem(blockedBy = FieldChange.Set(listOf("blocker-one", "blocker-two"))),
         )
 
-        val fetched = reads.getItem(project.slug, "add-search")
+        val fetched = service.getItem(project.slug, "add-search")
 
         assertEquals(ItemType.TASK, fetched.type)
         assertEquals("Add search", fetched.name)
@@ -89,15 +81,23 @@ class ReadServiceItemTest {
 
     @Test
     fun `a handle taken over by a new item resolves to it, and the old id to nothing`() {
-        val project = writes.createProject(CreateProject("Handle Handover"))
-        val gone = writes.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
-        writes.deleteItem(project.slug, "add-search")
-        val replacement = writes.createItem(
+        val project = service.createProject(CreateProject("Handle Handover"))
+        val gone = service.createItem(project.slug, CreateItem(type = "task", name = "Add search"))
+        service.deleteItem(project.slug, "add-search")
+        val replacement = service.createItem(
             project.slug,
             CreateItem(type = "bug", name = "Add search", slug = "add-search"),
         )
 
-        assertEquals(replacement.id, reads.getItem(project.slug, "add-search").id)
-        assertNotFound { reads.getItem(project.slug, gone.id.toString()) }
+        assertEquals(replacement.id, service.getItem(project.slug, "add-search").id)
+        assertNotFound { service.getItem(project.slug, gone.id.toString()) }
     }
+}
+
+class ReadServiceItemInProcessTest : ReadServiceItemBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class ReadServiceItemAcrossConnectionTest : ReadServiceItemBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }

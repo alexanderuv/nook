@@ -10,9 +10,23 @@ kotlin {
     explicitApi()
 }
 
-// No serialization plugin and no serializer dependency, deliberately. Nothing
-// here is @Serializable — the wire format is designed when a wire exists (see
-// Entities.kt) — and carrying the plugin meanwhile cost more than it looked
-// like: applying it here gave this module a buildscript classpath of its own,
-// which loads the Kotlin plugin a second time. Gradle's own warning for that
-// says it "is not supported and may break the build".
+dependencies {
+    // The wire, and the one library that turns these shapes into text and back.
+    // `api` rather than `implementation`: the request and reply shapes are part
+    // of what this module offers, so anyone holding them holds their format too.
+    //
+    // The plugin that writes the conversion code is applied by nook.kotlin-jvm,
+    // never here — a module that declares it gets a buildscript classpath of its
+    // own, which loads the Kotlin plugin twice.
+    api(libs.kotlinx.serialization.json)
+    api(libs.ktor.client.core)
+    // Which engine drives the client is this module's own choice, so it ships
+    // one: a caller builds the calling library and nothing else.
+    implementation(libs.ktor.client.cio)
+
+    // Java reflection reports a method's parameter types but not their names,
+    // and what the catalog's surface has to be held to is partly the names: the
+    // project an operation acts inside is a named argument of the seven that
+    // take one, and the four that do not must offer no place for it.
+    testImplementation(kotlin("reflect"))
+}

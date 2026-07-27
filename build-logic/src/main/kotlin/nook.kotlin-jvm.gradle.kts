@@ -2,6 +2,12 @@ import java.time.Duration
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
+    // Both Kotlin plugins are applied from here, never from a module. A module
+    // that declares one gets a buildscript classpath of its own, which loads the
+    // Kotlin plugin a second time — Gradle warns that this "is not supported and
+    // may break the build". Applying it to every module costs nothing: without a
+    // @Serializable declaration it generates nothing.
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 group = "io.nook"

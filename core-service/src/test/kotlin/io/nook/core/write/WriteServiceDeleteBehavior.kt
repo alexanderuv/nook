@@ -7,8 +7,8 @@ import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
+import io.nook.core.catalog.CatalogBehavior
 import io.nook.core.db.DocumentTable
-import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ItemDependencyTable
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
@@ -19,7 +19,6 @@ import kotlin.test.assertFailsWith
 import kotlin.uuid.Uuid
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.or
-import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -38,12 +37,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  * The counts here are read from the tables directly, because after a delete
  * there is nothing left for an operation to return.
  */
-class WriteServiceDeleteTest {
-
-    private companion object {
-        val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
-    }
+abstract class WriteServiceDeleteBehavior : CatalogBehavior() {
 
     private fun assertFailsWithCode(code: ErrorCode, block: () -> Unit) {
         val failure = assertFailsWith<StructuredErrorException> { block() }
@@ -322,4 +316,12 @@ class WriteServiceDeleteTest {
         val converted = service.updateItem(project.slug, "emptied", UpdateItem(type = FieldChange.Set("task")))
         assertEquals("task", converted.type.label)
     }
+}
+
+class WriteServiceDeleteInProcessTest : WriteServiceDeleteBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceDeleteAcrossConnectionTest : WriteServiceDeleteBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }

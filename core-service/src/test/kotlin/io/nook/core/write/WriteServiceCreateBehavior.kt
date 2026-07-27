@@ -7,24 +7,19 @@ import io.nook.contract.ErrorCode
 import io.nook.contract.ItemStatus
 import io.nook.contract.ReleaseStatus
 import io.nook.contract.StructuredErrorException
+import io.nook.core.catalog.CatalogBehavior
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.uuid.Uuid
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * The create operations against the running service on embedded PostgreSQL:
  * slug derivation and suffixing, containment, initial statuses, and the
  * rejections for unusable names, slugs, and types.
  */
-class WriteServiceCreateTest {
-
-    private companion object {
-        val db by lazy { Database.connect(io.nook.core.db.EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
-    }
+abstract class WriteServiceCreateBehavior : CatalogBehavior() {
 
     private fun assertFailsWithCode(code: ErrorCode, block: () -> Unit): StructuredErrorException {
         val failure = assertFailsWith<StructuredErrorException> { block() }
@@ -131,4 +126,12 @@ class WriteServiceCreateTest {
         val saved = service.createItem(project.slug, CreateItem(type = "task", name = "???", slug = "q3-spike"))
         assertEquals("q3-spike", saved.slug)
     }
+}
+
+class WriteServiceCreateInProcessTest : WriteServiceCreateBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceCreateAcrossConnectionTest : WriteServiceCreateBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }

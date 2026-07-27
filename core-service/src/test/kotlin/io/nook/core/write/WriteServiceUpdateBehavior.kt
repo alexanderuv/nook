@@ -9,23 +9,18 @@ import io.nook.contract.ItemStatus
 import io.nook.contract.ItemType
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
+import io.nook.core.catalog.CatalogBehavior
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * update_item against the running service: partial updates, slug stability
  * and explicit changes, reparenting, the status vocabulary, type-change
  * rules, and the guarantee that a failed call changes nothing.
  */
-class WriteServiceUpdateTest {
-
-    private companion object {
-        val db by lazy { Database.connect(io.nook.core.db.EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
-    }
+abstract class WriteServiceUpdateBehavior : CatalogBehavior() {
 
     private fun assertFailsWithCode(code: ErrorCode, block: () -> Unit): StructuredErrorException {
         val failure = assertFailsWith<StructuredErrorException> { block() }
@@ -249,4 +244,12 @@ class WriteServiceUpdateTest {
         assertEquals("Add search", untouched.name)
         assertEquals(ItemStatus.TODO, untouched.status)
     }
+}
+
+class WriteServiceUpdateInProcessTest : WriteServiceUpdateBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceUpdateAcrossConnectionTest : WriteServiceUpdateBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }

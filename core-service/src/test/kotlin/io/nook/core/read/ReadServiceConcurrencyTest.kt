@@ -3,14 +3,12 @@ package io.nook.core.read
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.FieldChange
-import io.nook.contract.ItemFilter
 import io.nook.contract.UpdateItem
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.store.blockerSetsOf
 import io.nook.core.write.WriteService
 import java.sql.Connection
-import java.util.concurrent.CountDownLatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -28,18 +26,18 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
  * reads one moment for exactly this reason, and this is where that claim is
  * put under a writer working at the same time.
  *
- * Each round commits three writes, in the order that makes the anomaly
- * reachable: the leaf first, then the item that blocks it, then the edge. A
- * reader lists throughout. Between the reader's first statement and its second,
- * a blocker can appear and be pointed at — so at PostgreSQL's normal setting the
- * blocker sets could name an item the listing itself never showed. Reading one
- * moment is what rules that out, and what every listing here is checked against.
+ * Between the reader's first statement and its second, a blocker can appear and
+ * be pointed at — so at PostgreSQL's normal setting the blocker sets could name
+ * an item the listing itself never showed. Reading one moment is what rules that
+ * out.
+ *
+ * Both checks drive that transaction directly rather than calling an operation,
+ * which is why they stay in the core's own process: what they are about is a
+ * discipline inside the read path, and the connection has no view of it. The
+ * same claim as a caller meets it — a listing taken while another caller writes
+ * — is asked both ways, in its own suite.
  */
 class ReadServiceConcurrencyTest {
-
-    private companion object {
-        const val ROUNDS = 100
-    }
 
     private val db = Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase())
     private val writes = WriteService(db)
@@ -109,54 +107,4 @@ class ReadServiceConcurrencyTest {
         assertEquals(emptySet(), straddled)
     }
 
-    @Test
-    fun `a listing taken while another caller writes always shows fully committed items`() {
-        val reads = ReadService(db)
-        val project = writes.createProject(CreateProject("Listed While Written"))
-
-        val started = CountDownLatch(1)
-        val failures = mutableListOf<Throwable>()
-        val writer = Thread {
-            started.countDown()
-            repeat(ROUNDS) { round ->
-                runCatching {
-                    writes.createItem(project.slug, CreateItem(type = "task", name = "Blocked $round"))
-                    writes.createItem(project.slug, CreateItem(type = "task", name = "Blocker $round"))
-                    writes.updateItem(
-                        project.slug, "blocked-$round",
-                        UpdateItem(blockedBy = FieldChange.Set(listOf("blocker-$round"))),
-                    )
-                }.onFailure { synchronized(failures) { failures += it } }
-            }
-        }
-
-        writer.start()
-        started.await()
-        val listings = buildList {
-            repeat(ROUNDS) {
-                add(runCatching { reads.listItems(project.slug, ItemFilter()) })
-            }
-        }
-        writer.join()
-
-        assertEquals(emptyList(), failures.toList(), "no write may fail")
-        listings.forEachIndexed { attempt, listing ->
-            val items = listing.getOrElse { throw AssertionError("listing $attempt failed", it) }
-            val visible = items.map { it.id }.toSet()
-            items.forEach { item ->
-                val unseen = item.blockedBy - visible
-                assertTrue(
-                    unseen.isEmpty(),
-                    "listing $attempt gave ${item.slug} a blocker it never showed: $unseen",
-                )
-                val expected = "blocker-${item.slug.substringAfter('-')}"
-                assertTrue(
-                    item.blockedBy.size <= 1 &&
-                        item.blockedBy.all { blockerId -> items.single { it.id == blockerId }.slug == expected },
-                    "listing $attempt gave ${item.slug} a blocker set it was never written with",
-                )
-            }
-        }
-        assertEquals(2 * ROUNDS, reads.listItems(project.slug, ItemFilter()).size)
-    }
 }

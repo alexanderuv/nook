@@ -1,18 +1,27 @@
+@file:UseSerializers(InstantSerializer::class, LocalDateSerializer::class)
+
 package io.nook.contract
 
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.uuid.Uuid
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
-// The entities the core service returns from its operations. Plain data
-// classes: the wire format (serializers, transport shapes) is designed when a
-// wire exists; until then these are in-process values only.
+// The entities the core service returns from its operations, in-process and
+// across the connection alike — one shape, so that what a caller receives over
+// the wire is what the core produced rather than a rendering of it.
 //
 // A timestamp is an [Instant] — a moment, carrying no zone. The store keeps the
 // zone so the moment survives being written on one machine and read on another;
 // what a caller receives is the moment alone, because the offset a row happened
 // to be written at means nothing to anyone reading it.
+//
+// The two time types are the only ones here the serialization library cannot
+// write a conversion for; both are named at the top of this file, so a field
+// added later is carried without anyone remembering to say so.
 
+@Serializable
 public data class Project(
     public val id: Uuid,
     public val slug: String,
@@ -28,6 +37,7 @@ public data class Project(
  * a release; leaves may be parented under an epic and may carry blockers.
  * [blockedBy] holds the ids of the items this item is blocked by.
  */
+@Serializable
 public data class ProjectItem(
     public val id: Uuid,
     public val projectId: Uuid,
@@ -43,6 +53,7 @@ public data class ProjectItem(
     public val updatedAt: Instant,
 )
 
+@Serializable
 public data class Release(
     public val id: Uuid,
     public val projectId: Uuid,

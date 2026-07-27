@@ -60,8 +60,9 @@ reading the same reply differently.
   neither is referenced anywhere in the repository. Ktor 3.5.1 is pinned, but
   only `ktor-server-core` is depended on — which is the part that describes a
   server, not the part that listens on a port, and there is no client half at
-  all. So this epic adds the engine that listens, the client, and the piece that
-  joins either of them to a text format.
+  all. So this epic adds the engine that listens and the client. (It did not add
+  the piece that joins either of them to a text format — see the divergences
+  below.)
 
 - **The test foundation.** One real PostgreSQL starts inside the test process for
   the whole test run, and each test class gets its own freshly created, fully
@@ -326,7 +327,7 @@ operations.
 
 ## Steps
 
-- [ ] **STEP1** — Move the text-conversion helper onto the shared Kotlin build
+- [x] **STEP1** — Move the text-conversion helper onto the shared Kotlin build
   file (`build-logic/src/main/kotlin/nook.kotlin-jvm.gradle.kts`), adding its
   artifact to `build-logic/build.gradle.kts`; annotate one entity in `:contract`
   and delete the build-file comment that records why the module carried none,
@@ -335,7 +336,7 @@ operations.
   multiple times — the obstacle the module recorded, checked rather than trusted
   (FIND11).
 
-- [ ] **STEP2** — Write the conversions for `UpdateItem` and `UpdateRelease` by
+- [x] **STEP2** — Write the conversions for `UpdateItem` and `UpdateRelease` by
   hand, deciding each field by whether the request mentions it, and leave
   `FieldChange` itself untouched; verify: a test writes out and reads back every
   state of every field — nothing at all, a name alone, a description cleared, a
@@ -344,7 +345,7 @@ operations.
   equal to what went in, with "leave alone" and "set to nothing" never equal
   (REQ7, EDGE2, EDGE3, EDGE4).
 
-- [ ] **STEP3** — Annotate the entities, the three vocabularies, and the listing
+- [x] **STEP3** — Annotate the entities, the three vocabularies, and the listing
   filter, writing by hand only the two conversions the library does not know: a
   moment in time and a calendar date; make the vocabularies cross as their labels;
   verify: a test takes a project, an item named with emoji and non-Latin script,
@@ -358,7 +359,7 @@ operations.
   one mistake nothing else catches: a hand-written conversion missing a field
   compiles and drops it in silence (FIND3).
 
-- [ ] **STEP4** — Declare `io.nook.contract.OperationCatalog` naming all eleven
+- [x] **STEP4** — Declare `io.nook.contract.OperationCatalog` naming all eleven
   operations, and implement it in `:core-service` as `CoreCatalog` over the
   existing `WriteService` and `ReadService`; verify: a test reads the operations
   off the interface itself and requires exactly the eleven of REQ1 and no
@@ -366,14 +367,14 @@ operations.
   instance-level ones offering no place to name one (AC1's first part, AC3), and
   `./gradlew check` stays green with both service surface tests untouched.
 
-- [ ] **STEP5** — Add the request and reply shapes: a request naming its
+- [x] **STEP5** — Add the request and reply shapes: a request naming its
   operation, carrying a project for the seven that need one, and a payload
   decoded by the named operation; a reply naming its own ending and carrying an
   answer, a refusal, or a fault; verify: a test requires a request carrying a
   field its operation does not define to be rejected rather than ignored, and each
   of the three endings to survive being written out and read back (EDGE14).
 
-- [ ] **STEP6** — Build the answering side in `:core-service`: one address, the
+- [x] **STEP6** — Build the answering side in `:core-service`: one address, the
   request read **inside** the attempt that runs it, the store's work handed to
   threads that may sit and wait, the core's refusals passed through with their own
   code and message and details, and anything else reported as a fault; verify:
@@ -385,7 +386,7 @@ operations.
   nothing reaching the store and the next good call answered normally (AC10,
   AC11, AC13, EDGE11–EDGE14).
 
-- [ ] **STEP7** — Build the calling library in `:contract`: the eleven operations
+- [x] **STEP7** — Build the calling library in `:contract`: the eleven operations
   under the same names, one web client reused across calls, the wait limit taken
   at construction and defaulting to 30 seconds, nothing installed that resends,
   and a breakdown that says whether the core broke or could not be reached;
@@ -399,7 +400,7 @@ operations.
   (AC15); and a fast call made while a slow one is in flight to be answered first
   (AC17).
 
-- [ ] **STEP8** — Restructure epic 03's and epic 04's operation-behavior suites so
+- [x] **STEP8** — Restructure epic 03's and epic 04's operation-behavior suites so
   each runs twice, once against `CoreCatalog` and once against a `CatalogClient`
   pointed at a server started in the test — the assertions untouched, only how the
   suite reaches the operations changing; verify: every one of them green under
@@ -412,7 +413,7 @@ operations.
   guards, and the two service surface tests — stay in-process only, and this step
   names them so the split is deliberate rather than accidental.
 
-- [ ] **STEP9** — Add the checks that exist only across the connection: that the
+- [x] **STEP9** — Add the checks that exist only across the connection: that the
   values the core's own operation is invoked with equal, one for one, what was
   handed to the library — a name with emoji, a description with line breaks and
   quotation marks, a blocker list holding the same reference twice, and a
@@ -425,7 +426,7 @@ operations.
   EDGE10). Nothing is built for that last one — it is a test of the transaction
   the write path already opens (FIND8).
 
-- [ ] **STEP10** — Give `:core-service` a real `Main.kt`: the port and the
+- [x] **STEP10** — Give `:core-service` a real `Main.kt`: the port and the
   database setting taken from outside the program, the host fixed to loopback, and
   a start refused with a message naming the missing setting rather than a default
   nobody chose; add, in test sources, a small program that builds the calling
@@ -440,6 +441,60 @@ operations.
   door nor the calling library resolves a database dependency (AC22, REQ30); run
   `./gradlew check` on a clean checkout; push for the continuous-integration run;
   verify: green locally and in that run, with the new tests visibly executed.
+
+## What the build changed about this plan
+
+Seven places where the work landed differently from the text above. None of them
+moves a requirement; each is recorded so the plan and the diff say the same
+thing.
+
+- **No library joining the web halves to a text format.** Both sides read and
+  write the request body as text and hand it to the contract's own converter
+  directly, so the version list gained the server engine and the client and
+  nothing else. It is one dependency fewer, and it puts the decoding on a line
+  the handler chooses, which is exactly what the reading-inside-the-attempt rule
+  needs (FIND5). Both engines are Ktor's own CIO, which is what the discovery's
+  layout, refusal, waiting, and concurrency runs were taken on.
+
+- **The wiring table lives in `:contract`, beside the calling library.** Each of
+  the eleven states once what its payload is, what its answer is, and how it is
+  invoked on a catalog; the calling library builds a request from that statement
+  and the core's answering side runs a request against it. Splitting the two
+  directions across two modules would have had the same eleven pairings written
+  down twice. What stayed in `:core-service` is the answering side proper: one
+  address, the reading inside the attempt, the store's work on threads that may
+  wait, and the mapping of failures onto the three endings.
+
+- **Whether an operation acts inside a project is the shape of its wiring, not a
+  flag on it.** A project-scoped wiring cannot be invoked without a project and
+  an instance-level one has nowhere to put one, so both ways a caller can get
+  that wrong are refused in one place instead of eleven.
+
+- **The interface names the instance-level project reference `ref`, not
+  `projectRef`.** `projectRef` is the project an operation acts *inside*, which
+  is what REQ5 gives to seven of the eleven; `getProject` and `deleteProject`
+  address a project the way `getItem` addresses an item. On the wire the same
+  distinction is the request's own `project` field against a payload's `ref`,
+  and `ref` names the target of every operation that has one.
+
+- **Two suites were split rather than doubled whole.** `ReadServiceConcurrency`
+  held two checks that drive the read path's transaction directly and one that
+  asks the same thing through the operations; the third became a suite of its
+  own and runs both ways, and the two stayed in-process. `WriteServiceInput`
+  held two checks that read column widths and call nothing; those became
+  `WriteServiceLimitsTest`. Both splits are the same rule the step already
+  states, applied inside a file rather than between files.
+
+- **The abandoned-write check drives `update_item`.** That is the one operation
+  in this catalog which writes a row and its edges together, so it is the only
+  shape where "the item without its edges" is a state the store could be left in
+  if the transaction did not hold. The caller's limit is a few milliseconds, so
+  it is gone while the core is inside the write, and nothing was built to make
+  that happen.
+
+- **The doubled suites were renamed from `…Test.kt` to `…Behavior.kt`.** Each
+  file now holds the assertions once, as an abstract suite, and the two concrete
+  classes that run them — so the file name says what it holds.
 
 ## Caveats & rabbit holes
 

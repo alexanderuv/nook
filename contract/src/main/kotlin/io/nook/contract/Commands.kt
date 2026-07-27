@@ -1,6 +1,10 @@
+@file:UseSerializers(LocalDateSerializer::class)
+
 package io.nook.contract
 
 import java.time.LocalDate
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 /**
  * The write commands: one data class per mutation, carrying that mutation's
@@ -11,9 +15,16 @@ import java.time.LocalDate
  * Enum-valued fields (item type, statuses) carry their label strings and are
  * validated against the vocabulary by the service. Fields typed [FieldChange]
  * distinguish "leave the stored value alone" from "write this value".
+ *
+ * The three create commands cross the wire as themselves. The two partial
+ * updates do not: a generated conversion has one slot per field and no way to
+ * record that a field was mentioned at all, which collapses "leave this alone"
+ * and "clear this" into one request. Theirs is written by hand, alongside the
+ * reference each addresses — see [ItemUpdate] and [ReleaseUpdate].
  */
 
 /** Creates a project. A null [slug] means: derive it from [name]. */
+@Serializable
 public data class CreateProject(
     public val name: String,
     public val slug: String? = null,
@@ -25,6 +36,7 @@ public data class CreateProject(
  * [parentRef] names the epic to sit under (leaves only); [releaseRef] names
  * the release to join (epics only).
  */
+@Serializable
 public data class CreateItem(
     public val type: String,
     public val name: String,
@@ -61,6 +73,7 @@ public data class UpdateItem(
 )
 
 /** Creates a release in a project. A null [slug] means: derive it from [name]. */
+@Serializable
 public data class CreateRelease(
     public val name: String,
     public val slug: String? = null,

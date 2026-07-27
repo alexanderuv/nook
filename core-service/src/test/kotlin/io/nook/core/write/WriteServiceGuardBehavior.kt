@@ -8,12 +8,11 @@ import io.nook.contract.FieldChange
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
-import io.nook.core.db.EmbeddedPostgresSupport
+import io.nook.core.catalog.CatalogBehavior
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
-import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
  * The rules the write path enforces that nothing else would.
@@ -29,12 +28,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
  * up two violations at once passes when either guard survives, and that is
  * indistinguishable from passing when both do.
  */
-class WriteServiceGuardTest {
-
-    private companion object {
-        val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
-    }
+abstract class WriteServiceGuardBehavior : CatalogBehavior() {
 
     private fun assertFailsWithCode(code: ErrorCode, block: () -> Unit): StructuredErrorException {
         val failure = assertFailsWith<StructuredErrorException> { block() }
@@ -152,4 +146,12 @@ class WriteServiceGuardTest {
 
         assertEquals("renameable", readItem(db, project.slug, "renameable").slug)
     }
+}
+
+class WriteServiceGuardInProcessTest : WriteServiceGuardBehavior() {
+    override val reach = Reach.IN_PROCESS
+}
+
+class WriteServiceGuardAcrossConnectionTest : WriteServiceGuardBehavior() {
+    override val reach = Reach.ACROSS_THE_CONNECTION
 }
