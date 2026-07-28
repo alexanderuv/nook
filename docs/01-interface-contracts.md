@@ -11,9 +11,13 @@ from ARCHITECTURE.md §5; this spec pins the contracts.
 ### One operation set, one wire shape
 
 The **core service** defines the operation set once and exposes it as an internal
-RPC API; the two adapter apps reach everything through it (§3.3). That API's
-**request and reply shape is defined once**, in the shared contract library, and it
-is the only wire shape Nook has of its own:
+RPC API; the two adapter apps reach everything through it (§3.3). That API speaks
+**JSON-RPC 2.0** ([ADR-2](../architecture/adrs/adr-2.md)) — `method` names the
+operation, `params` carries the project and the arguments, a call answers with
+`result` or with `error {code, message, data?}`, and every reply comes back under
+one HTTP status. Nook has **no wire shape of its own**: the request and reply are
+the standard's, and the shared contract library defines only the operations'
+parameters and entities.
 
 - The **core service's internal RPC API** is the shared backing both adapters call;
   it is not public, and the adapters hold no store access of their own.
@@ -27,7 +31,10 @@ is the only wire shape Nook has of its own:
   skills and persists through these same operations rather than making a second trip
   out through MCP. REST was rejected for the same reason the second shape now is:
   Nook's surface is action-heavy, so RPC keeps one contract instead of a second,
-  differently-shaped one.
+  differently-shaped one. What serves that shape is JSON-RPC 2.0 rather than an
+  envelope of Nook's own — the published standard for exactly this arrangement,
+  and the one `:mcp-server` already speaks, MCP being defined on it
+  ([ADR-2](../architecture/adrs/adr-2.md)).
 - **MCP** (external-agent surface, in `:mcp-server`) is the one translation that
   cannot be avoided, because its shape is dictated by someone else's specification:
   the **seven project-scoped operations** become **tools**, and tenets and documents
@@ -39,10 +46,14 @@ is the only wire shape Nook has of its own:
 
 > The web API first mirrored the operations in a shape of its own — the project in
 > a path segment, the outcome in an HTTP status number — which meant two designs
-> over one catalog: two places to change a field, two ways for one refusal to
+> over one catalog: two places to change a field, two ways for one failure to
 > arrive, and a second contract for the UI to be written against. Serving the core's
 > own shape removes the second design rather than keeping two in step. What it gives
 > up is HTTP-native semantics on the web API, which the error model below takes up.
+> A second reversal followed: that shared shape was at first an envelope designed
+> here, with an `outcome` field naming one of three endings. It is now JSON-RPC 2.0,
+> which specifies the same arrangement and is already in the repo
+> ([ADR-2](../architecture/adrs/adr-2.md)).
 
 ### Transport & project scoping
 
@@ -138,11 +149,17 @@ MCP tool surface.
   Filter grammar, containment/status rules, and what a delete reaches per
   [04](./04-structure-semantics.md).
 
-`update_item` is the one way an item changes, whatever the field. Supplying
-`slug` is the rename (a name change alone never re-derives the slug); setting or
-clearing `parentRef` reparents a leaf; setting or clearing `releaseRef` puts an
-epic in a release or takes it out; and `blockedBy` **replaces** the item's whole
-blocker set rather than adding to it. Both deletes are permanent: nothing is
+`update_item` is the one way an item changes, whatever the field, and both updates
+are **JSON Merge Patch (RFC 7396)** ([ADR-3](../architecture/adrs/adr-3.md)): a
+field left out is left alone, a field carrying a value is set, a field carrying
+`null` is cleared, and an array replaces rather than merges. Two deviations are
+Nook's: a field that must always hold a value (`name`, `slug`, `status`, `type`)
+refuses `null` instead of clearing, and a field the operation does not define is
+refused rather than ignored. So supplying `slug` is the rename (a name change
+alone never re-derives the slug); setting or clearing `parentRef` reparents a
+leaf; setting or clearing `releaseRef` puts an epic in a release or takes it out;
+and `blockedBy` **replaces** the item's whole blocker set rather than adding to
+it — the standard's array rule, not a Nook one. Both deletes are permanent: nothing is
 marked, and no argument, filter, or operation can ask for what is gone.
 
 > Three operations were folded away after the write and read paths were first
@@ -169,21 +186,36 @@ marked, and no argument, filter, or operation can ask for what is gone.
 
 ### Error model
 
-- **A reply names its own ending** — an answer, a refusal, or a breakdown — in the
-  body, rather than leaving it to the HTTP status number. Every reply Nook produces
-  comes back under one status, so the number is not the thing that says what
-  happened. The same rule holds on the internal connection and on the web API,
-  because they are the same shape.
-- A **refusal** carries `{ code, message, details? }`. Codes: `validation_failed`,
-  `not_found`, `conflict` (e.g. slug collision), `cycle` (blocked-by). A
-  **breakdown** carries no code, because there is nothing for the caller to fix.
-- **MCP maps a refusal onto a tool result** with `isError` and that same payload —
+Errors are JSON-RPC 2.0's, not Nook's ([ADR-2](../architecture/adrs/adr-2.md)).
+
+- **A reply carries `result` or `error`**, in the body, rather than leaving the
+  outcome to the HTTP status number. Every reply comes back under one status, so
+  the number is not the thing that says what happened. The same rule holds on the
+  internal connection and on the web API, because they are the same shape.
+- An **error object** is `{ code, message, data? }`. The standard's reserved codes
+  cover the request itself: `-32700` for contents that are not JSON, `-32600` for
+  an envelope that is not a request, `-32601` for an operation nobody defined,
+  `-32602` for invalid params, and `-32603` for a call that produced no verdict.
+- **Nook's domain failures ride in the same object.** `validation_failed` *is*
+  `-32602`, whether the request was unreadable or the core refused its contents;
+  `not_found` is `-32001`, `conflict` (e.g. slug collision) `-32002`, and `cycle`
+  (blocked-by) `-32003` — the range the specification reserves for
+  implementation-defined server errors. `data.reason` carries the domain name, so
+  a caller reads it without matching integers, and the details a failure already
+  carries ride alongside.
+- A call that produced no verdict — the core unreachable, or broken — is
+  `-32603`, and says nothing about which of the two it was: which part of Nook
+  failed is not the caller's business.
+- **MCP maps an error onto a tool result** with `isError` and that same object —
   the one translation MCP's own specification forces.
 
-> Replaced: the web API previously mapped the four codes onto `400` / `404` / `409`.
-> Two of them shared `409`, and a route matching nothing answered `404` with an
-> empty body — so the number could not decide what a reply was, while the body
-> already could.
+> Replaced twice. The web API first mapped four failure codes onto `400` / `404` /
+> `409`; two shared `409`, and a route matching nothing answered `404` with an
+> empty body, so the number could not decide what a reply was while the body
+> already could. The body-carried outcome that replaced it was then an envelope
+> designed here — an `outcome` field naming an answer, a refusal or a breakdown,
+> with four string codes — which is JSON-RPC 2.0 with different names
+> ([ADR-2](../architecture/adrs/adr-2.md)).
 
 ### Resources (MCP)
 

@@ -307,7 +307,7 @@ cycle or a duplicate slug.
   holds a project `search-revamp`, when a second project named "Search
   Revamp" is created, then it succeeds with slug `search-revamp-2`.
 - **AC4** (REQ10, REQ5) — Given a project, when `create_item` is called with
-  `type="story"`, then it fails with a structured error whose code is
+  `type="story"`, then it fails with a JSON-RPC error whose reason is
   `validation_failed`.
 - **AC5** (REQ11, REQ12) — Given an epic `search-core`, when a task is created
   with `parentRef="search-core"` and a bug is created with no `parentRef`,
@@ -396,7 +396,7 @@ cycle or a duplicate slug.
   every run both calls succeed and the two slugs differ.
 - **AC25** (REQ5, REQ6) — Given item `add-search` in status `todo`, when
   `update_item` supplies both a new name and status `finished`, then the call
-  fails with one structured error (`validation_failed`) and the item's name
+  fails with one error (`validation_failed`, JSON-RPC `-32602`) and the item's name
   and status are unchanged.
 
 ## Definitions
@@ -417,7 +417,9 @@ cycle or a duplicate slug.
   **explicit slug** — one the caller supplies verbatim.
 - **status vocabulary** — the closed set of statuses an entity kind allows;
   items and releases have distinct vocabularies (REQ25).
-- **structured error** — the `{code, message, details?}` failure payload; the
+- **error object** — JSON-RPC 2.0's `{code, message, data?}` failure payload
+  ([ADR-2](../../../architecture/adrs/adr-2.md)), where `data.reason` carries the
+  domain name (`validation_failed`, `not_found`, `conflict`, `cycle`); the
   four codes are the whole error surface.
 - **reference (ref)** — a string identifying an entity: a UUID, or a slug
   resolved within the target project.

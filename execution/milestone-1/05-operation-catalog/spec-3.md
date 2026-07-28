@@ -29,25 +29,25 @@ spec never restates a rule of theirs. It requires something narrower and
 load-bearing: that crossing the connection changes nothing — not what a caller
 asked for, not what came back, and not the verdict in between.
 
-This epic builds **both halves**: the core's answering side, and one calling
-library that both adapters use. That is what makes PRD-1's one-contract goal
+This epic builds **both halves**: the core's answering side, and one JSON-RPC
+client that both adapters use. That is what makes PRD-1's one-contract goal
 structural rather than hopeful — the two adapters cannot read a reply
 differently if there is only one piece of code that reads it.
 
 Throughout, an **adapter** is one of those two apps; **the connection** is the
-internal link described above; and **a handle** is the short lowercase name an
+internal link described above; and **a slug** is the short lowercase name an
 entity is known by in paths (`Add search` becomes `add-search`), usable
 anywhere its id is.
 
 In scope: the eleven operations as reached across the connection and through
-the calling library — what may cross it, what must survive it unchanged, the
-three ways a call can end and how a caller tells them apart, what happens when
+the client — what may cross it, what must survive it unchanged, the two ways a
+call can end and how a caller tells them apart, what happens when
 the core is slow, absent, or sent something it cannot read, several callers at
 once, and where the core listens.
 
 Out of scope:
 
-- **The rules the operations enforce** — handles, containment, status
+- **The rules the operations enforce** — slugs, containment, status
   vocabulary, cycles, filtering, ordering, readiness. Those are specs 1 and 2;
   this spec requires only that they arrive intact.
 - **The MCP tool surface** — epic 06 — and **the web HTTP API** — epic 07. The MCP
@@ -77,7 +77,7 @@ Out of scope:
 **Initiator:** an adapter process, serving a request from an agent.
 **Flow:**
 1. The adapter, which holds no database access of any kind, calls
-   `create_project` through the calling library.
+   `create_project` through the client.
 2. It then calls `create_release`, `create_item` for an epic, two tasks under
    it, and a project-level bug, then `update_item` twice — once to put the epic
    in the release, once to make the second task wait on the first.
@@ -88,7 +88,7 @@ Out of scope:
 inside its own process, with every field intact; the readiness answer holds
 exactly the open, unheld-up leaves, in the order the core put them in; the
 delete reports success and hands back no entity, which the adapter can still
-tell apart from a refusal; and the adapter never opened a database connection to
+tell apart from an error; and the adapter never opened a database connection to
 get any of it.
 
 ### SCEN2 — An edit that clears a field, and an edit that leaves it alone
@@ -104,16 +104,16 @@ the third changes nothing — three distinguishable outcomes, because "say
 nothing about this field" and "set this field to nothing" survive the crossing
 as different things.
 
-### SCEN3 — A refusal comes back as a refusal
+### SCEN3 — An error the caller can fix arrives as one
 
 **Initiator:** an agent, through the MCP server.
 **Flow:**
 1. The agent asks to close a dependency loop; the core refuses it as a cycle.
-2. The agent asks for a handle another item already holds; the core refuses it
+2. The agent asks for a slug another item already holds; the core refuses it
    as a conflict.
 3. The agent asks for an item that does not exist.
 4. A defect inside the core makes a fourth, perfectly good request fail.
-**Outcome:** the first three arrive at the adapter as refusals carrying the code
+**Outcome:** the first three arrive at the adapter as errors carrying the code
 the core chose, its message, and its details — enough for the adapter to map
 each to its own protocol's shape without guessing which kind of failure it was.
 The fourth arrives as something else entirely, carrying none of those codes, so
@@ -151,7 +151,7 @@ statement that the work did not happen.
 2. Each writes one half of what would together be a two-step dependency loop —
    two items each waiting on the other.
 3. While those writes are in flight, a third call lists the project.
-**Outcome:** both creates succeed with different handles; of the two loop halves
+**Outcome:** both creates succeed with different slugs; of the two loop halves
 exactly one commits and the other is refused as a cycle; and the listing waits
 on neither writer and shows only items whose writes had finished. Arriving over
 a connection rather than from inside the core changes none of it.
@@ -197,12 +197,12 @@ starting up and calling an address nobody chose.
 - **REQ2** — The connection MUST offer nothing besides those eleven: no other
   operation, and no argument or option beyond the ones those operations already
   take.
-- **REQ3** — The calling library MUST offer the same eleven operations under
+- **REQ3** — The client MUST offer the same eleven operations under
   the same names, accepting the same command values and filter and returning
   the same entities.
-- **REQ4** — An operation called through the calling library MUST produce the
+- **REQ4** — An operation called through the client MUST produce the
   same outcome as the same operation called inside the core's own process: the
-  same entity, the same refusal, and the same change to the store.
+  same entity, the same error, and the same change to the store.
 - **REQ5** — Each of the seven project-scoped operations MUST take the project
   it acts on as an argument of the call; the four instance-level ones
   (`create_project`, `get_project`, `list_projects`, `delete_project`) MUST NOT
@@ -228,21 +228,28 @@ starting up and calling an address nobody chose.
   arriving as empty text.
 - **REQ10** — A listing MUST arrive in the order the core produced it.
 - **REQ11** — The two deletes MUST return no entity, and a caller MUST be able
-  to tell their success apart from a refusal.
+  to tell their success apart from an error.
 
 ### How a call ends
 
-- **REQ12** — Every call MUST end in exactly one of three ways: an answer, a
-  refusal, or a breakdown.
-- **REQ13** — A refusal MUST arrive carrying the code, the message, and the
-  details the core produced, unchanged.
-- **REQ14** — A fault inside the core MUST arrive as a breakdown, and MUST NOT
-  carry any of the four refusal codes — there is nothing for a caller to fix, so
-  it must not read as though there were.
-- **REQ15** — A failure of the connection itself MUST arrive as a breakdown
-  too, and MUST be distinguishable from a fault inside the core.
+- **REQ12** — Every call MUST end in exactly one of the two ways JSON-RPC 2.0
+  defines ([ADR-2](../../../architecture/adrs/adr-2.md)): a `result`, or an
+  `error` object.
+- **REQ13** — An error the core produced MUST arrive carrying the code, the
+  message, and the `data` the core produced, unchanged — including
+  `data.reason`, which names the domain failure (`validation_failed`,
+  `not_found`, `conflict`, `cycle`).
+- **REQ14** — A defect inside the core MUST arrive as `-32603`, carrying none of
+  the domain reasons — there is nothing for a caller to fix, so it must not read
+  as though there were.
+- **REQ15** — A failure of the connection itself MUST arrive as `-32603` too,
+  and the client MUST be able to tell it apart from a defect inside the core:
+  one is worth attempting again and the other is not. This distinction is the
+  client's, for its own recovery — **an adapter MUST NOT pass it outward**, since
+  which half of Nook failed is not an outside caller's business
+  ([spec-5](../07-web-api/spec-5.md)).
 - **REQ16** — The connection MUST apply no rule of its own to a request it can
-  read: every acceptance and every refusal of such a request is the core's
+  read: every acceptance and every error of such a request is the core's
   verdict, not the connection's.
 - **REQ17** — A request the connection cannot read — unreadable, naming no
   operation, missing an argument its operation requires, or carrying a field
@@ -252,17 +259,17 @@ starting up and calling an address nobody chose.
 ### When the core does not answer
 
 - **REQ18** — A call still unanswered 30 seconds after it was made MUST fail
-  with a breakdown rather than wait longer.
-- **REQ19** — The calling library MUST NOT send any call a second time on the
-  caller's behalf — not after the wait limit, not after a dropped connection,
-  not after any refusal or breakdown. A write cannot be repeated safely, and no
+  with an internal error rather than wait longer.
+- **REQ19** — The client MUST NOT send any call a second time on the
+  caller's behalf — not after the timeout, not after a dropped connection,
+  not after any error or internal error. A write cannot be repeated safely, and no
   rule that repeats only some calls is worth the risk of getting the set wrong.
 - **REQ20** — When a caller stops waiting, the work the core has already begun
   MUST run to its own conclusion: a write that reached the moment its change
   becomes permanent in the database MUST stay permanent, and a caller that
   stopped listening MUST NOT leave a half-applied change behind.
 - **REQ21** — When the core is not running, or cannot be reached, a call MUST
-  fail with a breakdown within the wait limit rather than hang.
+  fail with an internal error within the timeout rather than hang.
 - **REQ22** — An adapter MUST recover on its own once the core is reachable
   again: a later call MUST succeed without the adapter being restarted.
 
@@ -282,7 +289,7 @@ across the connection.
 - **REQ24** — The store's guarantees under callers writing at once MUST hold
   when those writers arrive across the connection: the store MUST NOT come to
   hold a loop of items waiting on each other in a circle, nor two entities
-  sharing a handle that has to be unique — two items or releases inside one
+  sharing a slug that has to be unique — two items or releases inside one
   project, or two projects on the instance.
 - **REQ25** — A read taken across the connection MUST show the store either
   wholly before or wholly after a concurrent write, never half-applied.
@@ -300,7 +307,7 @@ across the connection.
 - **REQ29** — A process started without its address MUST stop with a message
   naming what is missing, rather than falling back to a default address nobody
   chose.
-- **REQ30** — Neither adapter, nor the calling library they share, MUST hold any
+- **REQ30** — Neither adapter, nor the client they share, MUST hold any
   database or persistence dependency.
 
 ## Edge cases
@@ -323,8 +330,8 @@ across the connection.
   crosses unchanged, and the core decides what it means.
 - **EDGE8** — The core is restarted between two of an adapter's calls: the
   second call succeeds.
-- **EDGE9** — The core is stopped in the middle of a call: a breakdown, not a
-  refusal, and no wait beyond the limit.
+- **EDGE9** — The core is stopped in the middle of a call: an internal error, not a
+  error, and no wait beyond the limit.
 - **EDGE10** — A caller stops waiting while its write is committing: the write
   stands, and a later read shows it.
 - **EDGE11** — A request naming an operation that does not exist:
@@ -337,27 +344,27 @@ across the connection.
   unknown field is a defect to surface, not a difference to absorb — and
   ignoring one would silently drop something a caller meant.
 - **EDGE15** — Two callers creating an item of the same name at the same
-  moment: both succeed, with different handles.
+  moment: both succeed, with different slugs.
 - **EDGE16** — Two callers each writing one half of a two-step dependency
   loop: exactly one commits, the other is refused as a cycle.
 - **EDGE17** — A slow call and a fast call in flight together: the fast one is
   answered without waiting for the slow one.
 - **EDGE18** — A well-formed call arriving from another machine: not served.
 - **EDGE19** — An adapter started before the core: its first call is a
-  breakdown, and a call made after the core comes up succeeds.
+  internal error, and a call made after the core comes up succeeds.
 - **EDGE20** — A process started with no address configured: it stops, naming
   the missing setting.
 
 ## Acceptance criteria
 
 - **AC1** (REQ1, REQ2, REQ3) — The core's connection answers exactly the
-  eleven named operations and no twelfth; the calling library's public
+  eleven named operations and no twelfth; the client's public
   surface is exactly those same eleven under the same names; and neither side
   accepts an argument that no operation defines.
 - **AC2** (REQ4) — Given the acceptance criteria of
   [spec-1](../03-core-write-path/spec-1.md) and
   [spec-2](../04-structure-queries/spec-2.md), when every one of them is driven
-  through the calling library instead of against the core's services directly,
+  through the client instead of against the core's services directly,
   then each reaches the same verdict it reaches in-process.
 - **AC3** (REQ5) — Given the eleven operations, when each is called, then the
   seven project-scoped ones require a project to be named and the four
@@ -366,7 +373,7 @@ across the connection.
   description with line breaks and quotation marks, a blocker list holding the
   same reference twice, and a reference that is nearly but not quite a
   well-formed id, when each crosses, then the values the core's own operation is
-  invoked with equal the values handed to the calling library, one for one —
+  invoked with equal the values handed to the client, one for one —
   same text, same reference, and the blocker list still holding its duplicate —
   and the stored item's name and description are the text that was sent.
 - **AC5** (REQ7, EDGE2, EDGE3) — Given a task with a description, when an update
@@ -390,19 +397,19 @@ across the connection.
   seconds in the same order the core produced.
 - **AC9** (REQ11) — Given an item and a project, when `delete_item` and
   `delete_project` are called across the connection, then both report success,
-  neither returns an entity, and both are distinguishable from a refusal.
-- **AC10** (REQ12, REQ13) — Given calls that produce each of the four refusal
+  neither returns an entity, and both are distinguishable from an error.
+- **AC10** (REQ12, REQ13) — Given calls that produce each of the four error
   codes in turn, when each is made across the connection, then each arrives as a
-  refusal carrying that same code, the core's message, and the core's details.
-- **AC11** (REQ14) — Given a fault deliberately planted inside the core, when an
-  operation hits it, then the caller receives a breakdown carrying none of the
-  four codes, and the caller can tell it apart from every refusal.
+  error carrying that same code, the core's message, and the core's details.
+- **AC11** (REQ14) — Given a defect deliberately planted inside the core, when an
+  operation hits it, then the caller receives an internal error carrying none of the
+  four codes, and the caller can tell it apart from every error.
 - **AC12** (REQ15, REQ21, REQ22, EDGE8, EDGE9, EDGE19) — Given a caller built
   while the core is not running, when it calls, then the call fails within 30
-  seconds as a breakdown distinguishable from a fault inside the core; when the
+  seconds as an internal error distinguishable from a defect inside the core; when the
   core is then started and the same caller calls again, then the call succeeds;
   and when the core is stopped mid-call and restarted, then that call is a
-  breakdown and the next call succeeds — with the caller never rebuilt at any
+  internal error and the next call succeeds — with the caller never rebuilt at any
   point.
 - **AC13** (REQ16, REQ17, EDGE11, EDGE12, EDGE13, EDGE14) — Given a request
   naming an unknown operation, one whose contents cannot be read, a
@@ -411,10 +418,10 @@ across the connection.
   the store is unchanged, and the core answers the next well-formed call
   normally.
 - **AC14** (REQ18) — Given a core made to hold a call without answering, when
-  the call is made, then it fails as a breakdown between 30 and 31 seconds after
+  the call is made, then it fails as an internal error between 30 and 31 seconds after
   it was sent.
 - **AC15** (REQ19) — Given a call that ends in a dropped connection, in the wait
-  limit, and in each of the four refusals, when each ends, then the core has
+  limit, and in each of the four errors, when each ends, then the core has
   received that request exactly once.
 - **AC16** (REQ20, EDGE10) — Given a caller that stops waiting while the core is
   still writing an item and its blocker edges (repeated 100 times), when the
@@ -427,8 +434,8 @@ across the connection.
 - **AC18** (REQ24, EDGE15, EDGE16) — Given two callers calling at once, when
   both create an item of the same name (repeated 100 times) and when each
   writes one half of a two-step dependency loop (repeated 100 times), then
-  every run of the first leaves two items with different handles, and every run
-  of the second leaves exactly one commit, one `cycle` refusal, and no loop in
+  every run of the first leaves two items with different slugs, and every run
+  of the second leaves exactly one commit, one `cycle` error, and no loop in
   the store.
 - **AC19** (REQ25) — Given one caller repeatedly listing a project while
   another repeatedly creates items in it (repeated 100 times), then every
@@ -444,7 +451,7 @@ across the connection.
   unset, then it stops with a message naming the missing setting rather than
   starting on a default.
 - **AC22** (REQ30) — Given the build's dependency graph, when the adapters and
-  the calling library are checked, then none of them resolves a database or
+  the client are checked, then none of them resolves a database or
   persistence dependency.
 
 ## Definitions
@@ -455,7 +462,7 @@ across the connection.
 - **adapter** — one of the two apps in front of the core: the MCP server, which
   serves agents, and the web app, which serves people. Each translates its own
   protocol into calls on the connection and owns no store.
-- **the calling library** — the one piece of code, shared by both adapters, that
+- **the client** — the one piece of code, shared by both adapters, that
   makes those calls and reads the replies. Built by this epic, so that the two
   adapters cannot read a reply differently.
 - **the catalog** — the eleven operations of REQ1, taken together: everything
@@ -464,22 +471,18 @@ across the connection.
   (seven of the eleven); **instance-level operation** — one that acts on the
   whole **instance** — one running Nook and every project in it — and so names
   no project (the other four).
-- **answer** — a call that ended with the result the operation produces: an
-  entity, a list, or, for the two deletes, nothing at all.
-- **refusal** — a call the core turned down because the request was wrong,
-  carrying `{code, message, details?}` with a code of `validation_failed`,
-  `not_found`, `conflict`, or `cycle`. A refusal tells the caller what to fix.
-- **breakdown** — a call that ended without a verdict, because the core is
-  broken or could not be reached. There is nothing for the caller to fix, which
-  is exactly why it must never look like a refusal.
-- **the wait limit** — the 30 seconds a call waits for an answer before it
-  becomes a breakdown (REQ18).
-- **handle** — the short lowercase name an entity is known by in paths, usable
-  anywhere its id is; **reference** — a string naming an entity, either an id or
-  a handle.
-- **partial update** — a command whose every field may be left unmentioned; the
-  three states a field can be in are unmentioned, set to a value, and set to
-  nothing.
+- **reference** — a string naming an entity, either an id or a slug.
+- **partial update** — an update expressed as JSON Merge Patch, RFC 7396
+  ([ADR-3](../../../architecture/adrs/adr-3.md)): a field left out is left
+  alone, a field carrying a value is set, a field carrying `null` is cleared,
+  and an array replaces rather than merges. Nook deviates twice — a field that
+  must always hold a value refuses `null`, and a field the operation does not
+  define is refused rather than ignored.
+
+JSON-RPC 2.0's own terms are used as the standard defines them and are not
+redefined here: `result`, `error` and its `code`, `message` and `data`, the
+reserved codes, and the timeout after which a call gives up (30 seconds,
+REQ18).
 
 ## Assumptions
 
@@ -488,7 +491,7 @@ across the connection.
   false: REQ4's "the same outcome" has no fixed meaning to be checked against.
 - **ASM2** — Both halves of the connection are built and released together from
   one source tree, so they never hold different ideas of the contract; if false:
-  EDGE14's refusal of an unknown field stops catching defects and starts
+  EDGE14's error of an unknown field stops catching defects and starts
   breaking working deployments, and the connection needs a compatibility rule it
   does not have.
 - **ASM3** — In this milestone the core and both adapters run on one machine
@@ -498,12 +501,12 @@ across the connection.
   reached from anywhere else
   ([08](../../../docs/08-deployment-and-cloud.md)).
 - **ASM4** — Nothing but the two adapters calls this connection; if false: the
-  refusal codes and entity shapes become a contract for callers nobody designed
+  error codes and entity shapes become a contract for callers nobody designed
   for, and changing either stops being a local decision.
 - **ASM5** — Projects hold few enough items that a listing returning everything
-  it matches in one go crosses well inside the wait limit
+  it matches in one go crosses well inside the timeout
   ([spec-2](../04-structure-queries/spec-2.md) makes the same assumption); if
-  false: a large listing turns into a breakdown, and handing results back a page
+  false: a large listing turns into an internal error, and handing results back a page
   at a time — deferred by the design docs — becomes the fix rather than a tuning
   exercise.
 - **ASM6** — Epic 08 adds the actor fields by growing the entities and commands

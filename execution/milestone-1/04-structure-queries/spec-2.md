@@ -16,9 +16,9 @@ subject of [epic 03's spec](../03-core-write-path/spec-1.md), whose rules —
 slug derivation, containment by type, free status movement — this one reads
 back.
 
-Throughout, a *slug* is an item's handle: the short lowercase name derived
-from its title (`Add search` becomes `add-search`) that appears in paths and
-can be used anywhere an id can.
+Throughout, a *slug* is the short lowercase name derived from an item's title
+(`Add search` becomes `add-search`) that appears in paths and can be used
+anywhere an id can.
 
 In scope: the four reads above, invoked directly on the core service — their
 inputs, their results, their ordering, their error behavior, and how they
@@ -116,7 +116,7 @@ whatever the caller knows about the row.
 1. `list_projects` is called against an instance holding four projects, one of
    which has been deleted.
 2. The caller picks one from the result and calls `get_project` with its
-   handle.
+   slug.
 **Outcome:** the listing shows the three remaining projects, newest first, without
 any project having been chosen first; the fetch returns the picked project in
 full.
@@ -146,7 +146,7 @@ because a deleted blocker no longer holds anything up.
 - **REQ4** — When a reference resolves to no entity in its scope — the bound
   project for items and releases, the whole instance for projects — the
   operation MUST fail with `not_found`.
-- **REQ5** — When a read fails, the system MUST return one structured error
+- **REQ5** — When a read fails, the system MUST return one JSON-RPC error
   `{code, message, details?}` whose `code` is `validation_failed` or
   `not_found`; the other two codes of the error model belong to writes and
   MUST NOT arise here.
@@ -273,7 +273,7 @@ because a deleted blocker no longer holds anything up.
   project P2, and with a UUID belonging to nothing, then the first two return
   that item and the last two fail with `not_found`.
 - **AC3** (REQ5) — Given any failing read, when the failure is returned, then
-  it is a single structured error whose code is `validation_failed` or
+  it is a single JSON-RPC error whose reason is `validation_failed` or
   `not_found`, and no read in the suite ever produces `conflict` or `cycle`.
 - **AC4** (REQ6) — Given a leaf under an epic with two blockers, when
   `get_item` returns it, then the result carries its type, name, slug,
@@ -366,9 +366,9 @@ because a deleted blocker no longer holds anything up.
 - **deleted row** — a row that has been removed from the store. Nothing of it
   remains: no read returns it, no reference resolves to it, and it is
   indistinguishable from a row that never existed.
-- **slug** — an item's handle: a short lowercase name used in paths and
-  accepted anywhere an id is. A handle belongs to the row holding it, so a name
-  is available again as soon as that row is deleted.
+- **slug** — a short lowercase name used in paths and accepted anywhere an id
+  is. A slug belongs to the row holding it, so a name is available again as soon
+  as that row is deleted.
 - **reference (ref)** — a string naming an entity: a UUID, or a slug resolved
   within the scope that applies (a project for items and releases, the
   instance for projects).
@@ -386,8 +386,10 @@ because a deleted blocker no longer holds anything up.
   `cancelled`. **Ready** is not a thing this contract defines: it is the name
   people give one combination of filter parts — the leaf types, status `todo`,
   and not held up — computed when asked, never stored and never a status.
-- **structured error** — the `{code, message, details?}` failure payload; on
-  reads, only `validation_failed` and `not_found` occur.
+- **error object** — JSON-RPC 2.0's `{code, message, data?}` failure payload
+  ([ADR-2](../../../architecture/adrs/adr-2.md)), where `data.reason` carries the
+  domain name; on reads, only `validation_failed` (`-32602`) and `not_found`
+  (`-32001`) occur.
 
 ## Assumptions
 

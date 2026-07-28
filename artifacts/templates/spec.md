@@ -4,12 +4,15 @@ true when this is done?* It is the requirements contract: the precise, testable
 behavior an implementation is checked against. Where a PRD argues why and roughly
 what, a spec removes the "roughly" — and it stops before "how": architecture and
 approach are `design_doc`/`plan`-altitude choices, and a spec that prescribes them
-overconstrains the builder. Two disciplines rule this document. Everything is
+overconstrains the builder. Three disciplines rule this document. Everything is
 checkable: every statement must resolve pass/fail against a running system —
 numbers with units, never adjectives ("completes in <2s on a 10k-row file", never
 "fast"). Nothing is guessed: agents build from this literally, so an ambiguity
 discovered while writing is marked as an open question, never papered over with a
-plausible-sounding sentence — a wrong guess reads exactly like a decision. SRS and
+plausible-sounding sentence — a wrong guess reads exactly like a decision. And
+nothing leaks: a contract describes the system from outside, so every statement in
+it is about what a caller can observe and act on, never about the parts behind the
+surface that produce it. SRS and
 use-case documents are house variants of this role. This document never tracks
 state in prose: the project tracker offers structure constructs (releases, statuses, dependency
 edges) for projects that want timeline/status tracking, and git already keeps
@@ -55,6 +58,22 @@ anything carrying two obligations. Non-functional requirements (performance,
 security, reliability, accessibility) are requirements like any other — with
 thresholds and conditions, never bare qualities. Keep *how* out: name the required
 behavior, not the mechanism that delivers it.
+
+Keep the *inside* out too, which is the same rule one step further. A requirement
+on a surface other people call must not name a part of the system they have no
+dealings with — a component, a process, a queue, a table, a library, a layer — nor
+report which of those parts a failure came from. Name one in a contract and callers
+begin coding against that arrangement, so it can no longer be changed without
+breaking them; you have shipped your internal structure as a promise, without ever
+deciding to. Two tests catch it. Could the requirement still be written if the
+system behind the surface were rebuilt a different way? And what does the caller do
+differently for knowing — if the answer is "nothing, but it's useful", it belongs in
+a log, a metric, or an operator's view, not here. So "when the lookup cache misses,
+the reply MUST say so" fails both: it names a cache the caller cannot see and did
+not ask for, and tells them nothing to act on. "The reply MUST arrive within 300ms"
+is the fact they can act on, and it survives the cache being deleted. Where the
+information genuinely is the caller's business, restate it as their decision — what
+they should do next — rather than as your diagnosis of which part broke.
 Format: `- **REQ1** — <When/While <condition>,> the system MUST <behavior>.` Group
 under `###` subheadings by area when the list grows past a dozen; numbering stays
 one REQ-series across groups.
@@ -68,7 +87,10 @@ duplicate), invalid and malformed input, failures of things this behavior depend
 on (network, permissions, concurrent edits), and ordering or repetition surprises
 (retry, double-submit, out-of-order arrival). For each: the situation and the
 required behavior, stated as flatly as a requirement — an edge case listed as a
-question is a to-do, not a spec. When the answer is genuinely "don't care", say so
+question is a to-do, not a spec. A failure of something this behavior depends on is
+written as the caller meets it, never as which part behind the surface gave way —
+the parts are the builder's business, and naming one here promises it will still be
+there. When the answer is genuinely "don't care", say so
 explicitly; silence here becomes an implementer's guess later.
 Format: `- **EDGE1** — <situation>: <required behavior, or "don't care — <why>">.`
 -->
@@ -96,6 +118,10 @@ each pinned: domain terms with precise meanings ("active user: session in the la
 30 days"), entities with the attributes and relationships the behavior depends on —
 described by meaning, not storage. Write an entry whenever two readers could bind a
 word differently; every requirement using a defined term inherits its precision.
+This section defines *this domain's* nouns, never substitutes for the world's: an
+entry teaching a word the industry already has a name for — a timeout, a client, a
+bad request — means the requirements should be using that name instead, so fix them
+and delete the entry. A long definitions list is the symptom of a private dialect.
 Format: `- **<term>** — <definition>.` For entities, follow the definition with
 `attributes: <the ones behavior depends on>; relates to: <other terms>.`
 -->

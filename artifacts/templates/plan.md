@@ -23,6 +23,18 @@ item, not as a series). Answers: *how do I build this one thing?* Key rules:
   or its comments: a comment becomes authoritative the moment it is written
   and must stand on its own, timeless — artifacts drift, archive, and
   renumber. State the underlying reason in plain words instead.
+- **Internals stay behind the surface.** The shortest route to a working change
+  often carries something internal outward through a surface other people call —
+  a library's own error wording, an internal name or id, a distinction that only
+  means anything to whoever built the system. That is a change to the contract,
+  made by accident: callers start depending on it before anyone decided to
+  promise it, and it cannot be taken back. Translate at the boundary into terms
+  the caller can act on, and where the surface genuinely needs the detail, raise
+  it as a change to the requirements rather than shipping it as a detail of the
+  route. The same rule inward: what this change exposes to the *rest of the
+  codebase* — a helper made public, a field opened up — is a promise too, so
+  widen only what the route needs.
+
 - **Right altitude, right size.** Whole-system architecture is
   `design_doc`-altitude and required behavior is `spec`-altitude (markers, not
   prerequisites — this may be the only doc the leaf has); this plan is the
@@ -65,8 +77,9 @@ The route, argued briefly:
 - **Why this way over the obvious alternative** — one honest sentence on the
   road not taken usually suffices at leaf altitude (a real options analysis
   is `rfc`/`design_doc` work).
-- **The blast radius** — what this change touches, and what it must leave
-  untouched.
+- **The blast radius** — what this change touches, what it must leave
+  untouched, and anything it adds to a surface outside this codebase, which is
+  a contract change however much it looks like one more field.
 - **Unverified assumptions, named** — if part of the approach rests on one,
   say so and make proving it the first step below: the riskiest part goes
   first, while changing course is still cheap.

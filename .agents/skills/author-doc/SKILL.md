@@ -80,15 +80,15 @@ template order regardless of interview order.
 
 For each question:
 
-- **Open with the decision and its stakes.** Before any options, one or two
-  plain sentences naming what the user is deciding and what hangs on the
-  answer — what it unblocks, changes, or costs ("this settles whether I
-  actually run the tool and report what happens, or the doc can only repeat
-  what its manual claims"). The test: if you can't state in one
-  line why this is the *user's* call rather than yours, it isn't an interview
-  question — make the judgment call yourself and declare it at the pre-write
-  gate. A question whose intent the user has to reverse-engineer reads as
-  random, however well-phrased its options are.
+- **Open with the decision, in one sentence.** Name what the user is deciding
+  and what turns on it — no more ("This settles whether I run the tool and
+  report what happened, or the doc can only repeat what its manual claims").
+  Not the reading that got you here, not why the decision is theirs rather
+  than yours: that test is for your own triage — if you can't state in one
+  line why this is the *user's* call, don't ask it, decide it and declare it
+  at the pre-write gate. A question whose intent the user has to
+  reverse-engineer reads as random, however well-phrased its options are —
+  and so does one buried under three sentences of setup.
 - **Never ask an open question.** Every question arrives as a brief: what is
   being decided, what the evidence says, two to four concrete options, and a
   recommendation — never a blank prompt that hands the framing back ("how should
@@ -175,33 +175,64 @@ You are a colleague asking a question, not a process reporting status.
 - One short question in plain words, with just enough context to answer it.
   If answering requires reading three paragraphs first, the question isn't
   ready to ask.
-- **Plain words means approachable words.** No unexplained jargon, no
-  compressed shorthand ("strict whole-graph form", "off-matrix pairing") —
-  say what a thing does in everyday language. For a technical choice, show
-  one concrete example of what happens under each option ("with option A, a
-  typo in the config file stops the program at startup with an error; with
-  option B, the program runs anyway on default values") rather than naming
-  categories; a consequence the user can picture beats a taxonomy. If the
-  user has to ask what a question means, the question was asked wrong.
-- **A structured question is self-contained.** The user reads the question
-  dialog on its own — chat prose before the tool call may never be seen, so
-  context placed there is context lost. The question text itself must set
-  the scene before asking: where the question comes from (which source
-  says what, or is silent on what), why it surfaces now, and what the
-  answer settles — then the ask. A question that assumes the reader
-  followed your reading so far will land as "where is this coming from?".
-- **Options are sentences, not specifications.** The same plain-words bar
-  applies inside a structured choice. A label is a short plain phrase a
-  reader parses at a glance ("Keep names and slugs separate"), never
-  syntax fragments or shorthand ("slug? input; name never touches it"). A
-  description carries exactly one idea: what the user's world looks like
-  under that option, ideally as the concrete example above. Everything
-  else — secondary trade-offs, which documents need amending, edge
-  implications — waits for a follow-up question, or for the judgment calls
-  reported with the finished file. If
-  a description needs a second sentence, it's carrying material that
-  belongs elsewhere.
+- **The length budget is real.** A question is at most three sentences: one
+  naming the decision, one carrying the fact the answer turns on, one asking.
+  A label is at most six words; a description is one sentence. Run longer and
+  you are explaining your reasoning rather than asking — cut the explanation,
+  never the facts.
+- **Name the thing, then gloss it — never paraphrase it away.** Precision is
+  not jargon. Write "the loopback address (`127.0.0.1`)", not "the address a
+  machine uses to reach itself"; "the fault reply's `message` field", not "the
+  words the reply carries". The real name is shorter, tells the reader what to
+  search for, and is what the code and the project's own documents call it.
+  What the plain-words tenet bans is an *unexplained* term and compressed
+  shorthand ("strict whole-graph form", "REQ17/EDGE3") — so the fix is a
+  three-word gloss at first use, not a circumlocution, and a term the
+  project's own documents already use needs no gloss at all. Technical
+  detail is what makes a question answerable; strip it and you have asked
+  about nothing.
+- **Show the consequence, not the category.** For a technical choice, one
+  concrete line of what happens beats a paragraph of characterization: "a typo
+  in the config stops the program at startup" against "the program starts on
+  defaults nobody chose". A code fragment, a wire payload, or a filename in
+  the option's `preview` does this better than any sentence — reach for it
+  first.
+- **Self-contained means it stands without the chat, not that it recaps your
+  reading.** Prose you write before the tool call may never be seen, so the
+  question must carry the one fact the answer turns on. It must not carry the
+  chain of documents you read to find that fact: name a source in a clause
+  ("spec-5 requires…", "epic 05 did this, and it cost…"), never in a sentence
+  of its own.
+- **Cut what the user already knows.** They asked for this document; they know
+  what it is and why they are being asked for input. Whatever the previous
+  question or their own last answer established is context to lean on, not
+  context to restate.
+- **Options are sentences, not specifications.** A label is a short plain
+  phrase parsed at a glance ("Keep names and handles separate"), never a
+  syntax fragment ("slug? input; name never touches it"). A description
+  carries exactly one idea: what the user's world looks like under that
+  option. Secondary trade-offs, which documents need amending, edge
+  implications — those wait for a follow-up question or for the judgment
+  calls reported with the finished file.
 - Quote the template only when pushing back, and only the one relevant line.
+
+Calibration, on a real decision:
+
+> **Too long** — "The discovery for epic 07 left exactly one thing for you to
+> settle before a plan can be written, and it is a change to something already
+> shipped. Today a call that never reached the core and a call the core
+> answered by breaking both come back as a fault carrying a message and
+> nothing else — the reply has no place to say which of the two happened.
+> Spec-5 requires a caller to tell them apart, because one is worth trying
+> again and the other is not. …" (four more sentences)
+>
+> **Right** — "A fault reply carries only `message`, so a caller can't tell
+> 'the core was unreachable' from 'the core answered and broke' — and spec-5
+> needs that distinction, since only the first is worth retrying. Add a
+> `reached` field to the reply, or make the message start with a fixed word?"
+
+Same decision, same facts, a quarter of the words — and the short one names
+the field, which the long one spent two sentences avoiding.
 
 When the questions run out, the interview is over and the document gets
 written — in that same turn, without asking permission to write it. Never dump
@@ -233,6 +264,17 @@ Then write the document:
 
 - Follow the template exactly: same heading order, `{Title}`/`{seq}` filled,
   **all guidance comments stripped**, each section obeying its `Format:` line.
+- **The naming rule from Voice governs the prose too, not just the questions.**
+  A thing the world already names keeps that name in the written document —
+  timeout, loopback address, bad request, client, idempotent — glossed once
+  where the audience needs it. Never coin a plain-sounding synonym: it reads as
+  everyday language, so it passes a plain-words review while hiding that a
+  standard concept was meant, and it travels from the document into field names
+  and class names, where it becomes a contract. Two checks before the file is
+  written: every entry in a definitions section defines a noun of *this*
+  domain — one teaching a word the wider world already has a name for means the
+  document should be using that name instead; and every mechanism the document
+  specifies names the standard it adopts, or the one it rejected and why.
 - Content is only what the interview agreed. Questions the interview asked
   and the user could not settle go in the template's open-questions section
   verbatim (or a trailing one if the template lacks it) — never guessed on

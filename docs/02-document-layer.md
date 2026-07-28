@@ -86,7 +86,12 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
   `Implementation Approach` or `Implementation Approach/Rollback`.
 - **Duplicate siblings** (same heading text under the same parent) are disambiguated
   by a 1-based **ordinal suffix**: `Rollback#2` is the second `Rollback` among its
-  siblings. Unique headings need no suffix.
+  siblings. Unique headings need no suffix. The convention every markdown renderer
+  uses for the same problem — GitHub's anchor slugs, where a repeated heading
+  becomes `rollback-1`, `rollback-2` — was rejected deliberately: it lowercases and
+  hyphenates the heading text, so the address stops being the text a caller can
+  read in the document, and its suffix is 0-based on the *second* occurrence, which
+  is a well-known source of off-by-one mistakes.
 - Heading paths are the only addressing scheme — **never line numbers or offsets**.
   Paths survive reordering and edits to unrelated sections (stable anchors, §4.2).
 
@@ -151,13 +156,33 @@ document's H1.
 `replace_range` was considered and dropped: section ops plus `apply_patch` cover fine
 edits without reintroducing line/offset addressing.
 
+> **On `apply_patch` not being a patch format.** Unified diff (POSIX `diff -u`) is
+> the standard way to express a text edit, and it was rejected rather than
+> overlooked: it addresses by line number and context, which is precisely the
+> addressing this layer refuses, and a hunk whose context has shifted either
+> misapplies or fails in ways a caller cannot repair. Exact-string find/replace,
+> failing loudly when `old` is missing or not unique, is the same guarantee
+> without line addressing — and is what every code-editing agent already emits.
+> RFC 6902 and RFC 7396 are JSON patch formats and do not apply to markdown
+> bodies ([ADR-3](../architecture/adrs/adr-3.md) adopts the latter for structure
+> updates).
+
 ### Concurrency — optional optimistic check
 
+This is HTTP's conditional-request mechanism (RFC 9110 §13) carried on an RPC
+wire: `expectedVersion` is an entity tag, and supplying it is `If-Match`. The
+semantics are taken from there rather than invented, including that a failed
+precondition writes nothing.
+
 - Every mutating op accepts an optional **`expectedVersion`**. If provided and it does
-  not equal the document's current version, the op fails with `conflict` and nothing
-  is written — lost-update protection.
+  not equal the document's current version, the op fails and nothing is written —
+  lost-update protection. The failure is a **precondition failure**, distinct from
+  a slug collision, which is the other thing `conflict` used to mean.
 - Omitted `expectedVersion` = last-writer-wins, fine for single-user v1. The field
   lets a careful caller (or the UI) opt into a check.
+- HTTP's own headers are not used, because the operation is not addressed by URL
+  ([ADR-2](../architecture/adrs/adr-2.md)); what is adopted is the semantics and
+  the vocabulary, so a caller who knows `If-Match` knows this.
 
 ### On-disk layout (artifact repo)
 

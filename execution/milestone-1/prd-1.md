@@ -49,7 +49,7 @@ every other milestone stacks on this layer.
   does: projects belong to the human surface (spec 01, and epic 06's spec-4).
 - **GOAL2** — one contract, checked wherever it can drift: all 11 catalog
   operations (4 instance-level + 7 project-scoped, per spec 01) reach the same
-  verdict — same entity, same refusal code, same change to the store — called
+  verdict — same entity, same JSON-RPC error, same change to the store — called
   inside the core, called across the internal connection, and called over the web
   API; and the 7 project-scoped ones reach that same verdict called as an MCP tool,
   those seven being the whole of the MCP surface. Observed by running one contract
@@ -88,7 +88,7 @@ every other milestone stacks on this layer.
 - **REQ6 · P0** — The MCP server: streamable HTTP at `/mcp/{projectRef}`,
   project bound per connection and reported to the client when the connection
   opens, the catalog's seven project-scoped operations as tools (projects are not
-  on this surface), UUID-or-slug references, structured errors
+  on this surface), UUID-or-slug references, JSON-RPC errors
   (`validation_failed` / `not_found` / `conflict` / `cycle`).
   *Why:* GOAL1 — the agent surface is the north-star path.
 - **REQ7 · P0** — The web API: `:web-app` serves the core's own request and reply

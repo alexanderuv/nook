@@ -48,9 +48,8 @@ the project's prerogative, never a working agent's.
   included — uses everyday language. No unexplained trade terms. No compressed
   shorthand: not bare token runs ("REQ17/REQ23/EDGE3"), not arrow chains
   ("resolve → validate → insert"), not abbreviations a newcomer would have to
-  decode. Where a technical term is unavoidable, say what it means in plain
-  words at first use ("a spike — a small throwaway experiment built only to
-  answer a question"). Where an artifact is cited, weave the citation into a
+  decode. Say what a term means in plain words at first use ("a spike — a small
+  throwaway experiment built only to answer a question"). Where an artifact is cited, weave the citation into a
   sentence that states the point in plain words, so the pointer is a
   cross-check, never required reading. A concrete example the reader can
   picture beats a category name. No claimed audience lifts this rule: "the
@@ -63,3 +62,39 @@ the project's prerogative, never a working agent's.
   after it. Check: if a reader outside the specialty would have to ask what a
   sentence means, rewrite the sentence; expect a reviewer to bounce the whole
   document on a single unexplained term.
+
+- **Adopt the standard before designing a mechanism.** Before specifying how
+  anything is exchanged, validated, reported, identified, or timed, name the
+  published standard that already covers it and take it unless there is a stated
+  reason it does not fit. Error replies over HTTP, request shapes, dates,
+  identifiers, authentication, pagination — the world solved these long ago,
+  wrote each one down as a public specification, and implemented it many times
+  over in every language. Whether this project happens to depend on such a
+  library already is beside the point: the standard exists, callers and their
+  tools know it, and the burden is on anyone proposing something else. Deriving
+  one from
+  first principles costs a design debate, a bespoke implementation, tests, and
+  documentation, and hands every caller something that works nowhere else and
+  that no tool understands. The cost is hidden, too: a home-made mechanism
+  re-opens settled questions as if they were new, one design meeting at a time.
+  Check: for any mechanism a document specifies, it names the standard it adopts,
+  or the one it rejected with the reason — "none was considered" fails.
+
+- **Established names, never invented ones.** This is the other half of plain
+  words, and the half that is easy to get backwards: the rule above bans an
+  *unexplained* term, never a *technical* one. Anything the industry, the
+  protocol, or the library already has a name for keeps that name — timeout,
+  loopback address, HTTP status, client, idempotent, bad request — glossed in a
+  few words the first time and used plainly after. Never coin a synonym to make
+  a term sound simpler. A coined word cannot be searched for, matches nothing in
+  any documentation the reader meets next, and turns a term they already knew
+  into one they have to learn; it is worse than jargon precisely because it
+  reads as plain English, which hides that a standard concept was meant. The
+  damage compounds the moment the words leave prose: a name invented in a
+  document becomes a field on the wire and a class in the code, and then it is a
+  contract that outside callers are held to. Where a project genuinely has a
+  thing of its own, name it plainly and define it once — that is what a
+  definitions list is for. Check: read the definitions list of any document; an
+  entry that teaches a word the wider world already has a name for is a defect
+  in the vocabulary, not a service to the reader — replace the word with the
+  established one and delete the entry.
