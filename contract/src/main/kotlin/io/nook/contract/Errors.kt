@@ -14,7 +14,7 @@ import kotlinx.serialization.Serializable
  * request", an exception means "this service is broken".
  */
 @Serializable(with = ErrorCodeSerializer::class)
-public enum class ErrorCode(public val label: String) {
+public enum class ErrorCode(override val label: String) : Labelled {
     VALIDATION_FAILED("validation_failed"),
     NOT_FOUND("not_found"),
     CONFLICT("conflict"),
@@ -48,7 +48,7 @@ private const val MISSING = "missing"
  * It travels in the details a refusal already carries rather than in its
  * message, so reading it needs no guessing at wording.
  */
-public enum class Missing(public val label: String) {
+public enum class Missing(override val label: String) : Labelled {
     PROJECT("project"),
     ITEM("item"),
     RELEASE("release"),
@@ -70,8 +70,11 @@ public enum class Missing(public val label: String) {
  * refusal: there is nothing for a caller to fix, which is exactly why it must
  * never read as though there were.
  */
-public enum class BreakdownOrigin(public val label: String) {
-    /** The core answered, and what it answered is that something inside it broke. */
+public enum class BreakdownOrigin(override val label: String) : Labelled {
+    /**
+     * The core answered, and its answer settled nothing: it says something
+     * inside it broke, or it is something this build cannot read at all.
+     */
     CORE("core"),
 
     /** No answer arrived at all: nothing listening, the link dropped, or the wait ran out. */
@@ -81,10 +84,12 @@ public enum class BreakdownOrigin(public val label: String) {
 /**
  * A call across the connection that produced no verdict.
  *
- * The two origins are kept apart because a caller acts on them differently: a
- * core that broke has a defect to report, while a core that could not be
- * reached may simply not be up yet — and the same caller succeeds later without
- * being rebuilt.
+ * The two origins are kept apart because a caller acts on them differently, and
+ * what separates them is whether anything came back. An answer that arrived and
+ * settled nothing will settle nothing on a second attempt either, so there is a
+ * defect to report — the core's own, or a version of it this build was never
+ * written against. A core that could not be reached may simply not be up yet,
+ * and the same caller succeeds later without being rebuilt.
  */
 public class BreakdownException internal constructor(
     public val origin: BreakdownOrigin,

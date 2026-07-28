@@ -6,12 +6,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlinx.serialization.SerializationException
 
 /**
  * The values the entities and the listing filter are made of, across the wire
- * and back — the vocabularies as the words a caller writes, the two time types
- * whose conversions are written by hand, and the filter's five parts.
+ * and back — the vocabularies as the words a caller writes and under the names
+ * their shapes go by, the two time types whose conversions are written by hand,
+ * and the filter's five parts.
  *
  * The filter needs no conversion of its own: a part nobody is filtering on is
  * absent from the text, while a part with no values is an empty list, and those
@@ -46,6 +48,68 @@ class ValueCrossingTest {
             "\"blocked\" is not an item status; the item statuses are todo, in_progress, done, cancelled",
             refused.message,
         )
+    }
+
+    @Test
+    fun `each vocabulary refuses under its own two words, never a neighbour's`() {
+        // Every vocabulary is four words wide and three of them are statuses of
+        // something, so a pairing swapped between two of them still encodes,
+        // decodes and round-trips every member correctly. The sentence is the
+        // only place the swap shows.
+        assertEquals(
+            "\"story\" is not an item type; the item types are epic, task, bug, chore",
+            assertFailsWith<SerializationException> {
+                catalogJson.decodeFromString<ItemType>(""""story"""")
+            }.message,
+        )
+        assertEquals(
+            "\"shipped\" is not a release status; the release statuses are planned, in_progress, released, cancelled",
+            assertFailsWith<SerializationException> {
+                catalogJson.decodeFromString<ReleaseStatus>(""""shipped"""")
+            }.message,
+        )
+        assertEquals(
+            "\"forbidden\" is not a refusal code; the refusal codes are validation_failed, not_found, conflict, cycle",
+            assertFailsWith<SerializationException> {
+                catalogJson.decodeFromString<ErrorCode>(""""forbidden"""")
+            }.message,
+        )
+    }
+
+    @Test
+    fun `a vocabulary keeps the name it goes by, whatever its Kotlin type is renamed to`() {
+        // These four are what a caller sees, and each is read off the Kotlin
+        // type, so a rename moves one. Nothing about a value's encoding depends
+        // on them — every other check here would keep passing — which is why
+        // the four are stated here rather than left to follow the code.
+        assertEquals("io.nook.contract.ItemType", ItemTypeSerializer.descriptor.serialName)
+        assertEquals("io.nook.contract.ItemStatus", ItemStatusSerializer.descriptor.serialName)
+        assertEquals("io.nook.contract.ReleaseStatus", ReleaseStatusSerializer.descriptor.serialName)
+        assertEquals("io.nook.contract.ErrorCode", ErrorCodeSerializer.descriptor.serialName)
+    }
+
+    @Test
+    fun `the wire and the services read one word as one member`() {
+        // The services validate a caller's word with `fromLabel` and the wire
+        // decodes it with the serializer. Were those two lookups rather than
+        // one, a word could validate as one member and come back as another,
+        // and every round trip below would still pass.
+        ItemType.entries.forEach { member ->
+            assertEquals(member, ItemType.fromLabel(member.label))
+            assertEquals(member, catalogJson.decodeFromString<ItemType>("\"${member.label}\""))
+        }
+        ItemStatus.entries.forEach { member ->
+            assertEquals(member, ItemStatus.fromLabel(member.label))
+            assertEquals(member, catalogJson.decodeFromString<ItemStatus>("\"${member.label}\""))
+        }
+        ReleaseStatus.entries.forEach { member ->
+            assertEquals(member, ReleaseStatus.fromLabel(member.label))
+            assertEquals(member, catalogJson.decodeFromString<ReleaseStatus>("\"${member.label}\""))
+        }
+
+        assertNull(ItemType.fromLabel("story"))
+        assertNull(ItemStatus.fromLabel("blocked"))
+        assertNull(ReleaseStatus.fromLabel("shipped"))
     }
 
     @Test

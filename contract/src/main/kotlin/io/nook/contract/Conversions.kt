@@ -3,6 +3,7 @@ package io.nook.contract
 import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import kotlin.enums.EnumEntries
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -78,73 +79,69 @@ public object LocalDateSerializer : KSerializer<LocalDate> {
  *
  * A label outside the vocabulary is refused with the vocabulary spelled out, so
  * a caller who mistypes a status learns the four it could have written.
+ *
+ * The accepted words are read off the members themselves and the name this
+ * reports itself under is read off the vocabulary's own type, so neither can
+ * drift from the vocabulary being crossed. That name is part of what a caller
+ * sees while being no part of what a value encodes to, so a check beside these
+ * states all four outright: a Kotlin rename would otherwise move a caller's
+ * name with every round trip still passing.
  */
-public abstract class LabelSerializer<T> internal constructor(
-    serialName: String,
+public sealed class LabelSerializer<T>(
+    entries: EnumEntries<T>,
+    type: Class<T>,
     private val singular: String,
     private val plural: String,
-    private val labels: List<String>,
-) : KSerializer<T> {
+) : KSerializer<T> where T : Enum<T>, T : Labelled {
 
+    private val byLabel: Map<String, T> = entries.associateBy { it.label }
+    private val vocabulary: String = entries.joinToString { it.label }
+
+    init {
+        // Two members under one word leave the word meaning whichever of them
+        // this map happened to keep, for every caller and every service at once.
+        require(byLabel.size == entries.size) {
+            "${type.canonicalName} has two members under one label: $vocabulary"
+        }
+    }
+
+    // The canonical name rather than the plain one: a vocabulary nested inside
+    // another type has a dollar sign in the name the runtime knows it by, where
+    // every name a caller is shown here is dotted throughout.
     final override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor(serialName, PrimitiveKind.STRING)
+        PrimitiveSerialDescriptor(type.canonicalName, PrimitiveKind.STRING)
 
-    protected abstract fun labelOf(value: T): String
-
-    protected abstract fun ofLabel(label: String): T?
+    /** The member [label] names, or nothing where the vocabulary has no such word. */
+    internal fun of(label: String): T? = byLabel[label]
 
     final override fun serialize(encoder: Encoder, value: T) {
-        encoder.encodeString(labelOf(value))
+        encoder.encodeString(value.label)
     }
 
     final override fun deserialize(decoder: Decoder): T {
         val label = decoder.decodeString()
-        return ofLabel(label)
+        return byLabel[label]
             ?: throw SerializationException(
-                "\"$label\" is not $singular; the $plural are ${labels.joinToString()}",
+                "\"$label\" is not $singular; the $plural are $vocabulary",
             )
     }
 }
 
 public object ItemTypeSerializer : LabelSerializer<ItemType>(
-    "io.nook.contract.ItemType",
-    "an item type",
-    "item types",
-    ItemType.entries.map { it.label },
-) {
-    override fun labelOf(value: ItemType): String = value.label
-    override fun ofLabel(label: String): ItemType? = ItemType.fromLabel(label)
-}
+    ItemType.entries, ItemType::class.java, "an item type", "item types",
+)
 
 public object ItemStatusSerializer : LabelSerializer<ItemStatus>(
-    "io.nook.contract.ItemStatus",
-    "an item status",
-    "item statuses",
-    ItemStatus.entries.map { it.label },
-) {
-    override fun labelOf(value: ItemStatus): String = value.label
-    override fun ofLabel(label: String): ItemStatus? = ItemStatus.fromLabel(label)
-}
+    ItemStatus.entries, ItemStatus::class.java, "an item status", "item statuses",
+)
 
 public object ReleaseStatusSerializer : LabelSerializer<ReleaseStatus>(
-    "io.nook.contract.ReleaseStatus",
-    "a release status",
-    "release statuses",
-    ReleaseStatus.entries.map { it.label },
-) {
-    override fun labelOf(value: ReleaseStatus): String = value.label
-    override fun ofLabel(label: String): ReleaseStatus? = ReleaseStatus.fromLabel(label)
-}
+    ReleaseStatus.entries, ReleaseStatus::class.java, "a release status", "release statuses",
+)
 
 public object ErrorCodeSerializer : LabelSerializer<ErrorCode>(
-    "io.nook.contract.ErrorCode",
-    "a refusal code",
-    "refusal codes",
-    ErrorCode.entries.map { it.label },
-) {
-    override fun labelOf(value: ErrorCode): String = value.label
-    override fun ofLabel(label: String): ErrorCode? = ErrorCode.entries.firstOrNull { it.label == label }
-}
+    ErrorCode.entries, ErrorCode::class.java, "a refusal code", "refusal codes",
+)
 
 /**
  * One value of the parent part: the epic's reference, or nothing at all for

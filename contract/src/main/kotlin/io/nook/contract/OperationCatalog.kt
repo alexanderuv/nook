@@ -59,7 +59,7 @@ public interface OperationCatalog {
  * into this type directly: a name nobody defined has to come back as a refusal
  * naming it, and text that failed to decode has nothing left to name.
  */
-public enum class CatalogOperation(public val label: String) {
+public enum class CatalogOperation(override val label: String) : Labelled {
     CREATE_PROJECT("create_project"),
     GET_PROJECT("get_project"),
     LIST_PROJECTS("list_projects"),

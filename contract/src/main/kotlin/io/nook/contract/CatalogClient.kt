@@ -15,6 +15,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 
 /** How long a call waits for an answer before it becomes a breakdown. */
@@ -29,7 +30,9 @@ public val DEFAULT_WAIT_LIMIT: Duration = 30.seconds
  * commands and filter, and returns the same entities. A call ends in exactly
  * one of three ways: it answers, it throws [StructuredErrorException] carrying
  * the core's own refusal unchanged, or it throws [BreakdownException] — which
- * says whether the core broke or could not be reached.
+ * says whether an answer arrived at all. A reply that arrived and cannot be read
+ * here is the second of those and never the first: the operation ran, so there
+ * is nothing in the call for its caller to correct.
  *
  * Nothing here sends a call a second time, and nothing is installed that would.
  * A write cannot be repeated safely, and no rule that repeats only some calls
@@ -97,19 +100,39 @@ public class CatalogClient(
             payload = catalogJson.encodeToJsonElement(wiring.payloadShape, payload).jsonObject,
         )
         return when (val reply = exchange(catalogJson.encodeToString(request))) {
-            is CatalogReply.Answer -> wiring.answerShape.read(catalogJson, reply.result)
+            is CatalogReply.Answer -> readAnswer(wiring, reply.result)
             is CatalogReply.Refusal -> throw StructuredErrorException(reply.error)
             is CatalogReply.Fault -> throw BreakdownException(BreakdownOrigin.CORE, reply.message, null)
         }
     }
 
     /**
+     * What a call that succeeded answered, or a breakdown where this build
+     * cannot read it.
+     *
+     * A core a version ahead answers a write that landed with a value whose
+     * vocabulary this build has never heard of. Left to escape, that reaches
+     * whatever an adapter has arranged for a call it got wrong, and an agent is
+     * told to correct the arguments of work that already happened — which it
+     * corrects by sending the write a second time. The operation ran, so there
+     * is nothing in the call for its caller to fix, and this says so.
+     */
+    private fun <P, R> readAnswer(wiring: WiredOperation<P, R>, result: JsonElement?): R =
+        try {
+            wiring.answerShape.read(catalogJson, result)
+        } catch (unreadable: SerializationException) {
+            throw brokenCore(
+                "the core at $address answered this call with something this cannot read: $unreadable",
+                unreadable,
+            )
+        }
+
+    /**
      * Sends one request and reads back one reply, or reports why there was
-     * none. Everything that is not a reply is the same kind of thing here —
-     * nothing listening, a link that dropped, a wait that ran out, an answer
-     * that could not be read — so it is caught broadly on purpose: a caller
-     * needs to know a verdict never arrived, and the cause it carries says the
-     * rest.
+     * none. What separates the two origins is whether anything came back at
+     * all: nothing listening, a link that dropped and a wait that ran out are
+     * the connection, while a core that answered has answered — even where what
+     * it answered is unreadable here, which it will be again next time.
      */
     private fun exchange(request: String): CatalogReply {
         val answered = try {
@@ -131,15 +154,18 @@ public class CatalogClient(
         return try {
             catalogJson.decodeFromString(body)
         } catch (unreadable: SerializationException) {
-            throw unreachable("the core at $address answered something this cannot read: $unreadable", unreadable)
+            throw brokenCore("the core at $address answered something this cannot read: $unreadable", unreadable)
         }
     }
 
-    private fun noReplyIn(status: HttpStatusCode): BreakdownException = unreachable(
+    private fun noReplyIn(status: HttpStatusCode): BreakdownException = brokenCore(
         "the core at $address answered $status, which carries no reply to read",
         cause = null,
     )
 
     private fun unreachable(message: String, cause: Throwable?): BreakdownException =
         BreakdownException(BreakdownOrigin.CONNECTION, message, cause)
+
+    private fun brokenCore(message: String, cause: Throwable?): BreakdownException =
+        BreakdownException(BreakdownOrigin.CORE, message, cause)
 }
