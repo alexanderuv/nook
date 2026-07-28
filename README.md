@@ -14,6 +14,9 @@ on the same two things:
 - **Documents** — manifestos, RFCs, design docs, and per-task implementation
   plans (analysis, background, approach, caveats, test plan). Versioned in git.
 
+Creating and deleting a *project* belongs to the human surface alone. An agent
+connects to a project and works inside it; there is no tool that names one.
+
 ## The workflow Nook is built around
 
 1. **Create an epic** — a name and a description.
@@ -46,9 +49,10 @@ Two things govern that workflow:
   branch-local documents.
 - **Nook is a service.** The artifact store is a hosted git remote Nook manages;
   the MCP endpoint is a network service; a single instance manages many projects.
-- **The MCP server is the only authorized writer.** Every mutation routes through
-  it so structure and documents stay in sync. Because content lives in git, drift
-  is always recoverable, never corrupting.
+- **The core service is the only authorized writer.** Both adapters reach state by
+  calling it and never open a store themselves, so every mutation routes through
+  one write path and structure and documents stay in sync. Because content lives
+  in git, drift is always recoverable, never corrupting.
 - **The document API is editor-grade.** Agents edit sections and ranges by stable
   anchors — never read-the-whole-doc-then-overwrite-the-whole-doc.
 
@@ -59,8 +63,8 @@ rationale behind each decision.
 
 | Layer            | Choice                                             |
 | ---------------- | -------------------------------------------------- |
-| Backend          | Kotlin + Ktor                                      |
-| Agent interface  | Official Java MCP SDK (network endpoint)           |
+| Backend          | Kotlin; Ktor in the core service, Jetty in the MCP server |
+| Agent interface  | Official Java MCP SDK, over streamable HTTP        |
 | Structure store  | PostgreSQL                                          |
 | Document store   | Git (hosted remote), behind an `ArtifactStore` seam |
 | Web UI           | React + TypeScript (strict)                         |
@@ -68,10 +72,11 @@ rationale behind each decision.
 ## Status
 
 Milestone 1, in progress. The architecture is settled (see `ARCHITECTURE.md`).
-The core service's structure layer is built: the PostgreSQL schema, the nine
-write operations, the five reads, and the tests that hold them to it. Still
-design only: the MCP server and web app, the document layer, and the git-backed
-artifact store.
+Built: the PostgreSQL schema, the nine write operations, the five reads, the
+connection both adapters reach the core service by, and the MCP server itself —
+the seven project-scoped operations offered as tools, one address per project.
+Still design only: the web app, the document layer, and the git-backed artifact
+store.
 
 The v1 goal is a **shallow end-to-end** slice: every part present — MCP,
 structure store, document store, skills, tenets, UI — none of them deep.

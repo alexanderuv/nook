@@ -1,10 +1,11 @@
 # Nook — session guide
 
 Agent-native project-management + artifact repository. **Milestone 1 in progress**:
-the design is settled and the core service's structure layer is built — schema,
-the nine write operations, the five reads, and their tests. The adapters
-(`:mcp-server`, `:web-app`), the document layer, and the git-backed artifact
-store are still design only.
+the design is settled, the core service's structure layer is built — schema, the
+nine write operations, the five reads, and their tests — and so are the
+connection both adapters reach the core by and `:mcp-server`, which serves the
+seven project-scoped operations as tools at one address per project. `:web-app`,
+the document layer, and the git-backed artifact store are still design only.
 
 ## Where things are
 
