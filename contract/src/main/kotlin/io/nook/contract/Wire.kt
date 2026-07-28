@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.descriptors.element
+import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.Json
@@ -92,7 +94,10 @@ public data object EmptyPayload
  * where there is one, is named by the request rather than by this.
  */
 @Serializable
-public data class TargetRef(public val ref: String)
+public data class TargetRef(
+    @Describes("What this call is about, by its id or its handle.")
+    public val ref: String,
+)
 
 /**
  * The payload of `update_item`: the item, and the fields to change, flat
@@ -112,11 +117,70 @@ public data class ReleaseUpdate(public val ref: String, public val changes: Upda
 
 public object ItemUpdateSerializer : KSerializer<ItemUpdate> {
 
-    private val defined = setOf(
-        "ref", "name", "slug", "description", "status", "type", "parentRef", "releaseRef", "blockedBy",
-    )
+    // Declaring the fields is what a conversion written by hand owes anyone who
+    // asks the shape what it holds — and a field that may be set to nothing is
+    // declared as one that accepts nothing, which is exactly the distinction
+    // [clearableChange] makes below. So the declaration and the reading cannot
+    // come to disagree.
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("io.nook.contract.ItemUpdate") {
+        element<String>("ref", describedAs("The item to change, by its id or its handle."))
+        element<String>(
+            "name",
+            describedAs("A new name for the item. Left out, the name is left alone."),
+            isOptional = true,
+        )
+        element<String>(
+            "slug",
+            describedAs("A new handle for the item. Left out, the handle is left alone."),
+            isOptional = true,
+        )
+        element<String?>(
+            "description",
+            describedAs(
+                "A new description, or nothing at all to clear the one it has. " +
+                    "Left out, the description is left alone.",
+            ),
+            isOptional = true,
+        )
+        element<String>(
+            "status",
+            describedAs(
+                "A new status: todo, in_progress, done, or cancelled. Left out, the status is left alone.",
+            ),
+            isOptional = true,
+        )
+        element<String>(
+            "type",
+            describedAs("A new type: epic, task, bug, or chore. Left out, the type is left alone."),
+            isOptional = true,
+        )
+        element<String?>(
+            "parentRef",
+            describedAs(
+                "The epic to move the item under, by its id or its handle, or nothing at all to move it out to " +
+                    "project level. Left out, where the item sits is left alone.",
+            ),
+            isOptional = true,
+        )
+        element<String?>(
+            "releaseRef",
+            describedAs(
+                "The release to put the epic in, by its id or its handle, or nothing at all to take it out of " +
+                    "every release. Left out, the release is left alone.",
+            ),
+            isOptional = true,
+        )
+        element<List<String>>(
+            "blockedBy",
+            describedAs(
+                "The whole set of items this one waits on, each by its id or its handle. It replaces the set " +
+                    "rather than adding to it, so an empty list clears it. Left out, the blockers are left alone.",
+            ),
+            isOptional = true,
+        )
+    }
 
-    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("io.nook.contract.ItemUpdate")
+    private val defined: Set<String> = descriptor.fieldNames().toSet()
 
     override fun serialize(encoder: Encoder, value: ItemUpdate) {
         val changes = value.changes
@@ -159,9 +223,45 @@ public object ItemUpdateSerializer : KSerializer<ItemUpdate> {
 
 public object ReleaseUpdateSerializer : KSerializer<ReleaseUpdate> {
 
-    private val defined = setOf("ref", "name", "slug", "description", "status", "targetDate")
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("io.nook.contract.ReleaseUpdate") {
+        element<String>("ref", describedAs("The release to change, by its id or its handle."))
+        element<String>(
+            "name",
+            describedAs("A new name for the release. Left out, the name is left alone."),
+            isOptional = true,
+        )
+        element<String>(
+            "slug",
+            describedAs("A new handle for the release. Left out, the handle is left alone."),
+            isOptional = true,
+        )
+        element<String?>(
+            "description",
+            describedAs(
+                "A new description, or nothing at all to clear the one it has. " +
+                    "Left out, the description is left alone.",
+            ),
+            isOptional = true,
+        )
+        element<String>(
+            "status",
+            describedAs(
+                "A new status: planned, in_progress, released, or cancelled. Left out, the status is left alone.",
+            ),
+            isOptional = true,
+        )
+        element(
+            "targetDate",
+            LocalDateSerializer.descriptor.nullable,
+            describedAs(
+                "A new day to aim at, written as 2026-12-24, or nothing at all to clear the one it has. " +
+                    "Left out, the day is left alone.",
+            ),
+            isOptional = true,
+        )
+    }
 
-    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("io.nook.contract.ReleaseUpdate")
+    private val defined: Set<String> = descriptor.fieldNames().toSet()
 
     override fun serialize(encoder: Encoder, value: ReleaseUpdate) {
         val output = encoder.jsonOutput()

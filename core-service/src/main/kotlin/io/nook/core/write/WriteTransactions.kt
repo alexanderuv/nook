@@ -2,6 +2,7 @@ package io.nook.core.write
 
 import io.nook.core.db.InstanceLockTable
 import io.nook.core.db.ProjectTable
+import io.nook.contract.Missing
 import io.nook.core.store.notFound
 import io.nook.core.store.projectIdentity
 import io.nook.core.store.requireNoOpenTransaction
@@ -73,7 +74,7 @@ internal fun lockProject(projectRef: String): ResultRow =
         .where(projectIdentity(projectRef))
         .forUpdate(ForUpdateOption.ForUpdate)
         .firstOrNull()
-        ?: notFound("no project matches reference \"$projectRef\"")
+        ?: notFound(Missing.PROJECT, "no project matches reference \"$projectRef\"")
 
 /**
  * Blocks until this transaction holds the instance-wide turn — the one whose

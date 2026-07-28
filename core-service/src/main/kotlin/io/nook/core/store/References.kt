@@ -1,5 +1,6 @@
 package io.nook.core.store
 
+import io.nook.contract.Missing
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.db.ProjectTable
 import io.nook.core.db.ReleaseTable
@@ -57,7 +58,7 @@ internal fun resolveProject(ref: String): ResultRow =
     ProjectTable.selectAll()
         .where(projectIdentity(ref))
         .firstOrNull()
-        ?: notFound("no project matches reference \"$ref\"")
+        ?: notFound(Missing.PROJECT, "no project matches reference \"$ref\"")
 
 internal fun resolveItem(projectId: Uuid, ref: String): ResultRow {
     val id = parseUuidOrNull(ref)
@@ -68,7 +69,7 @@ internal fun resolveItem(projectId: Uuid, ref: String): ResultRow {
         ProjectItemTable.selectAll()
             .where { (ProjectItemTable.projectId eq projectId) and (ProjectItemTable.slug eq ref) }
     }
-    return query.firstOrNull() ?: notFound("no item in the project matches reference \"$ref\"")
+    return query.firstOrNull() ?: notFound(Missing.ITEM, "no item in the project matches reference \"$ref\"")
 }
 
 internal fun resolveRelease(projectId: Uuid, ref: String): ResultRow {
@@ -80,5 +81,5 @@ internal fun resolveRelease(projectId: Uuid, ref: String): ResultRow {
         ReleaseTable.selectAll()
             .where { (ReleaseTable.projectId eq projectId) and (ReleaseTable.slug eq ref) }
     }
-    return query.firstOrNull() ?: notFound("no release in the project matches reference \"$ref\"")
+    return query.firstOrNull() ?: notFound(Missing.RELEASE, "no release in the project matches reference \"$ref\"")
 }

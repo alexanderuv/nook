@@ -88,9 +88,11 @@ class CatalogRefusalTest {
 
     @Test
     fun `a refusal's details cross unchanged`() {
-        // Details are part of what a refusal carries and have to survive, and no
-        // operation fills them in yet — so a core that does is put in the way,
-        // rather than leaving the field untested until one does.
+        // Details are part of what a refusal carries and have to survive. The
+        // ones the operations fill in today say which of the things a call named
+        // could not be found; a core carrying something else entirely is put in
+        // the way here, so that what is checked is the crossing rather than one
+        // operation's habits.
         val detailed = StructuredError(
             ErrorCode.CONFLICT,
             "two items already hold that handle",

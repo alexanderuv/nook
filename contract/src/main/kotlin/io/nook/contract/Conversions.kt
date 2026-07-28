@@ -8,6 +8,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.nullable
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
@@ -151,8 +152,12 @@ public object ErrorCodeSerializer : LabelSerializer<ErrorCode>(
  * this could reserve is a handle some project is entitled to give an epic.
  */
 public object ParentFilterSerializer : KSerializer<ParentFilter> {
+    // Declared as accepting nothing as well as text, because that is what it
+    // reads and writes: "no epic above it" crosses as nothing at all. A
+    // declaration saying text alone would be read by anyone deriving a shape
+    // from it as forbidding the very value this vocabulary exists for.
     override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("io.nook.contract.ParentFilter", PrimitiveKind.STRING)
+        PrimitiveSerialDescriptor("io.nook.contract.ParentFilter", PrimitiveKind.STRING).nullable
 
     override fun serialize(encoder: Encoder, value: ParentFilter) {
         val json = encoder as? JsonEncoder

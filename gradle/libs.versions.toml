@@ -10,6 +10,10 @@ exposed = "1.3.1"
 liquibase = "5.0.3"
 postgresql = "42.7.13"
 mcpSdk = "2.0.0"
+# The web container hosting the MCP SDK's servlet-shaped transport. Jetty 12's
+# `ee11` flavour is the one speaking the servlet revision (6.1) the SDK is built
+# against; the other flavours in the same release speak older ones.
+jetty = "12.1.11"
 zonkyPostgres = "2.2.2"
 # PostgreSQL version for the embedded test binaries (latest 17.x line).
 zonkyPostgresBinaries = "17.10.0"
@@ -32,6 +36,8 @@ exposed-migration-jdbc = { module = "org.jetbrains.exposed:exposed-migration-jdb
 liquibase-core = { module = "org.liquibase:liquibase-core", version.ref = "liquibase" }
 postgresql-jdbc = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 mcp-sdk = { module = "io.modelcontextprotocol.sdk:mcp", version.ref = "mcpSdk" }
+jetty-server = { module = "org.eclipse.jetty:jetty-server", version.ref = "jetty" }
+jetty-ee11-servlet = { module = "org.eclipse.jetty.ee11:jetty-ee11-servlet", version.ref = "jetty" }
 zonky-embedded-postgres = { module = "io.zonky.test:embedded-postgres", version.ref = "zonkyPostgres" }
 # Aligns every embedded-postgres-binaries-* artifact (including Zonky's default
 # platform set) to the pinned PostgreSQL version; import as a platform.

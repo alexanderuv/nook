@@ -32,6 +32,39 @@ public data class StructuredError(
 /** Carries a [StructuredError] out of a refused operation. */
 public class StructuredErrorException(public val error: StructuredError) : RuntimeException(error.message)
 
+/** The detail a `not_found` carries to say which of the things a call named was the one that was not there. */
+private const val MISSING = "missing"
+
+/**
+ * Which of the things a call named could not be found.
+ *
+ * A call names several: the project it acts inside, and often an item or a
+ * release within it. A refusal saying "not found" says one of them matched
+ * nothing but not which, and the difference decides what the caller does — a
+ * missing item is a reference to correct, while a missing project means the
+ * caller is working somewhere that no longer exists and everything it does next
+ * will fail the same way.
+ *
+ * It travels in the details a refusal already carries rather than in its
+ * message, so reading it needs no guessing at wording.
+ */
+public enum class Missing(public val label: String) {
+    PROJECT("project"),
+    ITEM("item"),
+    RELEASE("release"),
+    ;
+
+    /** This, as the details of the refusal reporting it. */
+    public fun asDetails(): Map<String, String> = mapOf(MISSING to label)
+
+    public companion object {
+
+        /** What [error] says was missing, or nothing where it does not say. */
+        public fun of(error: StructuredError): Missing? =
+            error.details?.get(MISSING)?.let { said -> entries.firstOrNull { it.label == said } }
+    }
+}
+
 /**
  * Where a call that ended without a verdict came apart. A breakdown is not a
  * refusal: there is nothing for a caller to fix, which is exactly why it must

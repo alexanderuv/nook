@@ -1,6 +1,7 @@
 package io.nook.core.store
 
 import io.nook.contract.ErrorCode
+import io.nook.contract.Missing
 import io.nook.contract.StructuredError
 import io.nook.contract.StructuredErrorException
 
@@ -16,5 +17,10 @@ import io.nook.contract.StructuredErrorException
 internal fun validationFailed(message: String): Nothing =
     throw StructuredErrorException(StructuredError(ErrorCode.VALIDATION_FAILED, message))
 
-internal fun notFound(message: String): Nothing =
-    throw StructuredErrorException(StructuredError(ErrorCode.NOT_FOUND, message))
+/**
+ * [missing] says which of the things the call named was the one that was not
+ * there. A caller acts on that difference — a reference to correct against a
+ * project that is gone — and the message alone would leave it reading wording.
+ */
+internal fun notFound(missing: Missing, message: String): Nothing =
+    throw StructuredErrorException(StructuredError(ErrorCode.NOT_FOUND, message, missing.asDetails()))

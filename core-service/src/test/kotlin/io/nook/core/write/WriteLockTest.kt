@@ -2,6 +2,7 @@ package io.nook.core.write
 
 import io.nook.contract.CreateProject
 import io.nook.contract.ErrorCode
+import io.nook.contract.Missing
 import io.nook.contract.StructuredErrorException
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.InstanceLockTable
@@ -189,6 +190,19 @@ class WriteLockTest {
             writeTransaction(db) { lockProject("no-such-project") }
         }
         assertEquals(ErrorCode.NOT_FOUND, failure.error.code)
+    }
+
+    @Test
+    fun `locking a project that is not there says the project is the thing that is missing`() {
+        val db = Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase())
+
+        val failure = assertFailsWith<StructuredErrorException> {
+            writeTransaction(db) { lockProject("no-such-project") }
+        }
+
+        // The write path resolves the project itself rather than through the
+        // shared resolver, so it is a fourth place this has to be said.
+        assertEquals(Missing.PROJECT, Missing.of(failure.error))
     }
 
     @Test

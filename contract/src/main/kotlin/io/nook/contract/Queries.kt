@@ -28,16 +28,24 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 public data class ItemFilter(
-    /** Item types by label: `epic`, `task`, `bug`, `chore`. */
+    @Describes("Match items of any of these types: epic, task, bug, or chore. Left out, type is not filtered on.")
     public val types: List<String>? = null,
-    /** Item statuses by label: `todo`, `in_progress`, `done`, `cancelled`. */
+    @Describes(
+        "Match items in any of these statuses: todo, in_progress, done, or cancelled. " +
+            "Left out, status is not filtered on.",
+    )
     public val statuses: List<String>? = null,
     /** Matches an item's own direct parent, never an ancestor further up. */
+    @Describes(
+        "Match items sitting directly under any of these epics, each by its id or its handle; " +
+            "nothing in the list means an item with no epic above it. Left out, where an item sits is not filtered on.",
+    )
     public val parents: List<ParentFilter>? = null,
-    /**
-     * Release references, matching an item's own release assignment. Only an
-     * epic carries one, so a leaf matches no release value.
-     */
+    /** Only an epic carries a release assignment, so a leaf matches no release value. */
+    @Describes(
+        "Match items assigned to any of these releases, each by its id or its handle. " +
+            "Left out, the release is not filtered on.",
+    )
     public val releases: List<String>? = null,
     /**
      * Whether anything unfinished is holding the item up: true for an item with
@@ -53,6 +61,10 @@ public data class ItemFilter(
      * blockers — and a `done` item with an unfinished blocker is held up like
      * any other.
      */
+    @Describes(
+        "True for items an unfinished blocker is holding up, false for items nothing is holding up. " +
+            "Left out, this is not filtered on.",
+    )
     public val heldUp: Boolean? = null,
 )
 

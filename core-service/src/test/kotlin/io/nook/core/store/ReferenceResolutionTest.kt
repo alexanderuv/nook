@@ -1,6 +1,7 @@
 package io.nook.core.store
 
 import io.nook.contract.ErrorCode
+import io.nook.contract.Missing
 import io.nook.contract.StructuredErrorException
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
@@ -128,6 +129,23 @@ class ReferenceResolutionTest {
             assertEquals(ErrorCode.NOT_FOUND, byId.error.code)
             val project = assertFailsWith<StructuredErrorException> { resolveProject("no-such-project") }
             assertEquals(ErrorCode.NOT_FOUND, project.error.code)
+        }
+    }
+
+    @Test
+    fun `a refusal says which of the three could not be found`() {
+        // A call names a project and often an entity inside it, so "not found"
+        // on its own leaves the caller guessing which of them it was about —
+        // and the two are acted on differently.
+        transaction(db) {
+            val project = assertFailsWith<StructuredErrorException> { resolveProject("no-such-project") }
+            assertEquals(Missing.PROJECT, Missing.of(project.error))
+
+            val item = assertFailsWith<StructuredErrorException> { resolveItem(projectOne, "no-such-item") }
+            assertEquals(Missing.ITEM, Missing.of(item.error))
+
+            val release = assertFailsWith<StructuredErrorException> { resolveRelease(projectOne, "no-such-release") }
+            assertEquals(Missing.RELEASE, Missing.of(release.error))
         }
     }
 
