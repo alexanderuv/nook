@@ -24,8 +24,8 @@ public const val NO_VERDICT: String = "this call produced no verdict, and nothin
  * that goes back.
  *
  * Both front doors mount this and neither adds to it. The core hands it the
- * catalog over its own store; the app a person's program reaches hands it the
- * calling library. So there is one piece of code deciding what a request is,
+ * catalog over its own store; the app behind the web UI hands it the calling
+ * library. So there is one piece of code deciding what a request is,
  * which is what makes "the same request reaches the same verdict at either
  * door" structural rather than a promise two programs keep by discipline.
  *

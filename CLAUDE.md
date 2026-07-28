@@ -9,6 +9,11 @@ seven project-scoped operations as tools at one address per project, and
 over one answering side held in `:contract`. The document layer and the
 git-backed artifact store are still design only.
 
+`/api` is the **web UI's** back end (the UI itself is milestone 4), not a public
+integration surface: humans reach Nook through the UI, agents through MCP, and
+nobody outside this repo is written against `/api`. Treat a read the UI needs as
+an operation to add, not as a contract to break.
+
 ## Where things are
 
 - `README.md` — what Nook is, the core workflow, the stack.

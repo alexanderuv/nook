@@ -1,21 +1,27 @@
 # A failure never names the part of Nook that failed — ADR-4
 
+> **Corrected 2026-07-28** — the Context below described the web API's callers as
+> people's own programs. `/api` is the web UI's back end
+> ([docs/01](../../docs/01-interface-contracts.md)), and the callers outside this
+> repo are the MCP surface's. The decision, options and consequences are unchanged;
+> "Revisit when" had this right already.
+
 ## Context
 
-Nook is several programs behind one address. A call from a person's own program
-reaches the web app, which reaches the core service, which reaches Postgres and a
-git working copy. When a call produces no verdict, each of those can be the reason,
-and the temptation is to say which — the information is right there in the exception
-the client caught.
+Nook is several programs behind one address. A call from the web UI reaches the web
+app, which reaches the core service, which reaches Postgres and a git working copy;
+a call from an external agent reaches the MCP server, which reaches that same core.
+When a call produces no verdict, each of those can be the reason, and the temptation
+is to say which — the information is right there in the exception the client caught.
 
 [Spec-5](../../execution/milestone-1/07-web-api/spec-5.md) took that temptation as a
 requirement. Its REQ24 obliged a failure reply to say whether the core had answered
 at all — that it could not be reached, or that it answered and something inside it
 broke — on the reasoning that one is worth attempting again and the other is not.
-The web API is the surface people and their own programs call, so that requirement
-put Nook's internal topology into a public contract: it told a caller there is a
-"core", that it is reachable separately, and that its being down is a state they
-should recognize.
+Both doors serve one reply shape ([ADR-2](./adr-2.md)), so that requirement put
+Nook's internal topology into every contract at once — the MCP surface's included,
+whose callers are agents outside this repo: it told a caller there is a "core", that
+it is reachable separately, and that its being down is a state they should recognize.
 
 Two things make that a mistake rather than a kindness. A caller cannot act on it —
 whichever half failed, the call produced no verdict, the request was not wrong, and

@@ -73,8 +73,8 @@ private fun Application.catalogRoute(catalog: OperationCatalog) {
  *
  * What a request means is decided in the contract library and nowhere here:
  * this end of the connection contributes an address, an engine and a binding,
- * and the app a person's program reaches contributes the same three around the
- * same function. Neither holds a rule about what a request contains, which is
+ * and the app behind the web UI contributes the same three around the same
+ * function. Neither holds a rule about what a request contains, which is
  * what makes the two doors unable to reach different verdicts.
  *
  * The store's work goes to threads that are allowed to sit and wait, kept off

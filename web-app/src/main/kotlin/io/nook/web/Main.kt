@@ -4,7 +4,7 @@ import io.nook.contract.CatalogClient
 import java.util.concurrent.CountDownLatch
 import kotlin.system.exitProcess
 
-/** The port the app a person's own program reaches answers on. */
+/** The port the app the web UI reaches answers on. */
 const val PORT_SETTING: String = "NOOK_WEB_PORT"
 
 /** Where the core is, as the address its connection answers at. */

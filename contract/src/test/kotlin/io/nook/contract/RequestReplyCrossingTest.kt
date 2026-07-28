@@ -18,10 +18,11 @@ import kotlinx.serialization.json.put
  * Nook's: they are JSON-RPC 2.0's, so a caller reaches Nook with a client that
  * already exists.
  *
- * The text is asserted literally, not just round-tripped, because this shape is
- * not private: the app a person's program reaches serves it outward rather than
- * inventing a second one, so a field named here is a field every later caller
- * is written against.
+ * The text is asserted literally, not just round-tripped, because conformance is
+ * what is under test and a round trip cannot see it: reading back what it wrote
+ * is something a shape invented here would pass just as well. What has to hold
+ * is that the bytes are the ones the specification names, so a client written
+ * against JSON-RPC 2.0 rather than against Nook can read them.
  */
 class RequestReplyCrossingTest {
 

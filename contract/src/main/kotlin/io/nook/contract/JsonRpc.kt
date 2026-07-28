@@ -22,7 +22,7 @@ import kotlinx.serialization.json.put
  *
  * Every call the catalog serves travels as a JSON-RPC 2.0 request object and
  * comes back as a JSON-RPC 2.0 response object, on the core's own connection
- * and on the surface a person's program reaches. Nook defines the operations
+ * and on the surface the web UI reaches. Nook defines the operations
  * and what their arguments hold; the shape a call travels in is a published
  * specification, so a caller reaches Nook with a client that already exists
  * instead of one written for Nook.

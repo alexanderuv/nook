@@ -26,8 +26,16 @@ const val LOOPBACK: String = "127.0.0.1"
 const val API_PATH: String = "/api"
 
 /**
- * The app a person's own program reaches Nook through: one address, with the
- * operation and the project named inside the request.
+ * The app the web UI reaches Nook through: one address, with the operation and
+ * the project named inside the request.
+ *
+ * Who calls this decides what it owes. The caller is the web UI arriving in
+ * milestone 4 — served by this same app, from the root address — and not a
+ * third party integrating against Nook: humans drive Nook through the UI and
+ * agents drive it through MCP, so nobody outside this repo is written against
+ * what is served here. That is why a read the UI turns out to need is an
+ * ordinary operation added to the catalog rather than a break in a public
+ * contract — see `docs/01-interface-contracts.md`, which owns this.
  *
  * It serves the core's own shape rather than a second one of its own, which is
  * why there is nothing here that reads a request or decides a verdict. What it
@@ -37,9 +45,9 @@ const val API_PATH: String = "/api"
  * thing, structurally rather than by two programs agreeing to.
  *
  * Everything else this app answers at is the web server's own reply, carrying
- * no error of Nook's. The root is deliberately among them: it is where the
- * interface arrives later, and nothing about an address says which operation a
- * call is for.
+ * no error of Nook's. The root is deliberately among them: it is where the web
+ * UI arrives later, and nothing about an address says which operation a call is
+ * for.
  *
  * [host] is fixed by whoever builds this and is not a setting the app offers —
  * see the entry point, where binding to the loopback address is the whole of
