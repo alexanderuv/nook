@@ -321,7 +321,8 @@ chose.
 - **REQ23** — A call that produced no verdict MUST arrive as `-32603` and MUST
   carry none of the domain reasons — there is nothing for the caller to fix, so
   it must not read as though there were.
-- **REQ24** — *Struck.* This requirement asked an internal error to say whether
+- **REQ24** — *Struck by [ADR-4](../../../architecture/adrs/adr-4.md).* This
+  requirement asked an internal error to say whether
   the core had answered at all — that it could not be reached, or that it
   answered and broke. Which half of Nook failed is not an outside caller's
   business: naming a part behind the surface makes that part a promise, and the

@@ -81,6 +81,10 @@ storage/consistency substrate comes from ARCHITECTURE.md §4.2 and
 
 ### Addressing — heading paths, no line numbers
 
+Addressing and fine editing are both settled in
+[ADR-6](../architecture/adrs/adr-6.md), which records the standards rejected and
+why.
+
 - A location in a document is a **heading path**: the sequence of heading texts from
   the document root to the target section, joined by `/` — e.g.
   `Implementation Approach` or `Implementation Approach/Rollback`.
@@ -170,14 +174,15 @@ edits without reintroducing line/offset addressing.
 ### Concurrency — optional optimistic check
 
 This is HTTP's conditional-request mechanism (RFC 9110 §13) carried on an RPC
-wire: `expectedVersion` is an entity tag, and supplying it is `If-Match`. The
-semantics are taken from there rather than invented, including that a failed
-precondition writes nothing.
+wire ([ADR-5](../architecture/adrs/adr-5.md)): `expectedVersion` is an entity
+tag, and supplying it is `If-Match`. The semantics are taken from there rather
+than invented, including that a failed precondition writes nothing.
 
 - Every mutating op accepts an optional **`expectedVersion`**. If provided and it does
   not equal the document's current version, the op fails and nothing is written —
   lost-update protection. The failure is a **precondition failure**, distinct from
-  a slug collision, which is the other thing `conflict` used to mean.
+  a slug collision, which is the other thing `conflict` used to mean; it carries
+  `data.reason` of `precondition_failed`.
 - Omitted `expectedVersion` = last-writer-wins, fine for single-user v1. The field
   lets a careful caller (or the UI) opt into a check.
 - HTTP's own headers are not used, because the operation is not addressed by URL

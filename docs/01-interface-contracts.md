@@ -31,10 +31,7 @@ parameters and entities.
   skills and persists through these same operations rather than making a second trip
   out through MCP. REST was rejected for the same reason the second shape now is:
   Nook's surface is action-heavy, so RPC keeps one contract instead of a second,
-  differently-shaped one. What serves that shape is JSON-RPC 2.0 rather than an
-  envelope of Nook's own — the published standard for exactly this arrangement,
-  and the one `:mcp-server` already speaks, MCP being defined on it
-  ([ADR-2](../architecture/adrs/adr-2.md)).
+  differently-shaped one.
 - **MCP** (external-agent surface, in `:mcp-server`) is the one translation that
   cannot be avoided, because its shape is dictated by someone else's specification:
   the **seven project-scoped operations** become **tools**, and tenets and documents
@@ -198,14 +195,17 @@ Errors are JSON-RPC 2.0's, not Nook's ([ADR-2](../architecture/adrs/adr-2.md)).
   `-32602` for invalid params, and `-32603` for a call that produced no verdict.
 - **Nook's domain failures ride in the same object.** `validation_failed` *is*
   `-32602`, whether the request was unreadable or the core refused its contents;
-  `not_found` is `-32001`, `conflict` (e.g. slug collision) `-32002`, and `cycle`
-  (blocked-by) `-32003` — the range the specification reserves for
+  `not_found` is `-32001`, `conflict` (e.g. slug collision) `-32002`, `cycle`
+  (blocked-by) `-32003`, and `precondition_failed` — a document edit whose
+  `expectedVersion` did not match ([ADR-5](../architecture/adrs/adr-5.md)) —
+  `-32005`. These sit in the range the specification reserves for
   implementation-defined server errors. `data.reason` carries the domain name, so
   a caller reads it without matching integers, and the details a failure already
   carries ride alongside.
 - A call that produced no verdict — the core unreachable, or broken — is
   `-32603`, and says nothing about which of the two it was: which part of Nook
-  failed is not the caller's business.
+  failed is not the caller's business
+  ([ADR-4](../architecture/adrs/adr-4.md)).
 - **MCP maps an error onto a tool result** with `isError` and that same object —
   the one translation MCP's own specification forces.
 
