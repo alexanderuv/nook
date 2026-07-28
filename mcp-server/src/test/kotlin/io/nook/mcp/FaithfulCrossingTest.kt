@@ -6,6 +6,7 @@ import io.nook.contract.FieldChange
 import io.nook.contract.ItemFilter
 import io.nook.contract.ParentFilter
 import io.nook.contract.UpdateItem
+import io.nook.contract.aProject
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

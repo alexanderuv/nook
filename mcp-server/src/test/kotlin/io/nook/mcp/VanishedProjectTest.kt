@@ -7,6 +7,7 @@ import io.nook.contract.Missing
 import io.nook.contract.RpcCode
 import io.nook.contract.StructuredError
 import io.nook.contract.StructuredErrorException
+import io.nook.contract.aProject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

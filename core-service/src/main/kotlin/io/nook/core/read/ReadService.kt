@@ -2,7 +2,9 @@ package io.nook.core.read
 
 import io.nook.contract.ItemFilter
 import io.nook.contract.ItemStatus
+import io.nook.contract.ItemStatusSerializer
 import io.nook.contract.ItemType
+import io.nook.contract.ItemTypeSerializer
 import io.nook.contract.ParentFilter
 import io.nook.contract.Project
 import io.nook.contract.ProjectItem
@@ -116,20 +118,14 @@ class ReadService(private val db: Database) {
     private fun matchOf(projectId: Uuid, filter: ItemFilter): Op<Boolean> {
         val parts = buildList {
             filter.types?.let { types ->
-                val codes = requireValues(types, "type").map { label ->
-                    ItemType.fromLabel(label)?.code
-                        ?: validationFailed(
-                            "\"$label\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}",
-                        )
+                val codes = requireValues(types, "type").map {
+                    ItemTypeSerializer.of(it, ::validationFailed).code
                 }
                 add(ProjectItemTable.type inList codes)
             }
             filter.statuses?.let { statuses ->
-                val codes = requireValues(statuses, "status").map { label ->
-                    ItemStatus.fromLabel(label)?.code
-                        ?: validationFailed(
-                            "\"$label\" is not an item status; the item statuses are ${ItemStatus.entries.joinToString { it.label }}",
-                        )
+                val codes = requireValues(statuses, "status").map {
+                    ItemStatusSerializer.of(it, ::validationFailed).code
                 }
                 add(ProjectItemTable.status inList codes)
             }

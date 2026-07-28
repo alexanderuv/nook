@@ -114,17 +114,26 @@ public sealed class LabelSerializer<T>(
     /** The member [label] names, or nothing where the vocabulary has no such word. */
     internal fun of(label: String): T? = byLabel[label]
 
+    /**
+     * The member [label] names, or whatever [refuse] makes of the words this
+     * vocabulary is refused in.
+     *
+     * A vocabulary is checked in more than one place — a label arrives across
+     * the wire and is checked here, and the same label reaches a service and is
+     * checked there — and the two fail in different ways: one is a payload that
+     * could not be read, the other a verdict on a request that was. What they
+     * must not differ in is what a caller is told, so the sentence is composed
+     * once and each caller supplies only its own way of failing.
+     */
+    public fun of(label: String, refuse: (String) -> Nothing): T =
+        byLabel[label] ?: refuse("\"$label\" is not $singular; the $plural are $vocabulary")
+
     final override fun serialize(encoder: Encoder, value: T) {
         encoder.encodeString(value.label)
     }
 
-    final override fun deserialize(decoder: Decoder): T {
-        val label = decoder.decodeString()
-        return byLabel[label]
-            ?: throw SerializationException(
-                "\"$label\" is not $singular; the $plural are $vocabulary",
-            )
-    }
+    final override fun deserialize(decoder: Decoder): T =
+        of(decoder.decodeString()) { throw SerializationException(it) }
 }
 
 public object ItemTypeSerializer : LabelSerializer<ItemType>(

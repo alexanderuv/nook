@@ -9,6 +9,8 @@ application {
 
 dependencies {
     implementation(project(":contract"))
+    // The stand-in core and its entity fixtures, shared with the other door.
+    testImplementation(testFixtures(project(":contract")))
     // The engine the core already answers with, so the two front doors differ
     // in what they serve rather than in what serves it. The calling library and
     // its own engine arrive with the contract.

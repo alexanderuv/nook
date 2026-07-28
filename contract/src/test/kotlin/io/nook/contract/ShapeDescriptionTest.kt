@@ -88,16 +88,17 @@ class ShapeDescriptionTest {
     }
 
     /**
-     * The two conversions written by hand keep their own list of the fields they
-     * accept; this is what holds that list to the one they declare. A field
-     * declared and not accepted is a lie to whoever built a caller from the
-     * declaration; a field accepted and not declared is invisible to them.
+     * The two partial updates are the shapes where a declared field and a read
+     * field could most easily part company, because what each field carries is a
+     * state rather than a value. A field declared and not accepted is a lie to
+     * whoever built a caller from the declaration; a field accepted and not
+     * declared is invisible to them.
      */
     @Test
-    fun `each hand-written conversion accepts exactly the fields it declares`() {
+    fun `each partial update accepts exactly the fields it declares`() {
         listOf<Pair<String, (JsonObject) -> Unit>>(
-            "update_item" to { payload -> catalogJson.decodeFromJsonElement(ItemUpdateSerializer, payload) },
-            "update_release" to { payload -> catalogJson.decodeFromJsonElement(ReleaseUpdateSerializer, payload) },
+            "update_item" to { payload -> catalogJson.decodeFromJsonElement(ItemUpdate.serializer(), payload) },
+            "update_release" to { payload -> catalogJson.decodeFromJsonElement(ReleaseUpdate.serializer(), payload) },
         ).forEach { (operation, read) ->
             val declared = projectOperations.single { it.name == operation }.arguments.fieldNames()
 

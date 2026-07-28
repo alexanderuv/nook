@@ -5,11 +5,14 @@ import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
 import io.nook.contract.FieldChange
 import io.nook.contract.ItemStatus
+import io.nook.contract.ItemStatusSerializer
 import io.nook.contract.ItemType
+import io.nook.contract.ItemTypeSerializer
 import io.nook.contract.Project
 import io.nook.contract.ProjectItem
 import io.nook.contract.Release
 import io.nook.contract.ReleaseStatus
+import io.nook.contract.ReleaseStatusSerializer
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
 import io.nook.core.db.DocumentTable
@@ -29,6 +32,7 @@ import io.nook.core.store.validationFailed
 import java.time.OffsetDateTime
 import java.time.ZoneOffset
 import kotlin.uuid.Uuid
+import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.Op
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -96,8 +100,7 @@ class WriteService(private val db: Database) {
 
     fun createItem(projectRef: String, command: CreateItem): ProjectItem = writeTransaction(db) {
         val projectId = lockedProjectId(projectRef)
-        val itemType = ItemType.fromLabel(command.type)
-            ?: validationFailed("\"${command.type}\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}")
+        val itemType = ItemTypeSerializer.of(command.type, ::validationFailed)
         requireUsableName(command.name)
         requireUsableDescription(command.description)
         val parentRef = command.parentRef
@@ -141,22 +144,19 @@ class WriteService(private val db: Database) {
 
             val newName = withSetValue(command.name) { requireUsableName(it) }
             val newSlug = withSetValue(command.slug) { value ->
-                explicitSlugProblem(value)?.let { validationFailed(it) }
-                if (value != row[ProjectItemTable.slug] && value in takenItemSlugs(projectId, value)) {
-                    conflict("slug \"$value\" is already taken by another item in the project")
+                requireFreeSlug(value, row[ProjectItemTable.slug], "item") {
+                    takenItemSlugs(projectId, value)
                 }
             }
             val newDescription = command.description
             if (newDescription is FieldChange.Set) requireUsableDescription(newDescription.value)
             val newStatus = when (val status = command.status) {
                 FieldChange.Keep -> null
-                is FieldChange.Set -> ItemStatus.fromLabel(status.value)
-                    ?: validationFailed("\"${status.value}\" is not an item status; the item statuses are ${ItemStatus.entries.joinToString { it.label }}")
+                is FieldChange.Set -> ItemStatusSerializer.of(status.value, ::validationFailed)
             }
             val targetType = when (val type = command.type) {
                 FieldChange.Keep -> currentType
-                is FieldChange.Set -> ItemType.fromLabel(type.value)
-                    ?: validationFailed("\"${type.value}\" is not an item type; the item types are ${ItemType.entries.joinToString { it.label }}")
+                is FieldChange.Set -> ItemTypeSerializer.of(type.value, ::validationFailed)
             }
             val targetParentId = when (val parentRef = command.parentRef) {
                 FieldChange.Keep -> row[ProjectItemTable.parentId]
@@ -264,17 +264,15 @@ class WriteService(private val db: Database) {
 
             val newName = withSetValue(command.name) { requireUsableName(it) }
             val newSlug = withSetValue(command.slug) { value ->
-                explicitSlugProblem(value)?.let { validationFailed(it) }
-                if (value != row[ReleaseTable.slug] && value in takenReleaseSlugs(projectId, value)) {
-                    conflict("slug \"$value\" is already taken by another release in the project")
+                requireFreeSlug(value, row[ReleaseTable.slug], "release") {
+                    takenReleaseSlugs(projectId, value)
                 }
             }
             val newDescription = command.description
             if (newDescription is FieldChange.Set) requireUsableDescription(newDescription.value)
             val newStatus = when (val status = command.status) {
                 FieldChange.Keep -> null
-                is FieldChange.Set -> ReleaseStatus.fromLabel(status.value)
-                    ?: validationFailed("\"${status.value}\" is not a release status; the release statuses are ${ReleaseStatus.entries.joinToString { it.label }}")
+                is FieldChange.Set -> ReleaseStatusSerializer.of(status.value, ::validationFailed)
             }
 
             ReleaseTable.update({ ReleaseTable.id eq releaseId }) {
@@ -444,33 +442,47 @@ class WriteService(private val db: Database) {
                 )
         }
 
-    // The slugs already in use in a uniqueness scope. Every row in the scope is
-    // a row that exists, so a name freed by a delete is free at once and needs
-    // no clause saying so.
+    /**
+     * The slugs already in use that could collide with [prefix] — the handle
+     * itself, and every numeric suffix of it — held in [slug], and narrowed to
+     * one project by [within] where that column's uniqueness scope is a project
+     * rather than the whole instance.
+     *
+     * Every row in the scope is a row that exists, so a name freed by a delete
+     * is free at once and needs no clause saying so.
+     */
+    private fun takenSlugs(slug: Column<String>, prefix: String, within: Op<Boolean>? = null): Set<String> {
+        val collides = (slug eq prefix) or (slug like "$prefix-%")
+        return slug.table.select(slug)
+            .where(within?.and(collides) ?: collides)
+            .map { it[slug] }
+            .toSet()
+    }
+
+    // The three uniqueness scopes, each naming only what makes it different from
+    // the others: which column holds the handle, and what bounds it.
 
     private fun takenProjectSlugs(prefix: String): Set<String> =
-        ProjectTable.select(ProjectTable.slug)
-            .where { (ProjectTable.slug eq prefix) or (ProjectTable.slug like "$prefix-%") }
-            .map { it[ProjectTable.slug] }
-            .toSet()
+        takenSlugs(ProjectTable.slug, prefix)
 
     private fun takenItemSlugs(projectId: Uuid, prefix: String): Set<String> =
-        ProjectItemTable.select(ProjectItemTable.slug)
-            .where {
-                (ProjectItemTable.projectId eq projectId) and
-                    ((ProjectItemTable.slug eq prefix) or (ProjectItemTable.slug like "$prefix-%"))
-            }
-            .map { it[ProjectItemTable.slug] }
-            .toSet()
+        takenSlugs(ProjectItemTable.slug, prefix, ProjectItemTable.projectId eq projectId)
 
     private fun takenReleaseSlugs(projectId: Uuid, prefix: String): Set<String> =
-        ReleaseTable.select(ReleaseTable.slug)
-            .where {
-                (ReleaseTable.projectId eq projectId) and
-                    ((ReleaseTable.slug eq prefix) or (ReleaseTable.slug like "$prefix-%"))
-            }
-            .map { it[ReleaseTable.slug] }
-            .toSet()
+        takenSlugs(ReleaseTable.slug, prefix, ReleaseTable.projectId eq projectId)
+
+    /**
+     * A handle supplied for an entity that already exists: well formed, and free
+     * in its scope — unless it is the handle that entity already carries, which
+     * collides with nothing. [taken] is asked only where it could matter, so an
+     * unchanged handle costs no query.
+     */
+    private fun requireFreeSlug(value: String, current: String, noun: String, taken: () -> Set<String>) {
+        explicitSlugProblem(value)?.let { validationFailed(it) }
+        if (value != current && value in taken()) {
+            conflict("slug \"$value\" is already taken by another $noun in the project")
+        }
+    }
 
     /** Every blocker edge among the project's items, keyed by the blocked item. */
     private fun projectBlockerEdges(projectId: Uuid): Map<Uuid, Set<Uuid>> =

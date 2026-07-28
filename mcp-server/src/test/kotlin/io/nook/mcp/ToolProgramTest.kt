@@ -5,6 +5,7 @@ import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport
 import io.modelcontextprotocol.spec.McpError
 import io.modelcontextprotocol.spec.McpSchema
+import io.nook.contract.aProject
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface

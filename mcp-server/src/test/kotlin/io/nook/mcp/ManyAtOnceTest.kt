@@ -4,6 +4,8 @@ import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.spec.McpSchema
 import io.nook.contract.DEFAULT_WAIT_LIMIT
 import io.nook.contract.ProjectItem
+import io.nook.contract.aProject
+import io.nook.contract.anItem
 import io.nook.contract.catalogJson
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit

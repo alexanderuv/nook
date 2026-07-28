@@ -4,6 +4,7 @@ import io.nook.contract.Project
 import io.nook.contract.RpcCode
 import io.nook.contract.RpcReply
 import io.nook.contract.RpcReplySerializer
+import io.nook.contract.aProject
 import io.nook.contract.catalogJson
 import java.io.File
 import java.net.Inet4Address

@@ -3,6 +3,7 @@ package io.nook.mcp
 import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.spec.McpSchema
 import io.nook.contract.Project
+import io.nook.contract.aProject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

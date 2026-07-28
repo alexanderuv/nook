@@ -24,13 +24,6 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 @Retention(AnnotationRetention.BINARY)
 public annotation class Describes(public val text: String)
 
-/**
- * [Describes], as the annotation list a declaration written by hand hands to
- * one of its fields — the counterpart of writing `@Describes` above a property
- * the compiler declares for you.
- */
-internal fun describedAs(text: String): List<Annotation> = listOf(Describes(text))
-
 /** What [Describes] says about the field at [index], or nothing where it carries none. */
 public fun SerialDescriptor.describes(index: Int): String? =
     getElementAnnotations(index).filterIsInstance<Describes>().firstOrNull()?.text

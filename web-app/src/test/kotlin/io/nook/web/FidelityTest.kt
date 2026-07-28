@@ -4,12 +4,15 @@ import io.nook.contract.CatalogOperation
 import io.nook.contract.CreateItem
 import io.nook.contract.DEFAULT_WAIT_LIMIT
 import io.nook.contract.FieldChange
+import io.nook.contract.Invocation
 import io.nook.contract.ItemFilter
 import io.nook.contract.ParentFilter
 import io.nook.contract.ProjectItem
 import io.nook.contract.Release
 import io.nook.contract.RpcReply
 import io.nook.contract.UpdateItem
+import io.nook.contract.aRelease
+import io.nook.contract.anItem
 import io.nook.contract.catalogJson
 import kotlin.test.AfterTest
 import kotlin.test.Test

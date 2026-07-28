@@ -149,8 +149,8 @@ class RequestReplyCrossingTest {
             { catalogJson.decodeFromString<CreateItem>("""{"type":"task","name":"A","colour":"red"}""") },
             { catalogJson.decodeFromString<CreateRelease>("""{"name":"v1","colour":"red"}""") },
             { catalogJson.decodeFromString<ItemFilter>("""{"types":["task"],"colour":"red"}""") },
-            { catalogJson.decodeFromString(ItemUpdateSerializer, """{"ref":"a","colour":"red"}""") },
-            { catalogJson.decodeFromString(ReleaseUpdateSerializer, """{"ref":"v1","colour":"red"}""") },
+            { catalogJson.decodeFromString(ItemUpdate.serializer(), """{"ref":"a","colour":"red"}""") },
+            { catalogJson.decodeFromString(ReleaseUpdate.serializer(), """{"ref":"v1","colour":"red"}""") },
         ).forEach { undefined -> assertFailsWith<SerializationException> { undefined() } }
     }
 

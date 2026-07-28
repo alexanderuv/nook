@@ -1,6 +1,7 @@
 package io.nook.mcp
 
 import io.modelcontextprotocol.spec.McpSchema
+import io.nook.contract.aProject
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

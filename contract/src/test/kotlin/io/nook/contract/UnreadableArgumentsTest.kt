@@ -129,12 +129,13 @@ class UnreadableArgumentsTest {
     }
 
     @Test
-    fun `a field that must always hold a value is refused in the words the hand-written conversions use`() {
-        // Those two said this before anything was derived from a declaration,
-        // and it is the right thing to say: what the caller asked for is to
-        // take the stored value away, not to supply something of another kind.
-        // So the derived check says it too, for every shape rather than for
-        // two, and it is driven the way a request drives it.
+    fun `a field that must always hold a value is refused as a field rather than as a value`() {
+        // Two conversions written by hand said this before anything was derived
+        // from a declaration, and it was the right thing to say: what the caller
+        // asked for is to take the stored value away, not to supply something of
+        // another kind. Now the derived check is the only one saying it — for
+        // every shape rather than for two — so these are what hold it to the
+        // words, driven the way a request drives it.
         assertEquals(
             "\"name\" takes a value; it cannot be set to nothing",
             refusalOf(
@@ -149,15 +150,6 @@ class UnreadableArgumentsTest {
                 catalogJson.parseToJsonElement("""{"ref":"autumn","status":null}""") as JsonObject,
             ),
         )
-        // And the two conversions still say it on their own, where they are
-        // read directly rather than through an operation.
-        listOf<() -> Any>(
-            { catalogJson.decodeFromString(ItemUpdateSerializer, """{"ref":"add-search","name":null}""") },
-            { catalogJson.decodeFromString(ReleaseUpdateSerializer, """{"ref":"autumn","status":null}""") },
-        ).forEach { byHand ->
-            val said = assertFailsWith<SerializationException> { byHand() }.message.orEmpty()
-            assertTrue(said.endsWith("takes a value; it cannot be set to nothing"), said)
-        }
     }
 
     @Test

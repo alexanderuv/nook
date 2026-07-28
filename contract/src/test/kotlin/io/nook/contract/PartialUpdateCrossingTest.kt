@@ -13,22 +13,23 @@ import kotlinx.serialization.json.jsonObject
  * into each other when this is got wrong — "leave the description alone" and
  * "clear the description" — look identical from anywhere except here.
  *
- * The last check in each half is the guard against the failure nothing else
- * catches: a conversion written by hand that never learned about a field
- * compiles perfectly and drops that field in silence.
+ * The last check is the guard against the failure nothing else catches: the
+ * flat wire shape and the command the core takes each name every field, and one
+ * that never learned about a field the other has compiles perfectly and drops
+ * that field in silence.
  */
 class PartialUpdateCrossingTest {
 
     private fun crossed(update: ItemUpdate): ItemUpdate =
         catalogJson.decodeFromString(
-            ItemUpdateSerializer,
-            catalogJson.encodeToString(ItemUpdateSerializer, update),
+            ItemUpdate.serializer(),
+            catalogJson.encodeToString(ItemUpdate.serializer(), update),
         )
 
     private fun crossed(update: ReleaseUpdate): ReleaseUpdate =
         catalogJson.decodeFromString(
-            ReleaseUpdateSerializer,
-            catalogJson.encodeToString(ReleaseUpdateSerializer, update),
+            ReleaseUpdate.serializer(),
+            catalogJson.encodeToString(ReleaseUpdate.serializer(), update),
         )
 
     private fun itemUpdate(changes: UpdateItem) = ItemUpdate("add-search", changes)
@@ -105,16 +106,16 @@ class PartialUpdateCrossingTest {
             UpdateItem() to UpdateItem(blockedBy = FieldChange.Set(emptyList())),
         ).forEach { (untouched, cleared) ->
             assertNotEquals(
-                catalogJson.encodeToString(ItemUpdateSerializer, itemUpdate(untouched)),
-                catalogJson.encodeToString(ItemUpdateSerializer, itemUpdate(cleared)),
+                catalogJson.encodeToString(ItemUpdate.serializer(), itemUpdate(untouched)),
+                catalogJson.encodeToString(ItemUpdate.serializer(), itemUpdate(cleared)),
             )
             assertNotEquals(crossed(itemUpdate(untouched)), crossed(itemUpdate(cleared)))
         }
 
         assertNotEquals(
-            catalogJson.encodeToString(ReleaseUpdateSerializer, releaseUpdate(UpdateRelease())),
+            catalogJson.encodeToString(ReleaseUpdate.serializer(), releaseUpdate(UpdateRelease())),
             catalogJson.encodeToString(
-                ReleaseUpdateSerializer,
+                ReleaseUpdate.serializer(),
                 releaseUpdate(UpdateRelease(targetDate = FieldChange.Set(null))),
             ),
         )
@@ -124,7 +125,7 @@ class PartialUpdateCrossingTest {
     fun `an update naming no field writes nothing but the item it names`() {
         assertEquals(
             """{"ref":"add-search"}""",
-            catalogJson.encodeToString(ItemUpdateSerializer, itemUpdate(UpdateItem())),
+            catalogJson.encodeToString(ItemUpdate.serializer(), itemUpdate(UpdateItem())),
         )
     }
 
@@ -132,9 +133,9 @@ class PartialUpdateCrossingTest {
     fun `both conversions carry every field their command declares`() {
         listOf(
             UpdateItem::class.java to
-                catalogJson.encodeToJsonElement(ItemUpdateSerializer, itemUpdate(everyItemField)),
+                catalogJson.encodeToJsonElement(ItemUpdate.serializer(), itemUpdate(everyItemField)),
             UpdateRelease::class.java to
-                catalogJson.encodeToJsonElement(ReleaseUpdateSerializer, releaseUpdate(everyReleaseField)),
+                catalogJson.encodeToJsonElement(ReleaseUpdate.serializer(), releaseUpdate(everyReleaseField)),
         ).forEach { (command, written) ->
             assertEquals(
                 command.declaredFields.map { it.name }.toSet() + "ref",

@@ -1,6 +1,11 @@
 plugins {
     id("nook.kotlin-jvm")
     id("nook.persistence-boundary")
+    // The stand-in core both adapters measure their door against ships from
+    // here. Held in either adapter it would be two stand-ins, and two doors
+    // shown to agree while being measured against stand-ins free to differ have
+    // been shown nothing.
+    id("java-test-fixtures")
 }
 
 // This module is the shape every other one agrees on, so its public surface is

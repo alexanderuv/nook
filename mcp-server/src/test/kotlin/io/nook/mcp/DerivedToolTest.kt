@@ -5,6 +5,7 @@ import io.modelcontextprotocol.spec.McpSchema
 import io.nook.contract.CatalogOperation
 import io.nook.contract.FieldChange
 import io.nook.contract.UpdateItem
+import io.nook.contract.aProject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
