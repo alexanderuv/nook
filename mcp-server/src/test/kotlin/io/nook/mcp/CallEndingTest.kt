@@ -4,10 +4,14 @@ import io.modelcontextprotocol.spec.McpError
 import io.modelcontextprotocol.spec.McpSchema
 import io.nook.contract.ErrorCode
 import io.nook.contract.ProjectItem
+import io.nook.contract.REASON
 import io.nook.contract.Release
 import io.nook.contract.StructuredError
 import io.nook.contract.StructuredErrorException
+import io.nook.contract.asRpcError
+import io.nook.contract.asStructuredError
 import io.nook.contract.catalogJson
+import io.nook.contract.rpcCode
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,6 +19,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonPrimitive
 
 /** The protocol's own number for a fault inside the server, and for a call it cannot route. */
 private const val SOMETHING_BROKE = -32603
@@ -62,7 +67,7 @@ class CallEndingTest {
     }
 
     @Test
-    fun `each refusal the core makes arrives as a failed call carrying its own code, message and details`() {
+    fun `each refusal the core makes arrives as a failed call carrying its own code, message and data`() {
         ErrorCode.entries.forEach { code ->
             val refusal = StructuredError(
                 code = code,
@@ -74,7 +79,14 @@ class CallEndingTest {
             val answered = getItem()
 
             assertEquals(true, answered.isError(), "a refusal did not arrive as a failed call")
-            assertEquals(refusal, answered.asRefusal(), "the core's own words did not survive the crossing")
+            val carried = answered.asRefusal()
+            assertEquals(refusal.asRpcError(), carried, "the core's own words did not survive the crossing")
+            // The number is the standard's; the name of the failure rides
+            // beside it, so an agent reads which one it was without matching
+            // integers against a table.
+            assertEquals(code.rpcCode, carried.code)
+            assertEquals(code.label, carried.data?.get(REASON)?.let { (it as JsonPrimitive).content })
+            assertEquals(refusal, carried.asStructuredError(), "the refusal did not read back as the core's own")
             oneRequestReached()
         }
     }

@@ -8,8 +8,9 @@ import io.modelcontextprotocol.spec.McpSchema
 import io.nook.contract.Missing
 import io.nook.contract.OperationCatalog
 import io.nook.contract.ProjectOperation
-import io.nook.contract.StructuredError
+import io.nook.contract.RpcError
 import io.nook.contract.StructuredErrorException
+import io.nook.contract.asRpcError
 import io.nook.contract.catalogJson
 import io.nook.contract.projectOperations
 import kotlinx.serialization.SerializationException
@@ -63,8 +64,9 @@ internal class DeclaredTool(private val operation: ProjectOperation) {
         try {
             answered(operation.runInside(catalog, project, request.arguments().asJsonObject()))
         } catch (refused: StructuredErrorException) {
-            if (Missing.of(refused.error) == Missing.PROJECT) whenProjectIsGone()
-            refused(refused.error)
+            val failure = refused.error.asRpcError()
+            if (Missing.of(failure) == Missing.PROJECT) whenProjectIsGone()
+            refused(failure)
         } catch (unreadable: SerializationException) {
             unreadable(unreadable)
         }
@@ -107,9 +109,13 @@ private fun answered(result: JsonElement?): McpSchema.CallToolResult {
     return answer.build()
 }
 
-/** A call the core turned down, carrying its code, its message and its details exactly as they arrived. */
-private fun refused(error: StructuredError): McpSchema.CallToolResult {
-    val text = catalogJson.encodeToString(StructuredError.serializer(), error)
+/**
+ * A call the core turned down, carrying its code, its message and its details
+ * exactly as they arrived — in the error object the catalog's own wire defines,
+ * which is the one this protocol also speaks.
+ */
+private fun refused(error: RpcError): McpSchema.CallToolResult {
+    val text = catalogJson.encodeToString(RpcError.serializer(), error)
     return McpSchema.CallToolResult.builder()
         .isError(true)
         .addTextContent(text)

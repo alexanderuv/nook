@@ -1,6 +1,6 @@
 package io.nook.core.catalog
 
-import io.nook.contract.CatalogReply
+import io.nook.contract.RpcReply
 import io.nook.core.DATABASE_SETTING
 import io.nook.core.PORT_SETTING
 import io.nook.core.db.EmbeddedPostgresSupport
@@ -149,7 +149,7 @@ class CoreProgramTest {
             )
             // And on the loopback address it answers, with no credential asked
             // for and none presented — which is the whole of the arrangement.
-            assertIs<CatalogReply.Answer>(rawReply(address, """{"operation":"list_projects"}"""))
+            assertIs<RpcReply.Answered>(rawReply(address, rawCall("list_projects")))
         }
     }
 
@@ -159,7 +159,7 @@ class CoreProgramTest {
         val request = HttpRequest.newBuilder(URI.create(address))
             .timeout(Duration.ofSeconds(5))
             .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString("""{"operation":"list_projects"}"""))
+            .POST(HttpRequest.BodyPublishers.ofString(rawCall("list_projects")))
             .build()
         client.send(request, HttpResponse.BodyHandlers.ofString()).statusCode() == 200
     }.getOrDefault(false)

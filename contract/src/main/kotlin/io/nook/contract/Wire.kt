@@ -1,7 +1,6 @@
 package io.nook.contract
 
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -26,61 +25,17 @@ import kotlinx.serialization.json.put
  * The one text format both halves of the connection read and write, so that
  * neither can come to read a reply the other way.
  *
- * Three settings carry weight. A reply names its own ending in `outcome`,
- * rather than leaving it to the numeric status every web reply already carries
- * — that number cannot tell an item that is not there from an address that is
- * not there. Defaults are left out, so a field nobody supplied is absent rather
- * than present and empty. And an undefined field is refused rather than ignored:
- * both halves ship from one source tree, so a field no operation defines is a
- * defect to surface, and ignoring one would silently drop something a caller
- * meant.
+ * Two settings carry weight. Defaults are left out, so a field nobody supplied
+ * is absent rather than present and empty. And an undefined field is refused
+ * rather than ignored: both halves ship from one source tree, so a field no
+ * operation defines is a defect to surface, and ignoring one would silently
+ * drop something a caller meant.
+ *
+ * What a call travels in is not defined here at all — see [RpcRequest], where
+ * the shape is the standard's rather than Nook's.
  */
 public val catalogJson: Json = Json {
-    classDiscriminator = "outcome"
     encodeDefaults = false
-}
-
-/**
- * One request shape for the whole catalog. [operation] names what to do — as
- * text, so that an operation nobody defined is a refusal this connection
- * produces rather than a silence from the web server underneath it. [project]
- * names the project the call acts *inside*, which the seven project-scoped
- * operations require and the four instance-level ones must not carry. [payload]
- * is shaped by the named operation and read with that operation's own
- * conversion.
- */
-@Serializable
-public data class CatalogRequest(
-    public val operation: String,
-    public val project: String? = null,
-    public val payload: JsonObject = JsonObject(emptyMap()),
-)
-
-/**
- * The three ways a call the core answered can end, each naming itself.
- *
- * A [Fault] carries no refusal code, deliberately: there is nothing for a
- * caller to fix, so it must not read as though there were. A call that never
- * reached the core at all produces no reply of any kind — the calling library
- * reports that as a breakdown of its own.
- */
-@Serializable
-public sealed interface CatalogReply {
-
-    /** The operation ran. [result] is its entity or listing, or nothing for the two deletes. */
-    @Serializable
-    @SerialName("answer")
-    public data class Answer(public val result: JsonElement? = null) : CatalogReply
-
-    /** The core turned the request down, and said what to fix. */
-    @Serializable
-    @SerialName("refusal")
-    public data class Refusal(public val error: StructuredError) : CatalogReply
-
-    /** Something inside the core broke. */
-    @Serializable
-    @SerialName("fault")
-    public data class Fault(public val message: String) : CatalogReply
 }
 
 /** The payload of `list_projects`, which asks for nothing: an empty object. */

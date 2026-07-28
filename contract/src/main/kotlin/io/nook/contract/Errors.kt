@@ -62,6 +62,13 @@ public enum class Missing(override val label: String) : Labelled {
         /** What [error] says was missing, or nothing where it does not say. */
         public fun of(error: StructuredError): Missing? =
             error.details?.get(MISSING)?.let { said -> entries.firstOrNull { it.label == said } }
+
+        /**
+         * The same, read off the error object a failure travels in — so a
+         * surface that carries the standard's shape outward reads the fact from
+         * the shape it carries rather than from one it used to.
+         */
+        public fun of(error: RpcError): Missing? = error.asStructuredError()?.let(::of)
     }
 }
 
@@ -84,15 +91,21 @@ public enum class BreakdownOrigin(override val label: String) : Labelled {
 /**
  * A call across the connection that produced no verdict.
  *
- * The two origins are kept apart because a caller acts on them differently, and
- * what separates them is whether anything came back. An answer that arrived and
- * settled nothing will settle nothing on a second attempt either, so there is a
- * defect to report — the core's own, or a version of it this build was never
- * written against. A core that could not be reached may simply not be up yet,
- * and the same caller succeeds later without being rebuilt.
+ * The two origins are kept apart because *this library* acts on them
+ * differently, and what separates them is whether anything came back. An answer
+ * that arrived and settled nothing will settle nothing on a second attempt
+ * either, so there is a defect to report — the core's own, or a version of it
+ * this build was never written against. A core that could not be reached may
+ * simply not be up yet, and the same caller succeeds later without being
+ * rebuilt.
+ *
+ * That distinction stops here. What this says out loud is [NO_VERDICT] and
+ * nothing more, whichever origin it carries, because a caller can do nothing
+ * differently for knowing and a reply naming a part behind the surface makes
+ * that part a promise. What was actually observed rides in the cause, where a
+ * stack trace carries it and a reply does not.
  */
 public class BreakdownException internal constructor(
     public val origin: BreakdownOrigin,
-    message: String,
     cause: Throwable?,
-) : RuntimeException(message, cause)
+) : RuntimeException(NO_VERDICT, cause)

@@ -1,10 +1,6 @@
 package io.nook.mcp
 
-import io.nook.contract.CatalogReply
-import io.nook.contract.CatalogRequest
-import io.nook.contract.StructuredErrorException
-import io.nook.contract.catalogJson
-import io.nook.contract.perform
+import io.nook.contract.answer
 import jakarta.servlet.http.HttpServlet
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -62,24 +58,19 @@ class StandInCoreHost(core: StandInCore, private val port: Int) : AutoCloseable 
 }
 
 /**
- * One request in, one reply out, in the three shapes the connection defines.
+ * One request in, one reply out, decided entirely by the answering side the
+ * real core mounts.
  *
- * The catalog decides all three; nothing here adds a verdict of its own, which
- * is what makes this a stand-in for the core rather than a second core.
+ * Nothing here adds a verdict of its own — an address, a container, and the
+ * shared function, which is exactly what the core is once its store is taken
+ * away. That is what makes this a stand-in for the core rather than a second
+ * core.
  */
 private class CoreServlet(private val core: StandInCore) : HttpServlet() {
 
     override fun doPost(request: HttpServletRequest, response: HttpServletResponse) {
-        val asked = catalogJson.decodeFromString(CatalogRequest.serializer(), request.reader.readText())
-        val reply = try {
-            CatalogReply.Answer(core.perform(asked))
-        } catch (refused: StructuredErrorException) {
-            CatalogReply.Refusal(refused.error)
-        } catch (broke: Exception) {
-            CatalogReply.Fault(broke.message ?: "something inside the core came apart")
-        }
         response.contentType = "application/json"
         response.characterEncoding = "UTF-8"
-        response.writer.write(catalogJson.encodeToString(CatalogReply.serializer(), reply))
+        response.writer.write(core.answer(request.reader.readText()))
     }
 }

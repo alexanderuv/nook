@@ -2,22 +2,27 @@ package io.nook.core.catalog
 
 import io.nook.contract.BreakdownException
 import io.nook.contract.BreakdownOrigin
-import io.nook.contract.CatalogReply
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.ErrorCode
 import io.nook.contract.FieldChange
 import io.nook.contract.OperationCatalog
+import io.nook.contract.RpcCode
+import io.nook.contract.RpcReply
+import io.nook.contract.RpcReplySerializer
 import io.nook.contract.StructuredError
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
+import io.nook.contract.asStructuredError
 import io.nook.contract.catalogJson
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.allStructureTables
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -108,13 +113,19 @@ class CatalogRefusalTest {
     }
 
     @Test
-    fun `a fault planted inside the core arrives as a breakdown carrying no refusal code`() {
+    fun `a defect planted inside the core arrives carrying no reason and naming no part of Nook`() {
         val broken = InterceptingCatalog(inProcess) { _, _ -> error("a defect planted inside the core") }
         Connection(broken).use { connection ->
-            // The reply itself carries no code, because the shape a fault takes
-            // has nowhere to put one — which is what keeps a caller from being
-            // told to fix a request that was never the problem.
-            assertIs<CatalogReply.Fault>(rawReply(connection.address, """{"operation":"list_projects"}"""))
+            val reply = assertIs<RpcReply.Failed>(rawReply(connection.address, rawCall("list_projects")))
+            assertEquals(RpcCode.INTERNAL_ERROR, reply.error.code)
+            // Nothing for a caller to fix, so it must not read as though there
+            // were: no domain failure named, and nothing said about which part
+            // of Nook gave way.
+            assertNull(reply.error.data, "a call that produced no verdict carried a reason")
+            assertNull(reply.error.asStructuredError(), "a call that produced no verdict read back as a refusal")
+            listOf("core", "connection", "database", "store", "catalog", "defect").forEach {
+                assertFalse(reply.error.message.contains(it), "the reply named a part of Nook: ${reply.error.message}")
+            }
 
             val breakdown = assertFailsWith<BreakdownException> { connection.caller.listProjects() }
             assertEquals(BreakdownOrigin.CORE, breakdown.origin)
@@ -127,30 +138,43 @@ class CatalogRefusalTest {
         val before = snapshot()
 
         connectionTo(db).use { connection ->
+            // Each mistake against the number the wire's own table gives it: the
+            // four the standard reserves for the request itself, and its
+            // "invalid params" for everything about the arguments, whoever
+            // found it wrong.
             mapOf(
-                "an operation nobody defined" to
-                    """{"operation":"teleport_item","project":"${project.slug}"}""",
                 "contents that cannot be read at all" to
-                    """this is not JSON""",
+                    (RpcCode.PARSE_ERROR to "this is not JSON"),
                 "no contents at all" to
-                    "",
+                    (RpcCode.PARSE_ERROR to ""),
+                "an envelope that is not a request" to
+                    (RpcCode.INVALID_REQUEST to """{"method":"list_projects","id":1}"""),
+                "a request carrying no id" to
+                    (RpcCode.INVALID_REQUEST to """{"jsonrpc":"2.0","method":"list_projects"}"""),
+                "a field the envelope itself does not define" to
+                    (RpcCode.INVALID_REQUEST to """{"jsonrpc":"2.0","method":"list_projects","id":1,"hurry":true}"""),
+                "an operation nobody defined" to
+                    (RpcCode.METHOD_NOT_FOUND to rawCall("teleport_item", """{"project":"${project.slug}"}""")),
                 "a project-scoped call naming no project" to
-                    """{"operation":"create_item","payload":{"type":"task","name":"Nowhere"}}""",
+                    (RpcCode.INVALID_PARAMS to rawCall("create_item", """{"type":"task","name":"Nowhere"}""")),
                 "an instance-level call naming a project" to
-                    """{"operation":"list_projects","project":"${project.slug}"}""",
+                    (RpcCode.INVALID_PARAMS to rawCall("list_projects", """{"project":"${project.slug}"}""")),
                 "a field the operation does not define" to
-                    """{"operation":"create_item","project":"${project.slug}",""" +
-                    """"payload":{"type":"task","name":"Extra","colour":"red"}}""",
-                "a field the request itself does not define" to
-                    """{"operation":"list_projects","hurry":true}""",
-            ).forEach { (what, body) ->
+                    (
+                        RpcCode.INVALID_PARAMS to rawCall(
+                            "create_item",
+                            """{"project":"${project.slug}","type":"task","name":"Extra","colour":"red"}""",
+                        )
+                        ),
+            ).forEach { (what, expected) ->
+                val (code, body) = expected
                 val exchange = rawExchange(connection.address, body)
                 assertEquals(200, exchange.statusCode(), "$what: every reply carries the same status")
-                val refusal = assertIs<CatalogReply.Refusal>(
-                    catalogJson.decodeFromString<CatalogReply>(exchange.body()),
+                val refused = assertIs<RpcReply.Failed>(
+                    catalogJson.decodeFromString(RpcReplySerializer, exchange.body()),
                     what,
                 )
-                assertEquals(ErrorCode.VALIDATION_FAILED, refusal.error.code, what)
+                assertEquals(code, refused.error.code, what)
             }
 
             assertEquals(before, snapshot(), "a request that could not be read reached the store")

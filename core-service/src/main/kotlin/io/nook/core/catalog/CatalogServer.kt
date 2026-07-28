@@ -9,19 +9,12 @@ import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
-import io.nook.contract.CatalogReply
-import io.nook.contract.CatalogRequest
-import io.nook.contract.ErrorCode
 import io.nook.contract.OperationCatalog
-import io.nook.contract.StructuredError
-import io.nook.contract.StructuredErrorException
-import io.nook.contract.catalogJson
-import io.nook.contract.perform
+import io.nook.contract.answer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerializationException
 
 /**
  * The address a machine uses to reach itself, which nothing outside it can
@@ -70,48 +63,35 @@ class CatalogServer(catalog: OperationCatalog, private val host: String, port: I
 private fun Application.catalogRoute(catalog: OperationCatalog) {
     routing {
         post("/") {
-            call.respondText(
-                catalogJson.encodeToString(replyFor(call, catalog)),
-                ContentType.Application.Json,
-            )
+            call.respondText(replyFor(call, catalog), ContentType.Application.Json)
         }
     }
 }
 
 /**
- * Reads the request and runs it inside one attempt.
+ * The request, run against the core's own catalog.
  *
- * Which line the reading sits on is the whole of this function's difficulty.
- * Read outside the attempt — the arrangement a handler falls into by default —
- * contents that cannot be read fail before anything maps them, and arrive as
- * the web server's own answer where a refusal was required. Nothing about the
- * code looks wrong when it is wrong, which is why there is a test that sends
- * unreadable contents.
+ * What a request means is decided in the contract library and nowhere here:
+ * this end of the connection contributes an address, an engine and a binding,
+ * and the app a person's program reaches contributes the same three around the
+ * same function. Neither holds a rule about what a request contains, which is
+ * what makes the two doors unable to reach different verdicts.
  *
  * The store's work goes to threads that are allowed to sit and wait, kept off
  * the small pool the server answers on: that work waits on the database, and a
  * call held there would otherwise hold an unrelated one behind it.
  *
- * Everything the core refuses passes through with its own code, message, and
- * details. Everything else that fails is a fault, carrying no code at all —
- * there is nothing for a caller to fix, so it must not read as though there
- * were.
+ * Bytes that could not be read as text at all are handed on as no contents,
+ * which is a reply this already has words for — and a shorter path than a
+ * second way of saying the same thing.
  */
-private suspend fun replyFor(call: ApplicationCall, catalog: OperationCatalog): CatalogReply =
-    try {
-        val request = catalogJson.decodeFromString<CatalogRequest>(call.receiveText())
-        CatalogReply.Answer(withContext(Dispatchers.IO) { catalog.perform(request) })
-    } catch (refused: StructuredErrorException) {
-        CatalogReply.Refusal(refused.error)
-    } catch (unreadable: SerializationException) {
-        CatalogReply.Refusal(
-            StructuredError(
-                ErrorCode.VALIDATION_FAILED,
-                unreadable.message ?: "this request's contents could not be read",
-            ),
-        )
+private suspend fun replyFor(call: ApplicationCall, catalog: OperationCatalog): String {
+    val request = try {
+        call.receiveText()
     } catch (abandoned: CancellationException) {
         throw abandoned
-    } catch (broken: Exception) {
-        CatalogReply.Fault("something inside the core failed: $broken")
+    } catch (unreadable: Exception) {
+        ""
     }
+    return withContext(Dispatchers.IO) { catalog.answer(request) }
+}

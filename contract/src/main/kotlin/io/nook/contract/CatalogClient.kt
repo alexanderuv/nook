@@ -10,12 +10,15 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
 /** How long a call waits for an answer before it becomes a breakdown. */
@@ -58,6 +61,9 @@ public class CatalogClient(
         install(HttpTimeout) { requestTimeoutMillis = waitLimit.inWholeMilliseconds }
     }
 
+    /** What every call is numbered by, so a reply can be shown to belong to the call that asked for it. */
+    private val calls = AtomicLong()
+
     override fun createProject(command: CreateProject): Project =
         call(createProjectWiring, null, command)
 
@@ -93,18 +99,46 @@ public class CatalogClient(
 
     override fun close(): Unit = http.close()
 
+    /**
+     * One call, as the standard shapes it: the operation by name, the project
+     * it acts inside beside that operation's own arguments, and an id nothing
+     * but this call carries.
+     *
+     * The id is checked on the way back rather than trusted. Two calls sharing
+     * one connection would otherwise be free to swap answers, and an answer
+     * belonging to a different call is not a wrong answer to this one — it is
+     * no answer to this one at all.
+     */
     private fun <P, R> call(wiring: WiredOperation<P, R>, project: String?, payload: P): R {
-        val request = CatalogRequest(
-            operation = wiring.operation.label,
-            project = project,
-            payload = catalogJson.encodeToJsonElement(wiring.payloadShape, payload).jsonObject,
+        val id = JsonPrimitive(calls.incrementAndGet())
+        val request = RpcRequest(
+            method = wiring.operation.label,
+            params = JsonObject(
+                buildMap {
+                    project?.let { put(PROJECT, JsonPrimitive(it)) }
+                    putAll(catalogJson.encodeToJsonElement(wiring.payloadShape, payload).jsonObject)
+                },
+            ),
+            id = id,
         )
-        return when (val reply = exchange(catalogJson.encodeToString(request))) {
-            is CatalogReply.Answer -> readAnswer(wiring, reply.result)
-            is CatalogReply.Refusal -> throw StructuredErrorException(reply.error)
-            is CatalogReply.Fault -> throw BreakdownException(BreakdownOrigin.CORE, reply.message, null)
+        val reply = exchange(catalogJson.encodeToString(RpcRequestSerializer, request), id)
+        return when (reply) {
+            is RpcReply.Answered -> readAnswer(wiring, reply.result)
+            is RpcReply.Failed -> throw reply.error.refusalOrBreakdown()
         }
     }
+
+    /**
+     * A failure the caller can act on, or one nobody can.
+     *
+     * What decides it is the name the failure gives itself, not its number: an
+     * error naming one of the four domain failures is the core's verdict on the
+     * request and goes back as one, and an error naming none of them settled
+     * nothing — which must never read as something in the call to correct.
+     */
+    private fun RpcError.refusalOrBreakdown(): RuntimeException =
+        asStructuredError()?.let { StructuredErrorException(it) }
+            ?: brokenCore("the core at $address failed this call under $code: $message", null)
 
     /**
      * What a call that succeeded answered, or a breakdown where this build
@@ -128,13 +162,14 @@ public class CatalogClient(
         }
 
     /**
-     * Sends one request and reads back one reply, or reports why there was
-     * none. What separates the two origins is whether anything came back at
-     * all: nothing listening, a link that dropped and a wait that ran out are
-     * the connection, while a core that answered has answered — even where what
-     * it answered is unreadable here, which it will be again next time.
+     * Sends one request and reads back the one reply that answers it, or
+     * reports why there was none. What separates the two origins is whether
+     * anything came back at all: nothing listening, a link that dropped and a
+     * wait that ran out are the connection, while a core that answered has
+     * answered — even where what it answered is unreadable here, which it will
+     * be again next time.
      */
-    private fun exchange(request: String): CatalogReply {
+    private fun exchange(request: String, id: JsonElement): RpcReply {
         val answered = try {
             runBlocking {
                 val response = http.post(address) {
@@ -151,11 +186,15 @@ public class CatalogClient(
 
         val (status, body) = answered
         if (!status.isSuccess()) throw noReplyIn(status)
-        return try {
-            catalogJson.decodeFromString(body)
+        val reply = try {
+            catalogJson.decodeFromString(RpcReplySerializer, body)
         } catch (unreadable: SerializationException) {
             throw brokenCore("the core at $address answered something this cannot read: $unreadable", unreadable)
         }
+        if (reply.id != id) {
+            throw brokenCore("the core at $address answered ${reply.id} to the call this made as $id", null)
+        }
+        return reply
     }
 
     private fun noReplyIn(status: HttpStatusCode): BreakdownException = brokenCore(
@@ -163,9 +202,14 @@ public class CatalogClient(
         cause = null,
     )
 
-    private fun unreachable(message: String, cause: Throwable?): BreakdownException =
-        BreakdownException(BreakdownOrigin.CONNECTION, message, cause)
+    /**
+     * The two origins, each carrying what was observed where a stack trace can
+     * reach it. None of it is what the breakdown says out loud: which part of
+     * Nook gave way is nobody's business outside this library.
+     */
+    private fun unreachable(observed: String, cause: Throwable?): BreakdownException =
+        BreakdownException(BreakdownOrigin.CONNECTION, IllegalStateException(observed, cause))
 
-    private fun brokenCore(message: String, cause: Throwable?): BreakdownException =
-        BreakdownException(BreakdownOrigin.CORE, message, cause)
+    private fun brokenCore(observed: String, cause: Throwable?): BreakdownException =
+        BreakdownException(BreakdownOrigin.CORE, IllegalStateException(observed, cause))
 }

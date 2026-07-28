@@ -1,7 +1,5 @@
 package io.nook.contract
 
-import com.sun.net.httpserver.HttpServer
-import java.net.InetSocketAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -21,29 +19,11 @@ import kotlin.test.assertFailsWith
  */
 class UnreadableReplyTest {
 
-    /** A core that answers [body] under [status] to everything, while [check] runs. */
-    private fun coreAnswering(body: String, status: Int = 200, check: (CatalogClient) -> Unit) {
-        val server = HttpServer.create(InetSocketAddress(LOOPBACK, 0), 0)
-        server.createContext("/") { call ->
-            call.requestBody.use { it.readAllBytes() }
-            val answer = body.toByteArray()
-            call.sendResponseHeaders(status, answer.size.toLong())
-            call.responseBody.use { it.write(answer) }
-        }
-        server.start()
-        try {
-            CatalogClient("http://$LOOPBACK:${server.address.port}").use(check)
-        } finally {
-            server.stop(0)
-        }
-    }
-
     private companion object {
-        const val LOOPBACK = "127.0.0.1"
 
         /** A created item, answered as a core holding a fifth status would answer it. */
         val itemWithAnUnknownStatus = """
-            {"outcome":"answer","result":{
+            {"jsonrpc":"2.0","id":1,"result":{
               "id":"0199a1f0-0000-7000-8000-000000000001",
               "projectId":"0199a1f0-0000-7000-8000-000000000002",
               "type":"task","slug":"add-search","name":"Add search",
@@ -67,19 +47,35 @@ class UnreadableReplyTest {
     }
 
     @Test
-    fun `a refusal carrying a code this build does not know says the core answered`() {
+    fun `a failure naming a reason this build does not know says the core answered`() {
         // Reported as the connection, this reads as "no answer arrived" and as
         // something a later attempt gets past. The core will refuse the same way
         // every time, so there is nothing for a retry to reach.
-        coreAnswering("""{"outcome":"refusal","error":{"code":"rate_limited","message":"too many"}}""") { caller ->
+        coreAnswering(
+            """{"jsonrpc":"2.0","id":1,"error":{"code":-32004,"message":"too many",""" +
+                """"data":{"reason":"rate_limited"}}}""",
+        ) { caller ->
             val breakdown = assertFailsWith<BreakdownException> { caller.listProjects() }
             assertEquals(BreakdownOrigin.CORE, breakdown.origin)
         }
     }
 
     @Test
+    fun `a reply answering a call this did not make says the core answered`() {
+        // Two calls sharing one connection would otherwise be free to swap
+        // answers, and an answer belonging to another call is no answer to this
+        // one at all.
+        coreAnswering("""{"jsonrpc":"2.0","id":999,"result":[]}""") { caller ->
+            assertEquals(
+                BreakdownOrigin.CORE,
+                assertFailsWith<BreakdownException> { caller.listProjects() }.origin,
+            )
+        }
+    }
+
+    @Test
     fun `a reply that is not a reply at all says the core answered`() {
-        coreAnswering("""{"outcome":"shrug"}""") { caller ->
+        coreAnswering("""{"jsonrpc":"2.0","id":1}""") { caller ->
             assertEquals(
                 BreakdownOrigin.CORE,
                 assertFailsWith<BreakdownException> { caller.listProjects() }.origin,
@@ -105,8 +101,7 @@ class UnreadableReplyTest {
     fun `nothing listening is still the connection`() {
         // The other half of the same rule, so that widening what counts as the
         // core cannot quietly swallow the case the origin exists for.
-        val nobodyThere = java.net.ServerSocket(0).use { it.localPort }
-        CatalogClient("http://$LOOPBACK:$nobodyThere").use { caller ->
+        noCoreAt { caller ->
             assertEquals(
                 BreakdownOrigin.CONNECTION,
                 assertFailsWith<BreakdownException> { caller.listProjects() }.origin,

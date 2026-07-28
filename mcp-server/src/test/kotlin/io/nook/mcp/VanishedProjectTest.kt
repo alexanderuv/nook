@@ -4,6 +4,7 @@ import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.spec.McpSchema
 import io.nook.contract.ErrorCode
 import io.nook.contract.Missing
+import io.nook.contract.RpcCode
 import io.nook.contract.StructuredError
 import io.nook.contract.StructuredErrorException
 import kotlin.test.Test
@@ -45,7 +46,7 @@ class VanishedProjectTest {
 
             val told = client.getItem()
             assertEquals(true, told.isError(), "the call after the deletion was not refused")
-            assertEquals(ErrorCode.NOT_FOUND, told.asRefusal().code)
+            assertEquals(RpcCode.NOT_FOUND, told.asRefusal().code)
             assertEquals(Missing.PROJECT, Missing.of(told.asRefusal()), "the refusal does not say the project is gone")
 
             core.invocations.clear()

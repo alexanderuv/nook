@@ -33,12 +33,31 @@ internal sealed class WiredOperation<P, R>(
      *
      * A payload this operation cannot read throws out of here as a
      * [SerializationException]; the answering side maps it, with everything
-     * else that cannot be read, to a refusal.
+     * else that cannot be read, to a refusal. It is checked against the shape's
+     * own declaration before it is decoded, so what the caller is told is
+     * Nook's own words rather than the serialization library's.
      */
     fun runAgainst(catalog: OperationCatalog, project: String?, payload: JsonObject): JsonElement? {
-        val answer = invokeOn(catalog, project, catalogJson.decodeFromJsonElement(payloadShape, payload))
-        return answerShape.write(catalogJson, answer)
+        payloadShape.descriptor.refuseUnreadable(payload)
+        val arguments = catalogJson.decodeFromJsonElement(payloadShape, payload)
+        return pastReading { answerShape.write(catalogJson, invokeOn(catalog, project, arguments)) }
     }
+
+    /**
+     * Everything after the arguments were read, with anything it says about
+     * reading turned into what it is: the operation ran, so there is nothing in
+     * the call for its caller to correct.
+     *
+     * Left to escape, an answer this cannot write out would arrive as a wrong
+     * argument, and whoever sent the call would fix it by sending the same
+     * write a second time.
+     */
+    private inline fun pastReading(run: () -> JsonElement?): JsonElement? =
+        try {
+            run()
+        } catch (unwritable: SerializationException) {
+            throw IllegalStateException("${operation.label} produced an answer that could not be written", unwritable)
+        }
 
     protected abstract fun invokeOn(catalog: OperationCatalog, project: String?, payload: P): R
 
@@ -249,27 +268,6 @@ public val projectOperations: List<ProjectOperation> = CatalogOperation.entries
     .map(::wiringOf)
     .filterIsInstance<WiredOperation.ProjectScoped<*, *>>()
     .map(::ProjectOperation)
-
-/**
- * Runs [request] against this catalog, and returns what its answer carries —
- * nothing at all, for the two deletes.
- *
- * The three ways a request can be one this connection cannot read are refused
- * here as failed validations, and nothing reaches the store: an operation
- * nobody defined, a project-scoped call naming no project, and an
- * instance-level call naming one. A payload that cannot be read throws a
- * [SerializationException] instead, and the caller of this function maps that
- * — along with a request whose contents could not be read at all — to the same
- * refusal.
- *
- * Everything past that point is the core's own verdict. This applies no rule of
- * its own to a request it can read.
- */
-public fun OperationCatalog.perform(request: CatalogRequest): JsonElement? {
-    val operation = CatalogOperation.fromLabel(request.operation)
-        ?: refuseAsInvalid("this connection carries no operation named \"${request.operation}\"")
-    return wiringOf(operation).runAgainst(this, request.project, request.payload)
-}
 
 internal fun refuseAsInvalid(message: String): Nothing =
     throw StructuredErrorException(StructuredError(ErrorCode.VALIDATION_FAILED, message))

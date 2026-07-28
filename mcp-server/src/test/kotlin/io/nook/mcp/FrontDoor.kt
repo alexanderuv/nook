@@ -4,7 +4,7 @@ import io.modelcontextprotocol.client.McpClient
 import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport
 import io.modelcontextprotocol.spec.McpSchema
-import io.nook.contract.StructuredError
+import io.nook.contract.RpcError
 import io.nook.contract.catalogJson
 import java.net.ServerSocket
 import java.net.URI
@@ -74,8 +74,8 @@ fun McpSchema.CallToolResult.said(): String =
     content().filterIsInstance<McpSchema.TextContent>().joinToString("\n") { it.text() }
 
 /** What a failed call carried, read back as the contract writes a refusal. */
-fun McpSchema.CallToolResult.asRefusal(): StructuredError =
-    catalogJson.decodeFromString(StructuredError.serializer(), said())
+fun McpSchema.CallToolResult.asRefusal(): RpcError =
+    catalogJson.decodeFromString(RpcError.serializer(), said())
 
 /**
  * What an opening exchange at [url] was answered with, or nothing at all where

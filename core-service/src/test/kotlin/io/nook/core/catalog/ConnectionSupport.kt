@@ -2,7 +2,6 @@ package io.nook.core.catalog
 
 import io.nook.contract.CatalogClient
 import io.nook.contract.CatalogOperation
-import io.nook.contract.CatalogReply
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
@@ -12,6 +11,8 @@ import io.nook.contract.OperationCatalog
 import io.nook.contract.Project
 import io.nook.contract.ProjectItem
 import io.nook.contract.Release
+import io.nook.contract.RpcReply
+import io.nook.contract.RpcReplySerializer
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
 import io.nook.contract.catalogJson
@@ -20,6 +21,8 @@ import java.net.URI
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import kotlin.time.Duration
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 
 /**
@@ -134,8 +137,19 @@ internal class InterceptingCatalog(
  * for — so the requests a defective adapter would send are written out by hand
  * here and posted by the runtime's own web client.
  */
-internal fun rawReply(address: String, body: String): CatalogReply =
-    catalogJson.decodeFromString(rawExchange(address, body).body())
+internal fun rawReply(address: String, body: String): RpcReply =
+    catalogJson.decodeFromString(RpcReplySerializer, rawExchange(address, body).body())
+
+/**
+ * One call, written out as text the way a program that is not this one writes
+ * it: the operation by name, the project alongside its arguments, and an id for
+ * the reply to hand back.
+ */
+internal fun rawCall(method: String, params: String = "{}", id: String = "1"): String =
+    """{"jsonrpc":"2.0","method":"$method","params":$params,"id":$id}"""
+
+/** The id [rawCall] uses unless it is told another, as it comes back on the reply. */
+internal val ONE_CALL: JsonElement = JsonPrimitive(1)
 
 internal fun rawExchange(address: String, body: String): HttpResponse<String> {
     val request = HttpRequest.newBuilder(URI.create(address))

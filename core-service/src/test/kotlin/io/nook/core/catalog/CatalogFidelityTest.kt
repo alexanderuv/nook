@@ -1,6 +1,6 @@
 package io.nook.core.catalog
 
-import io.nook.contract.CatalogReply
+import io.nook.contract.RpcReply
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.FieldChange
@@ -81,18 +81,18 @@ class CatalogFidelityTest {
             val project = connection.caller.createProject(CreateProject("Deleted Across"))
             connection.caller.createItem(project.slug, CreateItem(type = "task", name = "Doomed"))
 
-            val deleteItem = """{"operation":"delete_item","project":"${project.slug}","payload":{"ref":"doomed"}}"""
-            val deleteProject = """{"operation":"delete_project","payload":{"ref":"${project.slug}"}}"""
+            val deleteItem = rawCall("delete_item", """{"project":"${project.slug}","ref":"doomed"}""")
+            val deleteProject = rawCall("delete_project", """{"ref":"${project.slug}"}""")
 
-            // An answer carrying nothing at all, which is what "no entity" is on
-            // the wire — and it still names its ending, so a caller reads success
-            // from the reply rather than from the absence of a result.
-            assertEquals(CatalogReply.Answer(), rawReply(connection.address, deleteItem))
-            assertEquals(CatalogReply.Answer(), rawReply(connection.address, deleteProject))
+            // A result carrying nothing at all, which is what "no entity" is on
+            // the wire — and a result it plainly is, so a caller reads success
+            // from the reply rather than from the absence of one.
+            assertEquals(RpcReply.Answered(ONE_CALL, null), rawReply(connection.address, deleteItem))
+            assertEquals(RpcReply.Answered(ONE_CALL, null), rawReply(connection.address, deleteProject))
 
             // Doing either again is a refusal, which is how a caller can tell the
             // two apart: nothing about success looks like being turned down.
-            assertIs<CatalogReply.Refusal>(rawReply(connection.address, deleteProject))
+            assertIs<RpcReply.Failed>(rawReply(connection.address, deleteProject))
             assertFailsWith<StructuredErrorException> { connection.caller.deleteProject(project.slug) }
         }
     }

@@ -49,7 +49,7 @@ any restriction on where a request came from arrive together in a later phase
 
 In scope: which operations this surface serves and at what address; that what it
 serves is the core's own shape rather than a second one; what must reach the core
-untouched; the three ways a call can end and how a caller tells them apart; who
+untouched; the two ways a call can end and how a caller tells them apart; who
 may reach the app; several callers at once; and what the program is told from
 outside before it starts.
 
@@ -278,14 +278,31 @@ chose.
   the core's own connection reports for that same request — the same entity, the
   same code, message and details, and the same change to the store.
 - **REQ11** — A request this surface cannot read MUST NOT reach the store.
-- **REQ12** — Such a request MUST come back as an error carrying
-  `validation_failed`, and MUST name what was wrong with it: an operation nobody
-  defined by the name that was asked for, a field the operation does not define by
-  that field's name, a required argument that is missing by its name, and a value
-  of the wrong kind by the field carrying it.
+- **REQ12** — Such a request MUST come back as an error carrying the code
+  [ADR-2](../../../architecture/adrs/adr-2.md)'s table gives it, and MUST name
+  what was wrong with it: an operation nobody defined by the name that was asked
+  for, a field the operation does not define by that field's name, a required
+  argument that is missing by its name, and a value of the wrong kind by the
+  field carrying it.
+- **REQ12a** — That naming MUST be in Nook's own words. It MUST NOT quote the
+  library these shapes are read with, advise the caller to change a setting in
+  it, read the caller's own request back to them, or name a type from inside
+  Nook ([ADR-4](../../../architecture/adrs/adr-4.md)).
 - **REQ13** — A request naming a project on an operation that acts on the whole
   instance, and one naming no project on an operation that acts inside a project,
-  MUST each be refused with `validation_failed`.
+  MUST each be refused as invalid params, carrying `validation_failed` as its
+  reason.
+
+> REQ12 first required `validation_failed` for every request the surface cannot
+> read, which was this spec's own vocabulary before ADR-2 replaced it. The
+> standard already separates these: contents that are not JSON are `-32700`, an
+> envelope that is not a request `-32600`, an operation nobody defined `-32601`,
+> and everything about the arguments `-32602` — which *is* `validation_failed`,
+> carried in `data.reason`. So the requirement now asks for the same thing under
+> the table Nook actually serves, and REQ12a states the part that was never
+> written down: what a caller is told must describe their call and nothing
+> behind the surface. The four codes are in
+> [docs/01](../../../docs/01-interface-contracts.md) verbatim.
 
 ### What reaches the core untouched
 
@@ -366,8 +383,8 @@ chose.
 ## Edge cases
 
 - **EDGE1** — A request naming an operation nobody defined: an error carrying
-  `validation_failed` and naming the operation that was asked for, never the web
-  server's own empty answer for an address nobody defined.
+  `-32601` and naming the operation that was asked for, never the web server's
+  own empty answer for an address nobody defined.
 - **EDGE2** — A request carrying a field its operation does not define: an error
   naming that field. An unknown field is a defect to surface, not a difference to
   absorb — ignoring one would silently drop something a caller meant.
@@ -375,8 +392,11 @@ chose.
   naming that argument.
 - **EDGE4** — A request whose field holds a value of the wrong kind — a number
   where text belongs, text where a list belongs: an error naming that field.
-- **EDGE5** — A request whose contents cannot be read as the format at all: a
-  error carrying `validation_failed`, not an internal error.
+- **EDGE5** — A request whose contents cannot be read as the format at all: an
+  error carrying `-32700`, not an internal error. An envelope that is readable
+  JSON and is not a request — no version named, no operation named, no `id` to
+  pair a reply with, or a field the envelope does not define — is `-32600`, on
+  the same terms.
 - **EDGE6** — A request naming a project that does not exist: the core's own
   `not_found`, reaching the caller unchanged.
 - **EDGE7** — A request naming a project, and an item that belongs to a different
@@ -444,13 +464,13 @@ chose.
   listing, a delete, and one request producing each of the four domain reasons, then
   the two replies are equal: the same entity compared as a whole value, or the same
   code, message and details.
-- **AC4** (REQ9, REQ11, REQ12, EDGE1, EDGE2, EDGE3, EDGE4, EDGE5) — Given a
-  request naming an operation nobody defined, one carrying a field its operation
-  does not define, one missing a required argument, one holding a value of the
-  wrong kind, and one whose contents cannot be read at all, when each is sent,
-  then each comes back as an error carrying `validation_failed` and naming what
-  was wrong, the store is unchanged, and the next well-formed call is served
-  normally.
+- **AC4** (REQ9, REQ11, REQ12, REQ12a, EDGE1, EDGE2, EDGE3, EDGE4, EDGE5) —
+  Given a request naming an operation nobody defined, one carrying a field its
+  operation does not define, one missing a required argument, one holding a
+  value of the wrong kind, and one whose contents cannot be read at all, when
+  each is sent, then each comes back as an error carrying the code ADR-2's table
+  gives it and naming what was wrong, in Nook's own words, the store is
+  unchanged, and the next well-formed call is served normally.
 - **AC5** (REQ14, REQ17, EDGE8, EDGE9) — Given calls carrying a name with emoji and
   non-Latin script, a description with line breaks and quotation marks, a blocker
   list holding the same reference twice, and a reference that is nearly but not
