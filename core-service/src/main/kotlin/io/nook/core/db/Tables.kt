@@ -24,21 +24,47 @@ import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
 // in application enums whose members carry explicit, stable integers. The single
 // writer (this service) enforces domain membership, containment, and per-type
 // rules — the schema stores no such semantics beyond its constraints.
-//
-// Every row that records who wrote it records both halves of the pair: the
-// person the call was made for (created_by / updated_by) and the coding agent
-// that made it on their behalf (created_by_agent / updated_by_agent). The agent
-// is empty text where a person acted directly, which is not the same as unknown
-// — no agent acted. `item_dependency` records neither, by having no audit
-// column at all, and `document` gains the agent pair when the document layer
-// starts writing it.
-//
-// Audit timestamps are TIMESTAMPTZ, carried here as OffsetDateTime and handed to
-// callers as the Instant the contract promises. A zoneless column would store
-// the writing machine's wall clock and rebuild an Instant from the reading
-// machine's zone, so the same row would name a different moment on a different
-// host. The drift check cannot tell the two column types apart, which is why the
-// mismatch has to be prevented rather than caught.
+
+/**
+ * A table whose rows record when they were written and by whom.
+ *
+ * The six columns are declared once because the changelog gives every entity
+ * table the same six, down to the widths and the defaults. Declared per table
+ * they would drift silently: a table added later with `varchar(100)` or without
+ * a default agrees with the changelog written in the same sitting, so both
+ * checks pass and the new table is simply the only one shaped differently.
+ * Inherited, there is nothing to get wrong. The changelog cannot follow —
+ * Liquibase substitutes scalars, not column lists — so the repetition stays on
+ * that side.
+ *
+ * Who wrote a row is a pair, not a name: the person the call was made for
+ * (created_by / updated_by) and the coding agent that made it on their behalf
+ * (created_by_agent / updated_by_agent). The agent is empty text where a person
+ * acted directly, which is not the same as unknown — no agent acted.
+ *
+ * `item_dependency` is not one of these and records nobody, by having no column
+ * to record one in. `document` carries the four the changelog gave it and joins
+ * here when it gains the agent pair, which is when the document layer starts
+ * writing it.
+ *
+ * The timestamps are TIMESTAMPTZ, carried here as OffsetDateTime and handed to
+ * callers as the Instant the contract promises. A zoneless column would store
+ * the writing machine's wall clock and rebuild an Instant from the reading
+ * machine's zone, so the same row would name a different moment on a different
+ * host. The drift check cannot tell the two column types apart, which is why the
+ * mismatch has to be prevented rather than caught.
+ *
+ * Where these columns land in a table's own order is nothing: the drift check
+ * reads the schema by column name, and no statement anywhere selects by position.
+ */
+abstract class AuditedTable(name: String) : Table(name) {
+    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
+    val createdBy = varchar("created_by", 200).default("system")
+    val updatedBy = varchar("updated_by", 200).default("system")
+    val createdByAgent = varchar("created_by_agent", 200).default("")
+    val updatedByAgent = varchar("updated_by_agent", 200).default("")
+}
 
 // The rows writers lock to take a turn in a scope that owns no row of its own —
 // today just the instance-wide space of project handles. Holds no data: the row
@@ -50,18 +76,12 @@ object InstanceLockTable : Table("instance_lock") {
     override val primaryKey = PrimaryKey(scope)
 }
 
-object ProjectTable : Table("project") {
+object ProjectTable : AuditedTable("project") {
     val id = uuid("id")
     val slug = varchar("slug", 200).uniqueIndex("uq_project_slug")
     val name = varchar("name", 500)
     val description = text("description").default("").nullable()
     val artifactRepoUrl = varchar("artifact_repo_url", 1024).nullable()
-    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
-    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
-    val createdBy = varchar("created_by", 200).default("system")
-    val updatedBy = varchar("updated_by", 200).default("system")
-    val createdByAgent = varchar("created_by_agent", 200).default("")
-    val updatedByAgent = varchar("updated_by_agent", 200).default("")
 
     // The tenancy root: the subject that owns this project (distinct from
     // created_by, which is audit). Single-valued — one owner per project.
@@ -70,7 +90,7 @@ object ProjectTable : Table("project") {
     override val primaryKey = PrimaryKey(id)
 }
 
-object ReleaseTable : Table("release") {
+object ReleaseTable : AuditedTable("release") {
     val id = uuid("id")
     val projectId = uuid("project_id")
         .references(ProjectTable.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.NO_ACTION, fkName = "fk_release_project")
@@ -79,12 +99,6 @@ object ReleaseTable : Table("release") {
     val description = text("description").default("").nullable()
     val status = short("status").default(1)
     val targetDate = date("target_date").nullable()
-    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
-    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
-    val createdBy = varchar("created_by", 200).default("system")
-    val updatedBy = varchar("updated_by", 200).default("system")
-    val createdByAgent = varchar("created_by_agent", 200).default("")
-    val updatedByAgent = varchar("updated_by_agent", 200).default("")
 
     override val primaryKey = PrimaryKey(id)
 
@@ -99,7 +113,7 @@ object ReleaseTable : Table("release") {
 // `type`. parent_id places a leaf under an epic and is NULL for epics and
 // project-level leaves; release_id applies to epics. "Only an epic parents" and
 // "leaves never nest" are write-path rules — the type column carries the meaning.
-object ProjectItemTable : Table("project_item") {
+object ProjectItemTable : AuditedTable("project_item") {
     val id = uuid("id")
     val projectId = uuid("project_id")
         .references(ProjectTable.id, onDelete = ReferenceOption.CASCADE, onUpdate = ReferenceOption.NO_ACTION, fkName = "fk_item_project")
@@ -110,12 +124,6 @@ object ProjectItemTable : Table("project_item") {
     val name = varchar("name", 500)
     val description = text("description").default("").nullable()
     val status = short("status").default(1)
-    val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
-    val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
-    val createdBy = varchar("created_by", 200).default("system")
-    val updatedBy = varchar("updated_by", 200).default("system")
-    val createdByAgent = varchar("created_by_agent", 200).default("")
-    val updatedByAgent = varchar("updated_by_agent", 200).default("")
 
     override val primaryKey = PrimaryKey(id)
 
@@ -187,6 +195,11 @@ object DocumentTable : Table("document") {
     // repeat across items.
     val path = varchar("path", 1024).uniqueIndex("uq_document_path")
     val currentVersion = varchar("current_version", 64).nullable()
+
+    // The four the changelog gave it, declared here rather than inherited from
+    // [AuditedTable] until it gains the agent pair alongside them. Nothing
+    // writes a document yet, so the pair would be columns for a layer that does
+    // not exist; it joins when the document layer starts writing.
     val createdAt = timestampWithTimeZone("created_at").defaultExpression(CurrentTimestampWithTimeZone)
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
