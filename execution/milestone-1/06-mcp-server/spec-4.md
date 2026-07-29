@@ -430,9 +430,16 @@ and how it is done is a development-time choice.
   completed the protocol's `initialize` exchange.
 - **REQ44** — The server MUST serve only callers on the machine it runs on; a
   call arriving from any other machine MUST NOT be served.
-- **REQ45** — The server MUST require no credential in this milestone: an agent
+- **REQ45** — ~~The server MUST require no credential in this milestone: an agent
   presents none and the server checks for none. REQ44 is the whole of its
-  protection.
+  protection.~~ **Superseded by [spec-6](../08-actor-plumbing/spec-6.md) REQ15,
+  REQ21.** The server now requires a bearer token on every HTTP request of a
+  connection, the `initialize` exchange that opens it included, and refuses any
+  call presenting none with 401. It had to change because a row must record the
+  person a call was made for, and the `sub` claim of a token is the only place
+  that person comes from — nothing a caller writes may name them. REQ44 remains,
+  and is now what keeps a token travelling in the clear off any other machine
+  rather than the whole of the protection.
 - **REQ46** — The address the server listens on, and the address of the core it
   calls, MUST be settable from outside the program rather than fixed in its code.
 - **REQ47** — Started without either of those addresses, the server MUST stop
@@ -624,9 +631,10 @@ and how it is done is a development-time choice.
   Nook's sake; and when a tool call is sent before that handshake completes, or a
   resource is asked for, then neither is served and the store is unchanged.
 - **AC23** (REQ44, REQ45, EDGE26) — Given a running server, when a well-formed
-  call is made from the same machine with no credential, then it is served; and
-  when the same call is made to the server's address from another machine, then
-  it is not served and the store is unchanged.
+  call is made from the same machine ~~with no credential~~ **presenting a valid
+  bearer token** (spec-6 REQ15), then it is served; and when the same call is
+  made to the server's address from another machine, then it is not served and
+  the store is unchanged.
 - **AC24** (REQ46, REQ47, EDGE27) — Given a server configured with both addresses
   from outside the program, when it starts and a call is made, then it succeeds;
   and when it is started with either address unset, then it stops with a message

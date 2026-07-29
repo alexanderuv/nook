@@ -20,6 +20,10 @@ dependencies {
     // deployment detail — see the guard below.
     runtimeOnly(libs.postgresql.jdbc)
 
+    // The names the checks are about — the person a call is made for, the agent
+    // acting — shared with both doors, so that no two modules disagree about who
+    // `alex` is.
+    testImplementation(testFixtures(project(":contract")))
     testImplementation(libs.zonky.embedded.postgres)
     testImplementation(platform(libs.zonky.postgres.binaries.bom))
     testRuntimeOnly(libs.zonky.postgres.binaries.darwin.arm64v8)

@@ -1,0 +1,40 @@
+# Nook — what agent acted, beside who the call was for.
+#
+# Every row that records who wrote it already records a person. On the agent
+# surface two parties are involved in every write: a coding agent does the work,
+# and the person it is working for is whose project it is. Recording only the
+# agent loses the person; recording only the person loses which agent to ask
+# about a change. These columns are the second half of that pair.
+#
+# They go on the three tables the eleven operations write and on no others.
+# `document` keeps its audit columns and gains none of these until the document
+# layer writes anything; `item_dependency` records nobody at all, by having no
+# audit column to record one in.
+#
+# Empty rather than nullable, on the same terms as the audit columns beside
+# them: a person acting directly is not an agent whose name is unknown, it is no
+# agent at all, and one value for "nothing acted" is one fewer case for every
+# reader. The default is what the existing rows take, which is what they should
+# say — nothing wrote them through an agent, there having been no agents.
+
+databaseChangeLog:
+
+  - changeSet:
+      id: 0012-add-acting-agent-columns
+      author: nook
+      changes:
+        - addColumn:
+            tableName: project
+            columns:
+              - column: {name: created_by_agent, type: varchar(200), defaultValue: '', constraints: {nullable: false}}
+              - column: {name: updated_by_agent, type: varchar(200), defaultValue: '', constraints: {nullable: false}}
+        - addColumn:
+            tableName: project_item
+            columns:
+              - column: {name: created_by_agent, type: varchar(200), defaultValue: '', constraints: {nullable: false}}
+              - column: {name: updated_by_agent, type: varchar(200), defaultValue: '', constraints: {nullable: false}}
+        - addColumn:
+            tableName: release
+            columns:
+              - column: {name: created_by_agent, type: varchar(200), defaultValue: '', constraints: {nullable: false}}
+              - column: {name: updated_by_agent, type: varchar(200), defaultValue: '', constraints: {nullable: false}}

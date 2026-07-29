@@ -1,5 +1,7 @@
 package io.nook.core.catalog
 
+import io.nook.contract.AGENT_HEADER
+import io.nook.contract.Actor
 import io.nook.contract.CatalogClient
 import io.nook.contract.CatalogOperation
 import io.nook.contract.CreateItem
@@ -13,6 +15,7 @@ import io.nook.contract.ProjectItem
 import io.nook.contract.Release
 import io.nook.contract.RpcReply
 import io.nook.contract.RpcReplySerializer
+import io.nook.contract.SUBJECT_HEADER
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
 import io.nook.contract.catalogJson
@@ -43,10 +46,24 @@ internal class Connection(
 
     val address: String = server.start()
 
-    val caller: CatalogClient = CatalogClient(address, waitLimit)
+    private val client = CatalogClient(address, waitLimit)
+
+    /**
+     * The caller, bound to somebody — as a door binds it, and for the same
+     * reason: a mutation reaching the core naming nobody is refused, so a check
+     * about what the *connection* does has to name somebody to get past that.
+     */
+    val caller: OperationCatalog = client.forActor(CatalogBehavior.SOMEBODY)
+
+    /**
+     * Lets go of the web client every call goes out on, which is what a caller
+     * dropping its connection mid-call amounts to. Separate from [close]
+     * because a check about that has to do it while a call is still in flight.
+     */
+    fun dropTheConnection(): Unit = client.close()
 
     override fun close() {
-        caller.close()
+        client.close()
         server.close()
     }
 }
@@ -73,6 +90,9 @@ internal class InterceptingCatalog(
     private val inner: OperationCatalog,
     private val before: (CatalogOperation, List<Any?>) -> Unit,
 ) : OperationCatalog {
+
+    /** The identity binds on what is wrapped, so what this watches is a bound catalog too. */
+    override fun forActor(actor: Actor): OperationCatalog = InterceptingCatalog(inner.forActor(actor), before)
 
     override fun createProject(command: CreateProject): Project {
         before(CatalogOperation.CREATE_PROJECT, listOf(command))
@@ -137,8 +157,8 @@ internal class InterceptingCatalog(
  * for — so the requests a defective adapter would send are written out by hand
  * here and posted by the runtime's own web client.
  */
-internal fun rawReply(address: String, body: String): RpcReply =
-    catalogJson.decodeFromString(RpcReplySerializer, rawExchange(address, body).body())
+internal fun rawReply(address: String, body: String, naming: Actor = CatalogBehavior.SOMEBODY): RpcReply =
+    catalogJson.decodeFromString(RpcReplySerializer, rawExchange(address, body, naming).body())
 
 /**
  * One call, written out as text the way a program that is not this one writes
@@ -151,9 +171,23 @@ internal fun rawCall(method: String, params: String = "{}", id: String = "1"): S
 /** The id [rawCall] uses unless it is told another, as it comes back on the reply. */
 internal val ONE_CALL: JsonElement = JsonPrimitive(1)
 
-internal fun rawExchange(address: String, body: String): HttpResponse<String> {
+/**
+ * One request, written out and sent as a door sends it: the call itself, and
+ * beside it the two names saying who it is for.
+ *
+ * [naming] is what a door tells the core, and the default is somebody — because
+ * a check about the *shape* of a request would otherwise be answered by the
+ * refusal every mutation naming nobody earns, which is a different check.
+ */
+internal fun rawExchange(
+    address: String,
+    body: String,
+    naming: Actor = CatalogBehavior.SOMEBODY,
+): HttpResponse<String> {
     val request = HttpRequest.newBuilder(URI.create(address))
         .header("Content-Type", "application/json")
+        .apply { naming.subject?.let { header(SUBJECT_HEADER, it) } }
+        .apply { naming.agent?.let { header(AGENT_HEADER, it) } }
         .POST(HttpRequest.BodyPublishers.ofString(body))
         .build()
     return java.net.http.HttpClient.newHttpClient()

@@ -17,7 +17,9 @@ import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 
 // Rows to contract entities, shared by both paths: a read returns exactly what
-// the write that produced it returned. An unknown stored code is a corrupted
+// the write that produced it returned. Who wrote a row comes out with it,
+// unaltered — the store holds exactly the two names a door told the core, and
+// what a caller reads back is those. An unknown stored code is a corrupted
 // store, not a caller error — this service is the single writer and never
 // stores one — so it fails loudly instead of mapping to anything.
 //
@@ -34,6 +36,11 @@ internal fun ResultRow.toProject(): Project = Project(
     artifactRepoUrl = this[ProjectTable.artifactRepoUrl],
     createdAt = this[ProjectTable.createdAt].toInstant(),
     updatedAt = this[ProjectTable.updatedAt].toInstant(),
+    createdBy = this[ProjectTable.createdBy],
+    updatedBy = this[ProjectTable.updatedBy],
+    createdByAgent = this[ProjectTable.createdByAgent],
+    updatedByAgent = this[ProjectTable.updatedByAgent],
+    ownerSubject = this[ProjectTable.ownerSubject],
 )
 
 internal fun ResultRow.toProjectItem(blockedBy: Set<Uuid>): ProjectItem = ProjectItem(
@@ -51,6 +58,10 @@ internal fun ResultRow.toProjectItem(blockedBy: Set<Uuid>): ProjectItem = Projec
     blockedBy = blockedBy,
     createdAt = this[ProjectItemTable.createdAt].toInstant(),
     updatedAt = this[ProjectItemTable.updatedAt].toInstant(),
+    createdBy = this[ProjectItemTable.createdBy],
+    updatedBy = this[ProjectItemTable.updatedBy],
+    createdByAgent = this[ProjectItemTable.createdByAgent],
+    updatedByAgent = this[ProjectItemTable.updatedByAgent],
 )
 
 internal fun ResultRow.toRelease(): Release = Release(
@@ -64,6 +75,10 @@ internal fun ResultRow.toRelease(): Release = Release(
     targetDate = this[ReleaseTable.targetDate],
     createdAt = this[ReleaseTable.createdAt].toInstant(),
     updatedAt = this[ReleaseTable.updatedAt].toInstant(),
+    createdBy = this[ReleaseTable.createdBy],
+    updatedBy = this[ReleaseTable.updatedBy],
+    createdByAgent = this[ReleaseTable.createdByAgent],
+    updatedByAgent = this[ReleaseTable.updatedByAgent],
 )
 
 /** The ids of the items [itemId] is blocked by. Must run inside an open transaction. */

@@ -24,6 +24,24 @@ package io.nook.contract
  */
 public interface OperationCatalog {
 
+    /**
+     * This catalog as one call's identity sees it: the same eleven operations,
+     * each made for [actor] and recording that pair where it records anybody.
+     *
+     * The identity binds to a view rather than to a twelfth argument on every
+     * operation, because four of the eleven are reads and a read records
+     * nobody — an argument on all eleven would put one where it means nothing.
+     * It binds to a view rather than to the thread the call was made on for a
+     * harder reason: work here is handed to threads that are allowed to sit and
+     * wait, and an identity left on the calling thread is not there when the
+     * request is built. Where that shape passes it is worse still, quietly
+     * attributing a call that named nobody to whoever used the thread last.
+     *
+     * The view is a small object per call and holds nothing of its own beyond
+     * the pair, so binding costs nothing and nothing is left behind to inherit.
+     */
+    public fun forActor(actor: Actor): OperationCatalog
+
     // ── on the instance ──────────────────────────────────────────────────────
 
     public fun createProject(command: CreateProject): Project

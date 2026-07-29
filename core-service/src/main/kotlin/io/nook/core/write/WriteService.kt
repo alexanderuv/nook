@@ -1,5 +1,6 @@
 package io.nook.core.write
 
+import io.nook.contract.Actor
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.CreateRelease
@@ -76,11 +77,19 @@ import org.jetbrains.exposed.v1.jdbc.update
  * References: a string in UUID form resolves as an id, anything else as a
  * slug in the target project. Enum-valued inputs (item type, statuses) arrive
  * as their label strings and are validated against the vocabulary.
+ *
+ * Every mutation takes the identity its call was made for as a parameter rather
+ * than holding one: that identity lives as long as the call and no longer, and
+ * a field for it would be reachable from every other call this service serves.
+ * A mutation naming no person is refused before anything is written — see
+ * [requirePerson] — so no row reached through the connection can carry the
+ * store's own fallback value.
  */
 class WriteService(private val db: Database) {
 
-    fun createProject(command: CreateProject): Project =
+    fun createProject(actor: Actor, command: CreateProject): Project =
         writeTransaction(db) {
+            val subject = actor.requirePerson()
             takeInstanceLock()
             requireUsableName(command.name)
             requireUsableDescription(command.description)
@@ -94,11 +103,20 @@ class WriteService(private val db: Database) {
                 it[ProjectTable.slug] = chosenSlug
                 it[ProjectTable.name] = command.name
                 it[ProjectTable.description] = command.description
+                it[ProjectTable.createdBy] = subject
+                it[ProjectTable.updatedBy] = subject
+                it[ProjectTable.createdByAgent] = actor.actingAgent
+                it[ProjectTable.updatedByAgent] = actor.actingAgent
+                // Whose project this is, as against who wrote its row. Set here
+                // and by nothing afterwards: no operation alters it, so a
+                // project's owner is the person it was created for for good.
+                it[ProjectTable.ownerSubject] = subject
             }
             loadProject(id)
         }
 
-    fun createItem(projectRef: String, command: CreateItem): ProjectItem = writeTransaction(db) {
+    fun createItem(actor: Actor, projectRef: String, command: CreateItem): ProjectItem = writeTransaction(db) {
+        val subject = actor.requirePerson()
         val projectId = lockedProjectId(projectRef)
         val itemType = ItemTypeSerializer.of(command.type, ::validationFailed)
         requireUsableName(command.name)
@@ -130,12 +148,17 @@ class WriteService(private val db: Database) {
             it[ProjectItemTable.name] = command.name
             it[ProjectItemTable.description] = command.description
             it[ProjectItemTable.status] = ItemStatus.TODO.code
+            it[ProjectItemTable.createdBy] = subject
+            it[ProjectItemTable.updatedBy] = subject
+            it[ProjectItemTable.createdByAgent] = actor.actingAgent
+            it[ProjectItemTable.updatedByAgent] = actor.actingAgent
         }
         loadItem(id)
     }
 
-    fun updateItem(projectRef: String, itemRef: String, command: UpdateItem): ProjectItem =
+    fun updateItem(actor: Actor, projectRef: String, itemRef: String, command: UpdateItem): ProjectItem =
         writeTransaction(db) {
+            val subject = actor.requirePerson()
             val projectId = lockedProjectId(projectRef)
             val row = resolveItem(projectId, itemRef)
             val itemId = row[ProjectItemTable.id]
@@ -231,11 +254,19 @@ class WriteService(private val db: Database) {
                 if (command.parentRef is FieldChange.Set) it[ProjectItemTable.parentId] = targetParentId
                 if (command.releaseRef is FieldChange.Set) it[ProjectItemTable.releaseId] = targetReleaseId
                 it[ProjectItemTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
+                // Advanced whatever the command touched, the blocker set
+                // included: replacing an item's blockers is a change to the
+                // item, and the edges themselves record nobody.
+                it[ProjectItemTable.updatedBy] = subject
+                // Cleared where no agent acted, rather than left saying an
+                // agent made a change it did not make.
+                it[ProjectItemTable.updatedByAgent] = actor.actingAgent
             }
             loadItem(itemId)
         }
 
-    fun createRelease(projectRef: String, command: CreateRelease): Release = writeTransaction(db) {
+    fun createRelease(actor: Actor, projectRef: String, command: CreateRelease): Release = writeTransaction(db) {
+        val subject = actor.requirePerson()
         val projectId = lockedProjectId(projectRef)
         requireUsableName(command.name)
         requireUsableDescription(command.description)
@@ -252,12 +283,17 @@ class WriteService(private val db: Database) {
             it[ReleaseTable.description] = command.description
             it[ReleaseTable.status] = ReleaseStatus.PLANNED.code
             it[ReleaseTable.targetDate] = command.targetDate
+            it[ReleaseTable.createdBy] = subject
+            it[ReleaseTable.updatedBy] = subject
+            it[ReleaseTable.createdByAgent] = actor.actingAgent
+            it[ReleaseTable.updatedByAgent] = actor.actingAgent
         }
         loadRelease(id)
     }
 
-    fun updateRelease(projectRef: String, releaseRef: String, command: UpdateRelease): Release =
+    fun updateRelease(actor: Actor, projectRef: String, releaseRef: String, command: UpdateRelease): Release =
         writeTransaction(db) {
+            val subject = actor.requirePerson()
             val projectId = lockedProjectId(projectRef)
             val row = resolveRelease(projectId, releaseRef)
             val releaseId = row[ReleaseTable.id]
@@ -283,6 +319,8 @@ class WriteService(private val db: Database) {
                 val targetDate = command.targetDate
                 if (targetDate is FieldChange.Set) it[ReleaseTable.targetDate] = targetDate.value
                 it[ReleaseTable.updatedAt] = OffsetDateTime.now(ZoneOffset.UTC)
+                it[ReleaseTable.updatedBy] = subject
+                it[ReleaseTable.updatedByAgent] = actor.actingAgent
             }
             loadRelease(releaseId)
         }
@@ -309,7 +347,8 @@ class WriteService(private val db: Database) {
      * Deleting something already deleted is [io.nook.contract.ErrorCode.NOT_FOUND],
      * the same as any other reference to a row that is not there.
      */
-    fun deleteItem(projectRef: String, itemRef: String): Unit = writeTransaction(db) {
+    fun deleteItem(actor: Actor, projectRef: String, itemRef: String): Unit = writeTransaction(db) {
+        actor.requirePerson()
         val projectId = lockedProjectId(projectRef)
         val row = resolveItem(projectId, itemRef)
         val itemId = row[ProjectItemTable.id]
@@ -339,7 +378,8 @@ class WriteService(private val db: Database) {
      * removed underneath it. No other operation holds both, so the pair cannot
      * deadlock against anything.
      */
-    fun deleteProject(projectRef: String): Unit = writeTransaction(db) {
+    fun deleteProject(actor: Actor, projectRef: String): Unit = writeTransaction(db) {
+        actor.requirePerson()
         takeInstanceLock()
         val projectId = lockedProjectId(projectRef)
         ProjectTable.deleteWhere { ProjectTable.id eq projectId }

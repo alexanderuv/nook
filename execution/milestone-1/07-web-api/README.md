@@ -128,7 +128,9 @@ leaves an abandoned write running to its own end. One calling library serves the
 life of the program, so an app started before the core recovers on its own once
 the core is there, without being rebuilt. The host is fixed to the loopback
 address in code, exactly as the core and the agent front door fix theirs: this
-surface asks for no credential, so that binding is the whole of the protection,
+surface asked for no credential, so that binding was the whole of the protection
+(epic 08 added a bearer token to it; the binding now keeps a token travelling in
+the clear off any other machine),
 and a host taken from a setting is one typo away from removing all of it. The
 port and the core's address come from outside, and a missing one stops the
 program naming itself.
@@ -156,7 +158,7 @@ planning artifacts):
 | AC13 | `CallEndingTest` — a core stopped mid-call and one that answers nothing at all each produce no verdict, with the core reached exactly once after every ending |
 | AC14 | `ManyAtOnceTest` — a hundred callers that stop listening mid-write, with the core's own count showing every write begun and every write carried to its end |
 | AC15 | `ManyAtOnceTest` — a fast call answered while a slow one is still waiting, neither waiting on the other. Two callers contesting one handle is the store's own arbitration, which epic 05's `WriteServiceSlugRaceAcrossConnectionTest` drove across the connection and epic 09 drives through this surface |
-| AC16 | `WebProgramTest` — an app bound to the loopback address answers there and nowhere else this machine can be reached, with no credential asked for and none presented, and a request carrying the address of a page as its sender is served exactly as one carrying none |
+| AC16 | `WebProgramTest` — an app bound to the loopback address answers there and nowhere else this machine can be reached, to a caller presenting a valid bearer token (epic 08 superseded REQ31's "no credential"), and a request carrying the address of a page as its sender is served exactly as one carrying none |
 | AC17 | `WebProgramTest` — told both addresses, a caller reaches an operation and back; started without either, the program stops and names the one it is missing |
 | AC18 | `OneContractTest` — the root, reading `/api` rather than sending it a request, and an operation given an address of its own each come back as the web server's own reply carrying no error of Nook's, reaching the core at none, with `/api` still served afterwards |
 | AC19 | Epic 09 — the milestone's loop needs the real core over a real store |

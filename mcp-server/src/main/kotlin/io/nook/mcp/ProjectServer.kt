@@ -1,5 +1,6 @@
 package io.nook.mcp
 
+import io.modelcontextprotocol.common.McpTransportContext
 import io.modelcontextprotocol.server.McpServer
 import io.modelcontextprotocol.server.transport.DefaultServerTransportSecurityValidator
 import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider
@@ -8,6 +9,7 @@ import io.modelcontextprotocol.spec.McpSchema
 import io.nook.contract.OperationCatalog
 import io.nook.contract.Project
 import jakarta.servlet.Servlet
+import jakarta.servlet.http.HttpServletRequest
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** What the protocol calls this server, and what it calls the revision of Nook behind it. */
@@ -78,6 +80,12 @@ internal class ProjectServer(catalog: OperationCatalog, project: Project) : Auto
     private val transport = HttpServletStreamableServerTransportProvider.builder()
         .mcpEndpoint(WHEREVER_IT_IS_MOUNTED)
         .securityValidator(NOT_FROM_A_PAGE)
+        // The one thing the library takes for reading an arriving request, and
+        // the whole of what carries the person a call is for to the tool that
+        // runs it. The token itself is not among what it carries and never
+        // could be: it was spent at the gate, and handing one to anything
+        // behind the surface is what the protocol's own security rules forbid.
+        .contextExtractor(::whoTheGateRead)
         .build()
 
     private val server = McpServer.sync(transport)
@@ -105,6 +113,20 @@ internal class ProjectServer(catalog: OperationCatalog, project: Project) : Auto
         server.close()
     }
 }
+
+/**
+ * The person the gate read off this request's token, carried to wherever a tool
+ * runs.
+ *
+ * Only the person: a connection's requests each carry their own token and each
+ * may name a different person, while the agent is announced once when the
+ * connection opens and the library holds it against the session, where a tool
+ * reads it from the same exchange this reaches it by.
+ */
+private fun whoTheGateRead(request: HttpServletRequest): McpTransportContext =
+    McpTransportContext.create(
+        buildMap { request.getAttribute(SUBJECT_ATTRIBUTE)?.let { put(SUBJECT_ATTRIBUTE, it) } },
+    )
 
 /**
  * What every connection to a project is told when it opens: which project it is

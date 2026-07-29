@@ -20,6 +20,13 @@ import kotlinx.serialization.UseSerializers
 // The two time types are the only ones here the serialization library cannot
 // write a conversion for; both are named at the top of this file, so a field
 // added later is carried without anyone remembering to say so.
+//
+// Every entity names who made it and who last changed it, as a pair: the person
+// the call was made for, and the coding agent that made it on their behalf. The
+// agent is empty text wherever a person acted directly, which is every call on
+// the web API — empty rather than a repeat of the person's own name, because
+// no agent acted. None of the five is a field a caller may supply; each is
+// settled by the token a call presented and by what a connection announced.
 
 @Serializable
 public data class Project(
@@ -30,6 +37,12 @@ public data class Project(
     public val artifactRepoUrl: String?,
     public val createdAt: Instant,
     public val updatedAt: Instant,
+    public val createdBy: String,
+    public val updatedBy: String,
+    public val createdByAgent: String,
+    public val updatedByAgent: String,
+    /** Whose project this is, as against who wrote its row: set when it is created, and never afterwards. */
+    public val ownerSubject: String,
 )
 
 /**
@@ -51,6 +64,10 @@ public data class ProjectItem(
     public val blockedBy: Set<Uuid>,
     public val createdAt: Instant,
     public val updatedAt: Instant,
+    public val createdBy: String,
+    public val updatedBy: String,
+    public val createdByAgent: String,
+    public val updatedByAgent: String,
 )
 
 @Serializable
@@ -64,4 +81,8 @@ public data class Release(
     public val targetDate: LocalDate?,
     public val createdAt: Instant,
     public val updatedAt: Instant,
+    public val createdBy: String,
+    public val updatedBy: String,
+    public val createdByAgent: String,
+    public val updatedByAgent: String,
 )

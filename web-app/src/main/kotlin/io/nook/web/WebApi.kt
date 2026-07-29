@@ -1,20 +1,31 @@
 package io.nook.web
 
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.receiveText
+import io.ktor.server.response.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.nook.contract.Actor
+import io.nook.contract.BEARER_CHALLENGE
+import io.nook.contract.BearerTokens
+import io.nook.contract.NO_VALID_TOKEN
 import io.nook.contract.OperationCatalog
+import io.nook.contract.WWW_AUTHENTICATE
 import io.nook.contract.answer
+import io.nook.contract.catalogJson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * The address a machine uses to reach itself, which nothing outside it can
@@ -49,13 +60,27 @@ const val API_PATH: String = "/api"
  * UI arrives later, and nothing about an address says which operation a call is
  * for.
  *
+ * A call arrives here presenting a bearer token and is turned away without one.
+ * [tokens] is what that token is checked against, and it is built before this
+ * is: a door started with nothing to check tokens against must stop rather than
+ * serve, and building the reading afterwards would be one ordering away from
+ * serving anyway.
+ *
+ * No acting agent is ever recorded through this door. A person works here
+ * directly, so the field holds nothing rather than a repeat of their own name.
+ *
  * [host] is fixed by whoever builds this and is not a setting the app offers —
- * see the entry point, where binding to the loopback address is the whole of
- * what keeps a caller elsewhere out.
+ * see the entry point, where binding to the loopback address is what keeps a
+ * caller elsewhere off an address a token travels to in the clear.
  */
-class WebApi(catalog: OperationCatalog, private val host: String, port: Int) : AutoCloseable {
+class WebApi(
+    catalog: OperationCatalog,
+    tokens: BearerTokens,
+    private val host: String,
+    port: Int,
+) : AutoCloseable {
 
-    private val engine = embeddedServer(CIO, host = host, port = port) { apiRoute(catalog) }
+    private val engine = embeddedServer(CIO, host = host, port = port) { apiRoute(catalog, tokens) }
 
     /**
      * Where this is listening, readable once [start] has returned. A port left
@@ -76,12 +101,42 @@ class WebApi(catalog: OperationCatalog, private val host: String, port: Int) : A
     }
 }
 
-private fun Application.apiRoute(catalog: OperationCatalog) {
+private fun Application.apiRoute(catalog: OperationCatalog, tokens: BearerTokens) {
     routing {
         post(API_PATH) {
-            call.respondText(replyFor(call, catalog), ContentType.Application.Json)
+            val subject = tokens.subjectPresenting(call.request.headers[AUTHORIZATION])
+            if (subject == null) {
+                call.turnAway()
+                return@post
+            }
+            call.respondText(replyFor(call, catalog, Actor(subject)), ContentType.Application.Json)
         }
     }
+}
+
+/** The header a caller presents its token in, as its own specification names it. */
+private const val AUTHORIZATION = "Authorization"
+
+/**
+ * A call presenting no valid bearer token, refused.
+ *
+ * The refusal is written here rather than taken from either of Ktor's own token
+ * plugins: both fix the challenge at the word `Bearer` and a realm, where the
+ * bearer-token standard defines a fuller one that says the token was what was
+ * wrong. What a caller has to do differs between the two kinds of refusal — fix
+ * its configuration, or fix its request — so the two must not read alike.
+ *
+ * It carries none of the four domain reasons, because none of them applies:
+ * nothing about the call itself is wrong, and nothing in it is the caller's to
+ * correct.
+ */
+private suspend fun ApplicationCall.turnAway() {
+    response.header(WWW_AUTHENTICATE, BEARER_CHALLENGE)
+    respondText(
+        catalogJson.encodeToString(JsonObject.serializer(), buildJsonObject { put("error", NO_VALID_TOKEN) }),
+        ContentType.Application.Json,
+        HttpStatusCode.Unauthorized,
+    )
 }
 
 /**
@@ -95,7 +150,7 @@ private fun Application.apiRoute(catalog: OperationCatalog) {
  * Bytes that could not be read as text at all are handed on as no contents,
  * which is a reply the shared function already has words for.
  */
-private suspend fun replyFor(call: ApplicationCall, catalog: OperationCatalog): String {
+private suspend fun replyFor(call: ApplicationCall, catalog: OperationCatalog, actor: Actor): String {
     val request = try {
         call.receiveText()
     } catch (abandoned: CancellationException) {
@@ -103,5 +158,5 @@ private suspend fun replyFor(call: ApplicationCall, catalog: OperationCatalog): 
     } catch (unreadable: Exception) {
         ""
     }
-    return withContext(Dispatchers.IO) { catalog.answer(request) }
+    return withContext(Dispatchers.IO) { catalog.answer(request, actor) }
 }

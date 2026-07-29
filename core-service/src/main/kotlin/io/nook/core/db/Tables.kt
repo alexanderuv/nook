@@ -25,6 +25,14 @@ import org.jetbrains.exposed.v1.javatime.timestampWithTimeZone
 // writer (this service) enforces domain membership, containment, and per-type
 // rules — the schema stores no such semantics beyond its constraints.
 //
+// Every row that records who wrote it records both halves of the pair: the
+// person the call was made for (created_by / updated_by) and the coding agent
+// that made it on their behalf (created_by_agent / updated_by_agent). The agent
+// is empty text where a person acted directly, which is not the same as unknown
+// — no agent acted. `item_dependency` records neither, by having no audit
+// column at all, and `document` gains the agent pair when the document layer
+// starts writing it.
+//
 // Audit timestamps are TIMESTAMPTZ, carried here as OffsetDateTime and handed to
 // callers as the Instant the contract promises. A zoneless column would store
 // the writing machine's wall clock and rebuild an Instant from the reading
@@ -52,6 +60,8 @@ object ProjectTable : Table("project") {
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
+    val createdByAgent = varchar("created_by_agent", 200).default("")
+    val updatedByAgent = varchar("updated_by_agent", 200).default("")
 
     // The tenancy root: the subject that owns this project (distinct from
     // created_by, which is audit). Single-valued — one owner per project.
@@ -73,6 +83,8 @@ object ReleaseTable : Table("release") {
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
+    val createdByAgent = varchar("created_by_agent", 200).default("")
+    val updatedByAgent = varchar("updated_by_agent", 200).default("")
 
     override val primaryKey = PrimaryKey(id)
 
@@ -102,6 +114,8 @@ object ProjectItemTable : Table("project_item") {
     val updatedAt = timestampWithTimeZone("updated_at").defaultExpression(CurrentTimestampWithTimeZone)
     val createdBy = varchar("created_by", 200).default("system")
     val updatedBy = varchar("updated_by", 200).default("system")
+    val createdByAgent = varchar("created_by_agent", 200).default("")
+    val updatedByAgent = varchar("updated_by_agent", 200).default("")
 
     override val primaryKey = PrimaryKey(id)
 

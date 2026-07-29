@@ -6,8 +6,10 @@ nine write operations, the five reads, and their tests — and so are the
 connection both adapters reach the core by, `:mcp-server`, which serves the
 seven project-scoped operations as tools at one address per project, and
 `:web-app`, which serves all eleven at `/api`. Both doors speak JSON-RPC 2.0
-over one answering side held in `:contract`. The document layer and the
-git-backed artifact store are still design only.
+over one answering side held in `:contract`. Both now require a bearer token
+(`NOOK_TOKEN_SECRET`), take the person from its `sub` claim, and record that
+person plus the acting agent on every row the operations write. The document
+layer and the git-backed artifact store are still design only.
 
 `/api` is the **web UI's** back end (the UI itself is milestone 4), not a public
 integration surface: humans reach Nook through the UI, agents through MCP, and

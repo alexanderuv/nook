@@ -134,7 +134,7 @@ planning artifacts):
 | AC20 | `ToolProgramTest` — a core that goes away and comes back leaves the connection usable, with the agent never reconnecting and nothing restarted |
 | AC21 | `ManyAtOnceTest` — three connections, two on one project and one on another, call at once with one call held open, and neither fast call waits on it or sees another connection's project. Two agents creating the same name at once is the store's own arbitration, held by epic 05's `WriteServiceSlugRaceAcrossConnectionTest` |
 | AC22 | `DerivedToolTest` and `OfferedToolsTest` — an unmodified client completes the handshake, lists the tools and calls one; `ManyAtOnceTest` — a tool call sent before the handshake is not served and reaches nothing; `OfferedToolsTest` — a client asking for resources is offered none |
-| AC23 | `ToolProgramTest` — a front door bound to loopback answers there and nowhere else this machine can be reached, with no credential asked for and none presented; `RefusedConnectionTest` — an opening exchange a web page sent is turned away |
+| AC23 | `ToolProgramTest` — a front door bound to loopback answers there and nowhere else this machine can be reached, to a caller presenting a valid bearer token (epic 08 superseded REQ45's "no credential"); `RefusedConnectionTest` — an opening exchange a web page sent is turned away |
 | AC24 | `ToolProgramTest` — told both addresses, a client connects and calls a tool against the core; a program started without a setting stops and names the one it is missing |
 | AC25 | Epic 09 — the milestone's loop needs the real core over a real store |
 | AC26 | Epic 09 — epics 03 and 04's criteria re-run through the tools need the same |

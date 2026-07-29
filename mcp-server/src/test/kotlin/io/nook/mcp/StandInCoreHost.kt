@@ -1,5 +1,8 @@
 package io.nook.mcp
 
+import io.nook.contract.AGENT_HEADER
+import io.nook.contract.Actor
+import io.nook.contract.SUBJECT_HEADER
 import io.nook.contract.answer
 import jakarta.servlet.http.HttpServlet
 import jakarta.servlet.http.HttpServletRequest
@@ -65,12 +68,18 @@ class StandInCoreHost(core: StandInCore, private val port: Int) : AutoCloseable 
  * shared function, which is exactly what the core is once its store is taken
  * away. That is what makes this a stand-in for the core rather than a second
  * core.
+ *
+ * Who a call is for arrives beside the request, in the two headers a door
+ * sends, and is bound before anything is run — again as the real core does it.
+ * Nothing here asks a caller for a credential, and the real core asks for none
+ * either.
  */
 private class CoreServlet(private val core: StandInCore) : HttpServlet() {
 
     override fun doPost(request: HttpServletRequest, response: HttpServletResponse) {
         response.contentType = "application/json"
         response.characterEncoding = "UTF-8"
-        response.writer.write(core.answer(request.reader.readText()))
+        val actor = Actor(request.getHeader(SUBJECT_HEADER), request.getHeader(AGENT_HEADER))
+        response.writer.write(core.answer(request.reader.readText(), actor))
     }
 }

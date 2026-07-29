@@ -4,17 +4,26 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.header
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.nook.contract.AGENT_HEADER
+import io.nook.contract.ALEX
+import io.nook.contract.Actor
+import io.nook.contract.BearerTokens
 import io.nook.contract.CatalogClient
 import io.nook.contract.DEFAULT_WAIT_LIMIT
 import io.nook.contract.OperationCatalog
 import io.nook.contract.RpcReply
 import io.nook.contract.RpcReplySerializer
+import io.nook.contract.SUBJECT_HEADER
+import io.nook.contract.THE_SECRET
 import io.nook.contract.answer
 import io.nook.contract.catalogJson
+import io.nook.contract.presenting
+import io.nook.contract.tokenFor
 import java.net.ServerSocket
 import java.net.URI
 import java.net.http.HttpClient
@@ -85,9 +94,18 @@ private fun Application.coreRoute(catalog: OperationCatalog) {
     }
 }
 
+/**
+ * Who the call is for arrives beside the request, in the two headers a door
+ * sends, and is bound before anything is run — as the real core does it. No
+ * credential is asked for here, and the real core asks for none either.
+ */
 private suspend fun ApplicationCall.answerWith(catalog: OperationCatalog) {
     val request = receiveText()
-    respondText(withContext(Dispatchers.IO) { catalog.answer(request) }, io.ktor.http.ContentType.Application.Json)
+    val actor = Actor(this.request.header(SUBJECT_HEADER), this.request.header(AGENT_HEADER))
+    respondText(
+        withContext(Dispatchers.IO) { catalog.answer(request, actor) },
+        io.ktor.http.ContentType.Application.Json,
+    )
 }
 
 /**
@@ -111,7 +129,7 @@ class BothDoors(
 
     private val caller = CatalogClient(coreAddress, waitLimit)
 
-    private val app = WebApi(caller, LOOPBACK, 0)
+    private val app = WebApi(caller, BearerTokens(THE_SECRET), LOOPBACK, 0)
 
     /** Where the app serves the eleven operations. */
     val apiAddress: String = app.start() + API_PATH
@@ -141,8 +159,13 @@ class BothDoors(
     }
 }
 
-/** What a request came back as: the number it arrived under, and what it said. */
-data class Answer(val status: Int, val said: String)
+/** What a request came back as: the number it arrived under, what it said, and its headers. */
+data class Answer(val status: Int, val said: String, val headers: Map<String, List<String>> = emptyMap()) {
+
+    /** Header names arrive under whatever casing the server wrote them in, and are matched without it. */
+    fun header(name: String): String? =
+        headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value?.firstOrNull()
+}
 
 /**
  * One call, written out as text the way a program that is not this one writes
@@ -152,22 +175,47 @@ data class Answer(val status: Int, val said: String)
 fun rawCall(method: String, params: String = "{}", id: String = "1"): String =
     """{"jsonrpc":"2.0","method":"$method","params":$params,"id":$id}"""
 
-/** [body], sent to [address] exactly as written. */
-fun sentTo(address: String, body: String, method: String = "POST", from: String? = null): Answer {
+/**
+ * [body], sent to [address] exactly as written, presenting a valid token.
+ *
+ * [presenting] is what goes in the `Authorization` header — a valid token by
+ * default, so that every check carried over from before the gate is driven
+ * through it unchanged, and whatever a check about the gate itself wants
+ * otherwise.
+ */
+fun sentTo(
+    address: String,
+    body: String,
+    method: String = "POST",
+    from: String? = null,
+    presenting: String? = presenting(tokenFor(ALEX)),
+    naming: Actor? = null,
+): Answer {
     val request = HttpRequest.newBuilder(URI.create(address))
         .timeout(PATIENCE)
         .header("Content-Type", "application/json")
         .apply { from?.let { header("Origin", it) } }
+        .apply { presenting?.let { header("Authorization", it) } }
+        .apply { naming?.subject?.let { header(SUBJECT_HEADER, it) } }
+        .apply { naming?.agent?.let { header(AGENT_HEADER, it) } }
         .method(method, HttpRequest.BodyPublishers.ofString(body))
         .build()
     val sent = HttpClient.newBuilder().connectTimeout(PATIENCE).build()
         .send(request, HttpResponse.BodyHandlers.ofString())
-    return Answer(sent.statusCode(), sent.body())
+    return Answer(sent.statusCode(), sent.body(), sent.headers().map())
 }
 
-/** The reply [address] gave to [body], read as a reply. */
-fun replyFrom(address: String, body: String): RpcReply =
-    catalogJson.decodeFromString(RpcReplySerializer, sentTo(address, body).said)
+/**
+ * The reply [address] gave to [body], read as a reply.
+ *
+ * [naming] is who the call is for, as a door tells the core beside the request.
+ * Only a check reaching the core directly supplies it — there it is standing in
+ * for a door, and a door says who its call is for. The app takes the person
+ * from the token alone and reads no such header, which is the whole of why a
+ * caller cannot name somebody else.
+ */
+fun replyFrom(address: String, body: String, naming: Actor? = null): RpcReply =
+    catalogJson.decodeFromString(RpcReplySerializer, sentTo(address, body, naming = naming).said)
 
 /**
  * What [address] answered to [body], or nothing at all where nothing answered.

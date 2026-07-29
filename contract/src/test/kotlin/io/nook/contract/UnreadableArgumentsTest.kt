@@ -38,6 +38,7 @@ class UnreadableArgumentsTest {
      */
     private object Unreachable : OperationCatalog {
         private fun never(): Nothing = error(REACHED)
+        override fun forActor(actor: Actor) = this
         override fun createProject(command: CreateProject) = never()
         override fun getProject(ref: String) = never()
         override fun listProjects() = never()

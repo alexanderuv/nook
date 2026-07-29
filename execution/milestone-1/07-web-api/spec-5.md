@@ -367,8 +367,16 @@ chose.
 
 - **REQ30** — The app MUST serve only callers on the machine it runs on; a call
   arriving from any other machine MUST NOT be served.
-- **REQ31** — The app MUST require no credential in this milestone: a caller
-  presents none and the app checks for none. REQ30 is the whole of its protection.
+- **REQ31** — ~~The app MUST require no credential in this milestone: a caller
+  presents none and the app checks for none. REQ30 is the whole of its
+  protection.~~ **Superseded by [spec-6](../08-actor-plumbing/spec-6.md) REQ15.**
+  The app now requires a bearer token on every call and refuses one presenting
+  none with 401. It had to change because a row must record the person a call was
+  made for, and the `sub` claim of a token is the only place that person comes
+  from — nothing a caller writes may name them. REQ30 remains, and is now what
+  keeps a token travelling in the clear off any other machine rather than the
+  whole of the protection. REQ32 is untouched: where a request came from is still
+  not a reason to turn it down.
 - **REQ32** — The app MUST NOT turn a call down on account of where it came from,
   beyond REQ30. A browser attaches to every request it sends the address of the page
   that sent it; a request carrying one MUST be served exactly as one carrying none.
@@ -529,8 +537,9 @@ chose.
   while another is fast, then every run leaves two items with different slugs,
   and the fast call is answered before the slow one.
 - **AC16** (REQ30, REQ31, REQ32, EDGE22, EDGE23) — Given a running app, when a
-  well-formed call is made from the same machine with no credential, then it is
-  served; when the same call carries the address of a browser page as its sender,
+  well-formed call is made from the same machine ~~with no credential~~
+  **presenting a valid bearer token** (spec-6 REQ15), then it is served; when the
+  same call carries the address of a browser page as its sender,
   then it is served identically; and when it is made to the app's address from
   another machine, then it is not served and the store is unchanged.
 - **AC17** (REQ33, REQ34, EDGE24) — Given an app configured with both addresses

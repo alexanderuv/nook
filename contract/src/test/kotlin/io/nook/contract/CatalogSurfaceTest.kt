@@ -21,7 +21,15 @@ import kotlin.test.assertTrue
  */
 class CatalogSurfaceTest {
 
-    private val declared: Collection<KFunction<*>> = OperationCatalog::class.declaredMemberFunctions
+    /**
+     * Binding an identity is not a twelfth operation, on the same terms as
+     * letting go of the connection: it asks the core for nothing and hands back
+     * this same catalog as one call's identity sees it.
+     */
+    private val binding = "forActor"
+
+    private val declared: Collection<KFunction<*>> =
+        OperationCatalog::class.declaredMemberFunctions.filterNot { it.name == binding }
 
     private val projectScoped = setOf(
         "createItem", "updateItem", "deleteItem", "createRelease", "updateRelease", "getItem", "listItems",
@@ -78,9 +86,10 @@ class CatalogSurfaceTest {
             .filterNot { it.isSynthetic }
             .map { it.name }
             .toSet()
-        // `close` is not a twelfth operation: it asks the core for nothing and
-        // is how a caller lets go of the web client the other eleven share.
-        assertEquals(declared.map { it.name }.toSet() + "close", offered)
+        // Neither `close` nor the binding is a twelfth operation: one is how a
+        // caller lets go of the web client the eleven share, and the other
+        // hands back the same eleven as one call's identity sees them.
+        assertEquals(declared.map { it.name }.toSet() + "close" + binding, offered)
     }
 
     @Test

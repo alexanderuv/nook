@@ -1,9 +1,11 @@
 package io.nook.web
 
+import io.nook.contract.BearerTokens
 import io.nook.contract.Project
 import io.nook.contract.RpcCode
 import io.nook.contract.RpcReply
 import io.nook.contract.RpcReplySerializer
+import io.nook.contract.THE_SECRET
 import io.nook.contract.aProject
 import io.nook.contract.catalogJson
 import java.io.File
@@ -46,7 +48,7 @@ class WebProgramTest {
         val java = File(System.getProperty("java.home"), "bin/java").path
         val builder = ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), PROGRAM)
         builder.environment().apply {
-            listOf(PORT_SETTING, CORE_ADDRESS_SETTING).forEach(::remove)
+            listOf(PORT_SETTING, CORE_ADDRESS_SETTING, TOKEN_SECRET_SETTING).forEach(::remove)
             putAll(settings)
         }
         return builder.start()
@@ -56,7 +58,11 @@ class WebProgramTest {
     private fun running(corePort: Int, check: (String) -> Unit) {
         val port = freePort()
         val program = launch(
-            mapOf(PORT_SETTING to port.toString(), CORE_ADDRESS_SETTING to "http://$LOOPBACK:$corePort"),
+            mapOf(
+                PORT_SETTING to port.toString(),
+                CORE_ADDRESS_SETTING to "http://$LOOPBACK:$corePort",
+                TOKEN_SECRET_SETTING to THE_SECRET,
+            ),
         )
         try {
             val announcement = program.inputStream.bufferedReader().readLine()
@@ -77,8 +83,12 @@ class WebProgramTest {
     @Test
     fun `a program started without a setting stops and names the one it is missing`() {
         listOf(
-            PORT_SETTING to mapOf(CORE_ADDRESS_SETTING to "http://$LOOPBACK:1"),
-            CORE_ADDRESS_SETTING to mapOf(PORT_SETTING to "1"),
+            PORT_SETTING to mapOf(
+                CORE_ADDRESS_SETTING to "http://$LOOPBACK:1",
+                TOKEN_SECRET_SETTING to THE_SECRET,
+            ),
+            CORE_ADDRESS_SETTING to mapOf(PORT_SETTING to "1", TOKEN_SECRET_SETTING to THE_SECRET),
+            TOKEN_SECRET_SETTING to mapOf(PORT_SETTING to "1", CORE_ADDRESS_SETTING to "http://$LOOPBACK:1"),
         ).forEach { (missing, rest) ->
             val program = launch(rest)
             val complaint = program.errorStream.bufferedReader().readText()
@@ -87,6 +97,27 @@ class WebProgramTest {
             assertTrue(program.exitValue() != 0, "the program started anyway, without $missing")
             assertTrue(complaint.contains(missing), "it stopped without naming $missing; it said: $complaint")
         }
+    }
+
+    @Test
+    fun `a program started with a secret that could check no token stops and names the setting`() {
+        val program = launch(
+            mapOf(
+                PORT_SETTING to "1",
+                CORE_ADDRESS_SETTING to "http://$LOOPBACK:1",
+                // One character short of the least the signing accepts, which
+                // is the shape a mistyped secret actually takes.
+                TOKEN_SECRET_SETTING to THE_SECRET.dropLast(1),
+            ),
+        )
+        val complaint = program.errorStream.bufferedReader().readText()
+        assertTrue(program.waitFor(2, TimeUnit.MINUTES), "the program did not stop on an unusable secret")
+
+        assertTrue(program.exitValue() != 0, "the program started anyway, with a secret it could check nothing with")
+        assertTrue(
+            complaint.contains(TOKEN_SECRET_SETTING),
+            "it stopped without naming $TOKEN_SECRET_SETTING; it said: $complaint",
+        )
     }
 
     @Test
@@ -142,7 +173,12 @@ class WebProgramTest {
             served.start()
             running(corePort) { api ->
                 val body = rawCall("list_projects")
-                assertEquals(sentTo(api, body), sentTo(api, body, from = A_PAGE))
+                // The number and the words, which is the whole of what a caller
+                // sees. The headers a response carries include the moment it
+                // was written, so comparing those would be comparing clocks.
+                val plainly = sentTo(api, body)
+                val fromAPage = sentTo(api, body, from = A_PAGE)
+                assertEquals(plainly.status to plainly.said, fromAPage.status to fromAPage.said)
             }
         }
     }
@@ -162,7 +198,7 @@ class WebProgramTest {
         // address says nothing about what the loopback binding refuses — the
         // network turned it away, not the binding.
         val everywherePort = freePort()
-        val reachable = WebApi(core, "0.0.0.0", everywherePort).use { everywhere ->
+        val reachable = WebApi(core, BearerTokens(THE_SECRET), "0.0.0.0", everywherePort).use { everywhere ->
             everywhere.start()
             elsewhere.filter { reachedAt("http://$it:$everywherePort$API_PATH", call) != null }
         }
@@ -174,7 +210,7 @@ class WebProgramTest {
         }
 
         val loopbackPort = freePort()
-        WebApi(core, LOOPBACK, loopbackPort).use { onlyHere ->
+        WebApi(core, BearerTokens(THE_SECRET), LOOPBACK, loopbackPort).use { onlyHere ->
             onlyHere.start()
 
             assertEquals(
@@ -182,8 +218,10 @@ class WebProgramTest {
                 reachable.filter { reachedAt("http://$it:$loopbackPort$API_PATH", call) != null },
                 "an app bound to the loopback address answered somewhere else",
             )
-            // And on the loopback address it answers, with no credential asked
-            // for and none presented, which is the whole arrangement.
+            // And on the loopback address it answers a caller presenting a
+            // valid token. The binding and the gate are both load-bearing now:
+            // the token travels in the clear, so nothing off this machine may
+            // reach the address it travels to.
             assertEquals(
                 200,
                 reachedAt("http://$LOOPBACK:$loopbackPort$API_PATH", call)?.status,

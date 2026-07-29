@@ -1,6 +1,8 @@
 package io.nook.web
 
+import io.nook.contract.BearerTokens
 import io.nook.contract.CatalogClient
+import io.nook.contract.UnusableSecretException
 import java.util.concurrent.CountDownLatch
 import kotlin.system.exitProcess
 
@@ -10,19 +12,29 @@ const val PORT_SETTING: String = "NOOK_WEB_PORT"
 /** Where the core is, as the address its connection answers at. */
 const val CORE_ADDRESS_SETTING: String = "NOOK_CORE_ADDRESS"
 
+/** What a token presented at this door is checked against. */
+const val TOKEN_SECRET_SETTING: String = "NOOK_TOKEN_SECRET"
+
 /**
  * The human surface's front door as a program: the connection it reaches the
  * core by, and the one address it serves the eleven operations at.
  *
- * Two settings come from outside, and neither has a default. A default port
- * would have this listening somewhere nobody chose, and a default core address
- * would have it calling something nobody chose — so a missing setting stops the
+ * Three settings come from outside, and none has a default. A default port
+ * would have this listening somewhere nobody chose, a default core address
+ * would have it calling something nobody chose, and a default secret would have
+ * it accepting tokens nobody vouched for — so a missing setting stops the
  * program and says which one, rather than starting on a guess.
  *
- * The host is not among them, for the reason [WebApi] gives: this surface asks
- * for no credential, so the loopback binding is the whole of what keeps a
- * caller on another machine out, and a host taken from a setting is one typo
- * away from removing all of it.
+ * The reading of a token is built here, before anything is served, so that a
+ * secret nothing could check a token against stops the program at startup
+ * rather than at the first call. What the library says when it refuses one is
+ * about key length; what an operator needs to read is which setting to fix, so
+ * the words are written here.
+ *
+ * The host is not among the settings, for the reason [WebApi] gives: a token
+ * travels in the clear here, so the loopback binding is what keeps a caller on
+ * another machine off the address it travels to, and a host taken from a
+ * setting is one typo away from removing it.
  *
  * The core need not be up for this to start. Nothing is called until a request
  * arrives, and the calling library outlives a core that is not there yet — so
@@ -31,8 +43,13 @@ const val CORE_ADDRESS_SETTING: String = "NOOK_CORE_ADDRESS"
 fun main() {
     val port = requiredSetting(PORT_SETTING).toIntOrNull()
         ?: stop("$PORT_SETTING must be a port number")
+    val tokens = try {
+        BearerTokens(requiredSetting(TOKEN_SECRET_SETTING))
+    } catch (couldCheckNothing: UnusableSecretException) {
+        stop("$TOKEN_SECRET_SETTING is not a secret this could check a token against")
+    }
     val core = CatalogClient(requiredSetting(CORE_ADDRESS_SETTING))
-    val server = WebApi(core, LOOPBACK, port)
+    val server = WebApi(core, tokens, LOOPBACK, port)
 
     println("the web API is answering on ${server.start()}$API_PATH")
 

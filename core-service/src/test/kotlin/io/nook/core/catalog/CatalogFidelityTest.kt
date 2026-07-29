@@ -38,7 +38,7 @@ class CatalogFidelityTest {
 
     private companion object {
         val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val inProcess by lazy { CoreCatalog(db) }
+        val inProcess by lazy { CoreCatalog(db).forActor(CatalogBehavior.SOMEBODY) }
     }
 
     @Test

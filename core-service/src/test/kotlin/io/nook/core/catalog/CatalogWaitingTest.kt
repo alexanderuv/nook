@@ -37,7 +37,7 @@ class CatalogWaitingTest {
 
     private companion object {
         val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val inProcess by lazy { CoreCatalog(db) }
+        val inProcess by lazy { CoreCatalog(db).forActor(CatalogBehavior.SOMEBODY) }
 
         /** Well past any window a resend could hide in — sixteen times the limit below. */
         val LONG_ENOUGH_FOR_A_RESEND = 1_000L
@@ -111,7 +111,7 @@ class CatalogWaitingTest {
         Connection(slowly).use { connection ->
             val inFlight = thread { runCatching { connection.caller.listProjects() } }
             Thread.sleep(100)
-            connection.caller.close()
+            connection.dropTheConnection()
             inFlight.join()
             Thread.sleep(LONG_ENOUGH_FOR_A_RESEND)
             assertEquals(1, reached.get(), "a call whose connection dropped was sent again")

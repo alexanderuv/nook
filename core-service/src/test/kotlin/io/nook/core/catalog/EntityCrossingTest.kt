@@ -31,7 +31,7 @@ class EntityCrossingTest {
 
     private companion object {
         val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val writes by lazy { WriteService(db) }
+        val writes by lazy { CoreCatalog(db).forActor(CatalogBehavior.Companion.SOMEBODY) }
         val reads by lazy { ReadService(db) }
     }
 

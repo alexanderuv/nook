@@ -100,7 +100,10 @@ internal class Dispatcher(private val catalog: OperationCatalog) : HttpServlet()
      */
     private fun opening(address: String, request: HttpServletRequest, response: HttpServletResponse) {
         val project = try {
-            catalog.getProject(address)
+            // Bound like every other call, though this one records nobody: a
+            // door tells the core who a call is for whatever the call does, and
+            // one place where it does not is one place a rule has an exception.
+            catalog.forActor(request.actor()).getProject(address)
         } catch (refused: StructuredErrorException) {
             response.refusing(HttpServletResponse.SC_NOT_FOUND, unanswered(address))
             return
@@ -141,7 +144,7 @@ private fun unanswered(address: String): String = "no project answers to '$addre
  * anybody wrote, and the one thing that makes a wrong address diagnosable is
  * lost.
  */
-private fun HttpServletResponse.refusing(code: Int, said: String) {
+internal fun HttpServletResponse.refusing(code: Int, said: String) {
     status = code
     contentType = AS_JSON
     characterEncoding = AS_TEXT

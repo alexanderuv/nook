@@ -4,6 +4,8 @@ import io.nook.contract.CreateProject
 import io.nook.contract.ErrorCode
 import io.nook.contract.Missing
 import io.nook.contract.StructuredErrorException
+import io.nook.core.catalog.CatalogBehavior.Companion.SOMEBODY
+import io.nook.core.catalog.CoreCatalog
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.InstanceLockTable
 import io.nook.core.db.ProjectItemTable
@@ -220,7 +222,7 @@ class WriteLockTest {
             "expected the missing row to be named, got: ${failure.message}",
         )
         assertFailsWith<IllegalStateException> {
-            WriteService(db).createProject(CreateProject("Unprotected"))
+            CoreCatalog(db).forActor(SOMEBODY).createProject(CreateProject("Unprotected"))
         }
     }
 }

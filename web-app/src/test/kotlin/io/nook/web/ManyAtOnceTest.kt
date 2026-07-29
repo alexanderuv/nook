@@ -1,7 +1,10 @@
 package io.nook.web
 
+import io.nook.contract.ALEX
 import io.nook.contract.RpcReply
 import io.nook.contract.anItem
+import io.nook.contract.presenting
+import io.nook.contract.tokenFor
 import java.net.Socket
 import java.net.URI
 import java.util.concurrent.CopyOnWriteArrayList
@@ -103,6 +106,7 @@ class ManyAtOnceTest {
                 append("POST ${api.path} HTTP/1.1\r\n")
                 append("Host: ${api.host}:${api.port}\r\n")
                 append("Content-Type: application/json\r\n")
+                append("Authorization: ${presenting(tokenFor(ALEX))}\r\n")
                 append("Content-Length: ${body.toByteArray().size}\r\n")
                 append("Connection: close\r\n\r\n")
                 append(body)

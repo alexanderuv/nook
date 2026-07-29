@@ -42,7 +42,7 @@ class CatalogRefusalTest {
 
     private companion object {
         val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val inProcess by lazy { CoreCatalog(db) }
+        val inProcess by lazy { CoreCatalog(db).forActor(CatalogBehavior.SOMEBODY) }
     }
 
     /** Every stored row of every structure table, rendered so any change shows. */

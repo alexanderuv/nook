@@ -2,6 +2,8 @@ package io.nook.core.db
 
 import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
+import io.nook.core.catalog.CatalogBehavior.Companion.SOMEBODY
+import io.nook.core.catalog.CoreCatalog
 import io.nook.core.read.ReadService
 import io.nook.core.write.WriteService
 import java.util.TimeZone
@@ -27,7 +29,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 class TimestampsAreAbsoluteTest {
 
     private val db = Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase())
-    private val writes = WriteService(db)
+    private val writes = CoreCatalog(db).forActor(SOMEBODY)
     private val reads = ReadService(db)
 
     /** Zones spread far enough apart that any wall-clock reading disagrees. */

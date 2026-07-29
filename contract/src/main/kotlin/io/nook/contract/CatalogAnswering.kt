@@ -35,9 +35,15 @@ public const val NO_VERDICT: String = "this call produced no verdict, and nothin
  *
  * Nothing throws out of here but a caller giving up, so a route can answer with
  * what comes back without arranging for anything else.
+ *
+ * [actor] is taken here rather than left to each route to bind for itself, so
+ * that a route cannot reach the eleven operations without having said who the
+ * call is for. Binding happens before the request is so much as read: a request
+ * that turns out to be unreadable is still a request made by somebody, and
+ * deciding who afterwards would be one ordering away from deciding it never.
  */
-public fun OperationCatalog.answer(request: String): String =
-    catalogJson.encodeToString(RpcReplySerializer, replyTo(request))
+public fun OperationCatalog.answer(request: String, actor: Actor): String =
+    catalogJson.encodeToString(RpcReplySerializer, forActor(actor).replyTo(request))
 
 /**
  * The four ways a request can be one this cannot act on, then the call itself.

@@ -7,7 +7,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.uuid.Uuid
 
 /**
- * One thing the core was asked to do, as the values it was asked with.
+ * One thing the core was asked to do, as the values it was asked with and the
+ * identity it was asked for.
  *
  * [values] holds the arguments in the order the operation takes them, minus the
  * project, and holds them whole rather than field by field: a command that gains
@@ -15,12 +16,14 @@ import kotlin.uuid.Uuid
  */
 public data class Invocation(
     public val operation: CatalogOperation,
+    public val actor: Actor,
     public val project: String?,
     public val values: List<Any?>,
 )
 
 /**
- * A core that records what it was asked and answers what a test told it to.
+ * A core that records what it was asked, who it was asked for, and answers what
+ * a test told it to.
  *
  * An adapter owns no store and adds nothing to what the core decides, so what
  * its checks are about is entirely what crosses in each direction — which needs
@@ -33,10 +36,11 @@ public data class Invocation(
  * it, and needing the same one is the point: two doors shown to agree while
  * being measured against stand-ins free to differ have been shown nothing.
  *
- * What each adapter's checks need beyond the record is where the two do differ,
- * and [before] is where that goes — it runs on every call once the call has been
- * recorded and before it is answered, so a subclass can refuse, break, or wait
- * without restating any of the eleven operations.
+ * What each adapter's checks need beyond the record is where the two do differ.
+ * [before] runs on every call once it has been recorded and before it is
+ * answered, so a subclass can refuse, break, or wait; [answerTo] is where a
+ * subclass answers one operation for itself. Neither restates any of the eleven
+ * operations.
  */
 public open class RecordingCore : OperationCatalog {
 
@@ -59,35 +63,45 @@ public open class RecordingCore : OperationCatalog {
     public fun invocationsOf(operation: CatalogOperation): List<Invocation> =
         invocations.filter { it.operation == operation }
 
-    override fun createProject(command: CreateProject): Project =
-        answer(CatalogOperation.CREATE_PROJECT, null, command)
+    /** Everything it was asked on behalf of somebody, in order. */
+    public val actors: List<Actor> get() = invocations.map { it.actor }
 
-    override fun getProject(ref: String): Project = answer(CatalogOperation.GET_PROJECT, null, ref)
+    /**
+     * This core as one identity sees it — a small object per call, holding the
+     * pair and nothing else.
+     */
+    final override fun forActor(actor: Actor): OperationCatalog = ActingFor(actor)
 
-    override fun listProjects(): List<Project> = answer(CatalogOperation.LIST_PROJECTS, null)
+    // The eleven as a caller that bound nothing makes them, which is a call
+    // naming nobody. Every one of them goes through a view, so there is one
+    // place a call is recorded rather than two free to record it differently.
 
-    override fun deleteProject(ref: String): Unit = nothing(CatalogOperation.DELETE_PROJECT, null, ref)
+    override fun createProject(command: CreateProject): Project = unbound.createProject(command)
+
+    override fun getProject(ref: String): Project = unbound.getProject(ref)
+
+    override fun listProjects(): List<Project> = unbound.listProjects()
+
+    override fun deleteProject(ref: String): Unit = unbound.deleteProject(ref)
 
     override fun createItem(projectRef: String, command: CreateItem): ProjectItem =
-        answer(CatalogOperation.CREATE_ITEM, projectRef, command)
+        unbound.createItem(projectRef, command)
 
     override fun updateItem(projectRef: String, itemRef: String, command: UpdateItem): ProjectItem =
-        answer(CatalogOperation.UPDATE_ITEM, projectRef, itemRef, command)
+        unbound.updateItem(projectRef, itemRef, command)
 
-    override fun deleteItem(projectRef: String, itemRef: String): Unit =
-        nothing(CatalogOperation.DELETE_ITEM, projectRef, itemRef)
+    override fun deleteItem(projectRef: String, itemRef: String): Unit = unbound.deleteItem(projectRef, itemRef)
 
     override fun createRelease(projectRef: String, command: CreateRelease): Release =
-        answer(CatalogOperation.CREATE_RELEASE, projectRef, command)
+        unbound.createRelease(projectRef, command)
 
     override fun updateRelease(projectRef: String, releaseRef: String, command: UpdateRelease): Release =
-        answer(CatalogOperation.UPDATE_RELEASE, projectRef, releaseRef, command)
+        unbound.updateRelease(projectRef, releaseRef, command)
 
-    override fun getItem(projectRef: String, itemRef: String): ProjectItem =
-        answer(CatalogOperation.GET_ITEM, projectRef, itemRef)
+    override fun getItem(projectRef: String, itemRef: String): ProjectItem = unbound.getItem(projectRef, itemRef)
 
     override fun listItems(projectRef: String, filter: ItemFilter): List<ProjectItem> =
-        answer(CatalogOperation.LIST_ITEMS, projectRef, filter)
+        unbound.listItems(projectRef, filter)
 
     /**
      * What happens on a recorded call before it is answered. Nothing here; a
@@ -98,19 +112,64 @@ public open class RecordingCore : OperationCatalog {
         // Recorded and answered, and nothing in between.
     }
 
-    @Suppress("UNCHECKED_CAST")
-    protected fun <R> answer(operation: CatalogOperation, project: String?, vararg values: Any?): R =
-        asked(operation, project, values.toList()) as R
+    /**
+     * What a recorded call is answered with. A subclass overrides it where one
+     * operation has an answer of its own to give, and leaves the rest to what a
+     * test set — which is why it defers to [answering] rather than replacing it.
+     */
+    protected open fun answerTo(invocation: Invocation): Any? = answering(invocation)
 
-    protected fun nothing(operation: CatalogOperation, project: String?, vararg values: Any?) {
-        asked(operation, project, values.toList())
-    }
+    private val unbound: OperationCatalog = ActingFor(Actor.NOBODY)
 
-    private fun asked(operation: CatalogOperation, project: String?, values: List<Any?>): Any? {
-        val invocation = Invocation(operation, project, values)
+    private fun asked(operation: CatalogOperation, actor: Actor, project: String?, values: List<Any?>): Any? {
+        val invocation = Invocation(operation, actor, project, values)
         invocations += invocation
         before(invocation)
-        return answering(invocation)
+        return answerTo(invocation)
+    }
+
+    /** The eleven operations as one identity makes them, each recorded against it. */
+    private inner class ActingFor(private val actor: Actor) : OperationCatalog {
+
+        override fun forActor(actor: Actor): OperationCatalog = ActingFor(actor)
+
+        override fun createProject(command: CreateProject): Project =
+            answer(CatalogOperation.CREATE_PROJECT, null, command)
+
+        override fun getProject(ref: String): Project = answer(CatalogOperation.GET_PROJECT, null, ref)
+
+        override fun listProjects(): List<Project> = answer(CatalogOperation.LIST_PROJECTS, null)
+
+        override fun deleteProject(ref: String): Unit = nothing(CatalogOperation.DELETE_PROJECT, null, ref)
+
+        override fun createItem(projectRef: String, command: CreateItem): ProjectItem =
+            answer(CatalogOperation.CREATE_ITEM, projectRef, command)
+
+        override fun updateItem(projectRef: String, itemRef: String, command: UpdateItem): ProjectItem =
+            answer(CatalogOperation.UPDATE_ITEM, projectRef, itemRef, command)
+
+        override fun deleteItem(projectRef: String, itemRef: String): Unit =
+            nothing(CatalogOperation.DELETE_ITEM, projectRef, itemRef)
+
+        override fun createRelease(projectRef: String, command: CreateRelease): Release =
+            answer(CatalogOperation.CREATE_RELEASE, projectRef, command)
+
+        override fun updateRelease(projectRef: String, releaseRef: String, command: UpdateRelease): Release =
+            answer(CatalogOperation.UPDATE_RELEASE, projectRef, releaseRef, command)
+
+        override fun getItem(projectRef: String, itemRef: String): ProjectItem =
+            answer(CatalogOperation.GET_ITEM, projectRef, itemRef)
+
+        override fun listItems(projectRef: String, filter: ItemFilter): List<ProjectItem> =
+            answer(CatalogOperation.LIST_ITEMS, projectRef, filter)
+
+        @Suppress("UNCHECKED_CAST")
+        private fun <R> answer(operation: CatalogOperation, project: String?, vararg values: Any?): R =
+            asked(operation, actor, project, values.toList()) as R
+
+        private fun nothing(operation: CatalogOperation, project: String?, vararg values: Any?) {
+            asked(operation, actor, project, values.toList())
+        }
     }
 }
 
@@ -146,9 +205,15 @@ public fun noProject(ref: String): Nothing = throw StructuredErrorException(
 public fun unreachableCore(): Nothing = throw IOException("connection refused")
 
 // The entities a stand-in hands back. Every field is filled, so a check
-// comparing a whole entity has a whole entity to compare.
+// comparing a whole entity has a whole entity to compare — the five naming who
+// wrote a row among them.
 
 private val aMoment: Instant = Instant.parse("2026-07-27T09:15:00.123456Z")
+
+/** The person and the agent every stand-in entity is credited to. */
+public const val A_PERSON: String = "alex"
+
+public const val AN_AGENT: String = "claude-code"
 
 public fun aProject(
     name: String = "Search revamp",
@@ -163,6 +228,11 @@ public fun aProject(
     artifactRepoUrl = "https://example.invalid/$slug.git",
     createdAt = aMoment,
     updatedAt = aMoment,
+    createdBy = A_PERSON,
+    updatedBy = A_PERSON,
+    createdByAgent = AN_AGENT,
+    updatedByAgent = AN_AGENT,
+    ownerSubject = A_PERSON,
 )
 
 public fun anItem(
@@ -183,6 +253,10 @@ public fun anItem(
     blockedBy = setOf(Uuid.parse("cccccccc-0000-0000-0000-000000000002")),
     createdAt = aMoment,
     updatedAt = aMoment,
+    createdBy = A_PERSON,
+    updatedBy = A_PERSON,
+    createdByAgent = AN_AGENT,
+    updatedByAgent = AN_AGENT,
 )
 
 public fun aRelease(
@@ -199,4 +273,8 @@ public fun aRelease(
     targetDate = LocalDate.of(2026, 12, 24),
     createdAt = aMoment,
     updatedAt = aMoment,
+    createdBy = A_PERSON,
+    updatedBy = A_PERSON,
+    createdByAgent = AN_AGENT,
+    updatedByAgent = AN_AGENT,
 )

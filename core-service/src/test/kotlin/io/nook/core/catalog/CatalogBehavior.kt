@@ -1,5 +1,8 @@
 package io.nook.core.catalog
 
+import io.nook.contract.ALEX
+import io.nook.contract.Actor
+import io.nook.contract.AN_AGENT
 import io.nook.contract.CatalogClient
 import io.nook.contract.OperationCatalog
 import io.nook.core.db.EmbeddedPostgresSupport
@@ -21,6 +24,13 @@ import org.junit.jupiter.api.TestInstance
  * it always has, so [db] stays available to it. That works for both runs because
  * the core under test is in this process either way; what crosses the connection
  * is the call, not the store.
+ *
+ * Every caller here is bound to the same identity, because that is what a door
+ * does: no mutation reaches the core naming nobody, so a suite carried over
+ * from before there were identities asserts what it always did, with only the
+ * identity it now presents added. What a *different* identity produces, and
+ * what naming none produces, are their own checks rather than something every
+ * suite here has to arrange.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 abstract class CatalogBehavior {
@@ -69,6 +79,11 @@ abstract class CatalogBehavior {
     private fun callerTo(store: Database): OperationCatalog = when (reach) {
         Reach.IN_PROCESS -> CoreCatalog(store)
         Reach.ACROSS_THE_CONNECTION -> CatalogClient(coreFor(store).address).also { closing += it }
+    }.forActor(SOMEBODY)
+
+    companion object {
+        /** Who every call in a behavior suite is made for, standing in for a door that has read a token. */
+        val SOMEBODY: Actor = Actor(ALEX, AN_AGENT)
     }
 
     private fun coreFor(store: Database): RunningCore =

@@ -4,7 +4,9 @@ import io.modelcontextprotocol.json.McpJsonDefaults
 import io.modelcontextprotocol.json.McpJsonMapper
 import io.modelcontextprotocol.json.TypeRef
 import io.modelcontextprotocol.server.McpServerFeatures
+import io.modelcontextprotocol.server.McpSyncServerExchange
 import io.modelcontextprotocol.spec.McpSchema
+import io.nook.contract.Actor
 import io.nook.contract.Missing
 import io.nook.contract.OperationCatalog
 import io.nook.contract.ProjectOperation
@@ -141,7 +143,25 @@ internal fun toolsFor(
     whenProjectIsGone: () -> Unit,
 ): List<McpServerFeatures.SyncToolSpecification> =
     declaredTools.map { tool ->
-        McpServerFeatures.SyncToolSpecification(tool.declaration) { _, request ->
-            tool.callInside(catalog, project, request, whenProjectIsGone)
+        McpServerFeatures.SyncToolSpecification(tool.declaration) { exchange, request ->
+            tool.callInside(catalog.forActor(exchange.actor()), project, request, whenProjectIsGone)
         }
     }
+
+/**
+ * Who a tool call is for: the person from the token this very request
+ * presented, and the agent from the name its connection announced when it
+ * opened.
+ *
+ * The two come from different places because they change at different rates.
+ * A connection given a different person's token on its next request records
+ * that person and not the first; the agent is what opened the connection and
+ * holds for its whole life.
+ *
+ * A client that gives no name for itself and one that names itself with an
+ * empty string arrive identically here, and both mean no agent acted.
+ */
+private fun McpSyncServerExchange.actor(): Actor = Actor(
+    subject = transportContext().get(SUBJECT_ATTRIBUTE) as? String,
+    agent = clientInfo?.name()?.takeIf { it.isNotEmpty() },
+)

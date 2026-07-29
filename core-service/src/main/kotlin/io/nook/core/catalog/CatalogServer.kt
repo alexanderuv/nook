@@ -5,11 +5,15 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.header
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
+import io.nook.contract.AGENT_HEADER
+import io.nook.contract.Actor
 import io.nook.contract.OperationCatalog
+import io.nook.contract.SUBJECT_HEADER
 import io.nook.contract.answer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +36,13 @@ const val LOOPBACK: String = "127.0.0.1"
  * nobody defined. For the same reason the reply names its own ending and every
  * reply carries the same numeric status: a number that has to say both "the
  * item is not there" and "the address is not there" decides neither.
+ *
+ * Nothing here asks a caller for a credential, and that is unchanged: only the
+ * machine the core runs on can reach it, and that stays the whole of its
+ * protection. Who a call is for arrives beside the request in two headers of
+ * Nook's own, put there by a door that has already checked a token — no token
+ * of a caller's ever reaches here, the protocol's own security rules forbidding
+ * one being handed to anything behind a surface.
  *
  * [host] is fixed by whoever builds this and is not a setting the connection
  * offers — see the core's entry point, where binding to the loopback address is
@@ -69,7 +80,14 @@ private fun Application.catalogRoute(catalog: OperationCatalog) {
 }
 
 /**
- * The request, run against the core's own catalog.
+ * The request, run against the core's own catalog, for whoever the door that
+ * sent it says the call is for.
+ *
+ * The binding happens before the request is read and whatever the operation
+ * turns out to be: a read records nobody but is still made for somebody, and a
+ * door says who its call is for whatever the call does. The two names are taken
+ * exactly as they arrived — nothing trimmed, lowercased or filled in — because
+ * a name altered here is a row crediting somebody the token never named.
  *
  * What a request means is decided in the contract library and nowhere here:
  * this end of the connection contributes an address, an engine and a binding,
@@ -86,6 +104,7 @@ private fun Application.catalogRoute(catalog: OperationCatalog) {
  * second way of saying the same thing.
  */
 private suspend fun replyFor(call: ApplicationCall, catalog: OperationCatalog): String {
+    val actor = Actor(call.request.header(SUBJECT_HEADER), call.request.header(AGENT_HEADER))
     val request = try {
         call.receiveText()
     } catch (abandoned: CancellationException) {
@@ -93,5 +112,5 @@ private suspend fun replyFor(call: ApplicationCall, catalog: OperationCatalog): 
     } catch (unreadable: Exception) {
         ""
     }
-    return withContext(Dispatchers.IO) { catalog.answer(request) }
+    return withContext(Dispatchers.IO) { catalog.answer(request, actor) }
 }

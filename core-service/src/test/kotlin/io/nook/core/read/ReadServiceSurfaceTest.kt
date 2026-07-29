@@ -12,6 +12,8 @@ import io.nook.contract.ProjectItem
 import io.nook.contract.Release
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
+import io.nook.core.catalog.CatalogBehavior.Companion.SOMEBODY
+import io.nook.core.catalog.CoreCatalog
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.allStructureTables
 import io.nook.core.write.WriteService
@@ -39,7 +41,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 class ReadServiceSurfaceTest {
 
     private val db = Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase())
-    private val writes = WriteService(db)
+    private val writes = CoreCatalog(db).forActor(SOMEBODY)
     private val reads = ReadService(db)
 
     private fun publicMethodsOf(type: Class<*>) =

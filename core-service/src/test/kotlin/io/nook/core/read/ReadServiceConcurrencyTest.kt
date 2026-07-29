@@ -4,6 +4,8 @@ import io.nook.contract.CreateItem
 import io.nook.contract.CreateProject
 import io.nook.contract.FieldChange
 import io.nook.contract.UpdateItem
+import io.nook.core.catalog.CatalogBehavior.Companion.SOMEBODY
+import io.nook.core.catalog.CoreCatalog
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ProjectItemTable
 import io.nook.core.store.blockerSetsOf
@@ -40,7 +42,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 class ReadServiceConcurrencyTest {
 
     private val db = Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase())
-    private val writes = WriteService(db)
+    private val writes = CoreCatalog(db).forActor(SOMEBODY)
 
     /**
      * Runs a listing's two statements by hand with another caller committing

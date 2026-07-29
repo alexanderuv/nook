@@ -29,6 +29,24 @@ dependencies {
     // one: a caller builds the calling library and nothing else.
     implementation(libs.ktor.client.cio)
 
+    // The reading of a bearer token, which both front doors mount from here.
+    // Two readings in two modules would make "the identity is the same
+    // whichever door a call arrives at" a promise two programs keep rather than
+    // a fact — the first time one of them added a check the other did not, it
+    // would stop being true. The core gains a jar it never calls, which is what
+    // that guarantee costs.
+    //
+    // `implementation`: nothing of the library appears in what this module
+    // offers — a secret goes in and a person's name comes out — so a door
+    // mounts the reading without taking on the library that does it.
+    implementation(libs.nimbus.jose.jwt)
+
+    // Nothing in this epic mints a token — the milestone's one is minted by
+    // hand and written into a caller's configuration. The checks still need
+    // tokens to present, and both doors' checks need the same ones, so the
+    // minting ships beside the stand-in core for the same reason that does.
+    testFixturesApi(libs.nimbus.jose.jwt)
+
     // Java reflection reports a method's parameter types but not their names,
     // and what the catalog's surface has to be held to is partly the names: the
     // project an operation acts inside is a named argument of the seven that

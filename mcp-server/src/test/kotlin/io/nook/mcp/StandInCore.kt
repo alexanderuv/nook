@@ -39,10 +39,18 @@ class StandInCore : RecordingCore() {
     /** How many times the door asked which project an address names. */
     val projectQuestions: List<Invocation> get() = invocationsOf(CatalogOperation.GET_PROJECT)
 
-    override fun getProject(ref: String): Project {
-        invocations += Invocation(CatalogOperation.GET_PROJECT, null, listOf(ref))
-        return resolving(ref)
-    }
+    /**
+     * The one question the door asks for itself is answered here rather than by
+     * whatever a check told the rest of the core to answer — so a check that
+     * scripts an answer for the tools does not thereby stop addresses from
+     * resolving.
+     */
+    override fun answerTo(invocation: Invocation): Any? =
+        if (invocation.operation == CatalogOperation.GET_PROJECT) {
+            resolving(invocation.values.single() as String)
+        } else {
+            super.answerTo(invocation)
+        }
 
     /**
      * A core asked to work inside a project that is not there refuses before it

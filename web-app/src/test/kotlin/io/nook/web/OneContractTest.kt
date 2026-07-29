@@ -1,6 +1,8 @@
 package io.nook.web
 
 import io.nook.contract.RpcCode
+import io.nook.contract.ALEX
+import io.nook.contract.Actor
 import io.nook.contract.RpcReply
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -41,7 +43,10 @@ class OneContractTest {
      */
     private fun bothDoorsAgreeOn(what: String, body: String, reaching: Int) {
         core.invocations.clear()
-        val throughTheCore = replyFrom(doors.coreAddress, body)
+        // The core is reached the way a door reaches it, naming who the call
+        // is for beside the request — so that what the two are compared on is
+        // the request and its verdict, not which identity happened to carry it.
+        val throughTheCore = replyFrom(doors.coreAddress, body, naming = Actor(ALEX))
         val reachedByTheCore = core.invocations.toList()
 
         core.invocations.clear()

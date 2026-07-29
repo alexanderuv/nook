@@ -8,6 +8,8 @@ import io.nook.contract.FieldChange
 import io.nook.contract.StructuredErrorException
 import io.nook.contract.UpdateItem
 import io.nook.contract.UpdateRelease
+import io.nook.core.catalog.CatalogBehavior.Companion.SOMEBODY
+import io.nook.core.catalog.CoreCatalog
 import io.nook.core.db.EmbeddedPostgresSupport
 import io.nook.core.db.ItemDependencyTable
 import java.util.concurrent.atomic.AtomicInteger
@@ -35,7 +37,7 @@ class StoreNeverArbitratesTest {
 
     private companion object {
         val db by lazy { Database.connect(EmbeddedPostgresSupport.freshMigratedDatabase()) }
-        val service by lazy { WriteService(db) }
+        val service by lazy { CoreCatalog(db).forActor(SOMEBODY) }
     }
 
     private fun assertFailsWithCode(code: ErrorCode, block: () -> Unit) {

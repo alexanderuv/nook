@@ -14,6 +14,11 @@ mcpSdk = "2.0.0"
 # `ee11` flavour is the one speaking the servlet revision (6.1) the SDK is built
 # against; the other flavours in the same release speak older ones.
 jetty = "12.1.11"
+# Reads the bearer token both front doors are presented with. One jar with
+# nothing behind it, where the alternatives bring four, six and thirty-seven —
+# and it knows about neither a servlet nor a Ktor route, which is what lets one
+# reading serve both doors.
+nimbusJoseJwt = "10.9.1"
 zonkyPostgres = "2.2.2"
 # PostgreSQL version for the embedded test binaries (latest 17.x line).
 zonkyPostgresBinaries = "17.10.0"
@@ -38,6 +43,7 @@ postgresql-jdbc = { module = "org.postgresql:postgresql", version.ref = "postgre
 mcp-sdk = { module = "io.modelcontextprotocol.sdk:mcp", version.ref = "mcpSdk" }
 jetty-server = { module = "org.eclipse.jetty:jetty-server", version.ref = "jetty" }
 jetty-ee11-servlet = { module = "org.eclipse.jetty.ee11:jetty-ee11-servlet", version.ref = "jetty" }
+nimbus-jose-jwt = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbusJoseJwt" }
 zonky-embedded-postgres = { module = "io.zonky.test:embedded-postgres", version.ref = "zonkyPostgres" }
 # Aligns every embedded-postgres-binaries-* artifact (including Zonky's default
 # platform set) to the pinned PostgreSQL version; import as a platform.

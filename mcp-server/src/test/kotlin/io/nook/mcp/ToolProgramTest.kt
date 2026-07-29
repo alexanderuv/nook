@@ -5,7 +5,11 @@ import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport
 import io.modelcontextprotocol.spec.McpError
 import io.modelcontextprotocol.spec.McpSchema
+import io.nook.contract.ALEX
+import io.nook.contract.THE_SECRET
 import io.nook.contract.aProject
+import io.nook.contract.presenting
+import io.nook.contract.tokenFor
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -50,7 +54,7 @@ class ToolProgramTest {
         val java = File(System.getProperty("java.home"), "bin/java").path
         val builder = ProcessBuilder(java, "-cp", System.getProperty("java.class.path"), PROGRAM)
         builder.environment().apply {
-            listOf(PORT_SETTING, CORE_ADDRESS_SETTING).forEach(::remove)
+            listOf(PORT_SETTING, CORE_ADDRESS_SETTING, TOKEN_SECRET_SETTING).forEach(::remove)
             putAll(settings)
         }
         return builder.start()
@@ -60,7 +64,11 @@ class ToolProgramTest {
     private fun running(corePort: Int, check: (String) -> Unit) {
         val port = freePort()
         val program = launch(
-            mapOf(PORT_SETTING to port.toString(), CORE_ADDRESS_SETTING to "http://$LOOPBACK:$corePort"),
+            mapOf(
+                PORT_SETTING to port.toString(),
+                CORE_ADDRESS_SETTING to "http://$LOOPBACK:$corePort",
+                TOKEN_SECRET_SETTING to THE_SECRET,
+            ),
         )
         try {
             val announcement = program.inputStream.bufferedReader().readLine()
@@ -75,9 +83,20 @@ class ToolProgramTest {
         }
     }
 
+    /**
+     * A client presenting a token minted against the same secret the program was
+     * started with — which is the whole of what an operator arranges: one token,
+     * minted once by hand, written into a caller's configuration.
+     */
     private fun clientAt(address: String, projectRef: String): McpSyncClient =
-        McpClient.sync(HttpClientStreamableHttpTransport.builder(address).endpoint("$TOOLS_PATH/$projectRef").build())
-            .build()
+        McpClient.sync(
+            HttpClientStreamableHttpTransport.builder(address)
+                .endpoint("$TOOLS_PATH/$projectRef")
+                .httpRequestCustomizer { request, _, _, _, _ ->
+                    request.header("Authorization", presenting(tokenFor(ALEX)))
+                }
+                .build(),
+        ).build()
 
     private fun McpSyncClient.getItem(): McpSchema.CallToolResult =
         callTool(McpSchema.CallToolRequest.builder("get_item").arguments(mapOf("ref" to "add-search")).build())
@@ -85,8 +104,12 @@ class ToolProgramTest {
     @Test
     fun `a program started without a setting stops and names the one it is missing`() {
         listOf(
-            PORT_SETTING to mapOf(CORE_ADDRESS_SETTING to "http://$LOOPBACK:1"),
-            CORE_ADDRESS_SETTING to mapOf(PORT_SETTING to "1"),
+            PORT_SETTING to mapOf(
+                CORE_ADDRESS_SETTING to "http://$LOOPBACK:1",
+                TOKEN_SECRET_SETTING to THE_SECRET,
+            ),
+            CORE_ADDRESS_SETTING to mapOf(PORT_SETTING to "1", TOKEN_SECRET_SETTING to THE_SECRET),
+            TOKEN_SECRET_SETTING to mapOf(PORT_SETTING to "1", CORE_ADDRESS_SETTING to "http://$LOOPBACK:1"),
         ).forEach { (missing, rest) ->
             val program = launch(rest)
             val complaint = program.errorStream.bufferedReader().readText()
@@ -95,6 +118,27 @@ class ToolProgramTest {
             assertTrue(program.exitValue() != 0, "the program started anyway, without $missing")
             assertTrue(complaint.contains(missing), "it stopped without naming $missing; it said: $complaint")
         }
+    }
+
+    @Test
+    fun `a program started with a secret that could check no token stops and names the setting`() {
+        val program = launch(
+            mapOf(
+                PORT_SETTING to "1",
+                CORE_ADDRESS_SETTING to "http://$LOOPBACK:1",
+                // One character short of the least the signing accepts, which
+                // is the shape a mistyped secret actually takes.
+                TOKEN_SECRET_SETTING to THE_SECRET.dropLast(1),
+            ),
+        )
+        val complaint = program.errorStream.bufferedReader().readText()
+        assertTrue(program.waitFor(2, TimeUnit.MINUTES), "the program did not stop on an unusable secret")
+
+        assertTrue(program.exitValue() != 0, "the program started anyway, with a secret it could check nothing with")
+        assertTrue(
+            complaint.contains(TOKEN_SECRET_SETTING),
+            "it stopped without naming $TOKEN_SECRET_SETTING; it said: $complaint",
+        )
     }
 
     @Test
@@ -156,7 +200,7 @@ class ToolProgramTest {
         // network turned it away, not the binding.
         val everywherePort = freePort()
         val reachable = Dispatcher(core).use { dispatcher ->
-            ToolServer(dispatcher, "0.0.0.0", everywherePort).use { everywhere ->
+            ToolServer(gatedBy(dispatcher), "0.0.0.0", everywherePort).use { everywhere ->
                 everywhere.start()
                 elsewhere.filter { openedAt("http://$it:$everywherePort$TOOLS_PATH/${project.slug}") != null }
             }
@@ -170,7 +214,7 @@ class ToolProgramTest {
 
         val loopbackPort = freePort()
         Dispatcher(core).use { dispatcher ->
-            ToolServer(dispatcher, LOOPBACK, loopbackPort).use { onlyHere ->
+            ToolServer(gatedBy(dispatcher), LOOPBACK, loopbackPort).use { onlyHere ->
                 onlyHere.start()
 
                 assertEquals(
@@ -178,8 +222,10 @@ class ToolProgramTest {
                     reachable.filter { openedAt("http://$it:$loopbackPort$TOOLS_PATH/${project.slug}") != null },
                     "a front door bound to the loopback address answered somewhere else",
                 )
-                // And on the loopback address it answers, with no credential
-                // asked for and none presented, which is the whole arrangement.
+                // And on the loopback address it answers a caller presenting a
+                // valid token. The binding and the gate are both load-bearing
+                // now: the token travels in the clear, so nothing off this
+                // machine may reach the address it travels to.
                 assertEquals(
                     SERVED,
                     openedAt("http://$LOOPBACK:$loopbackPort$TOOLS_PATH/${project.slug}")?.status,
