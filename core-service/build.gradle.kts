@@ -1,5 +1,11 @@
 plugins {
     id("nook.application")
+    // The embedded database ships from here, because the assembled run in
+    // :system-test needs the same one this module's own suite uses. Two copies
+    // free to differ would have the two measuring against differently built
+    // databases while appearing to agree — which is the reason :contract already
+    // ships its stand-in core this way.
+    id("java-test-fixtures")
 }
 
 application {
@@ -24,10 +30,17 @@ dependencies {
     // acting — shared with both adapters, so that no two modules disagree about who
     // `alex` is.
     testImplementation(testFixtures(project(":contract")))
-    testImplementation(libs.zonky.embedded.postgres)
-    testImplementation(platform(libs.zonky.postgres.binaries.bom))
-    testRuntimeOnly(libs.zonky.postgres.binaries.darwin.arm64v8)
     testImplementation(libs.exposed.migration.jdbc)
+
+    // The embedded database, declared where the helpers that start it live, so
+    // that whoever takes the fixtures gets the binaries to run them with. `api`
+    // rather than `implementation`: both helpers hand out a real server, so a
+    // caller holds the library either way.
+    testFixturesApi(libs.zonky.embedded.postgres)
+    testFixturesApi(platform(libs.zonky.postgres.binaries.bom))
+    // Apple silicon is not in the library's default platform set, and the
+    // default set is what carries the Linux the continuous-integration run uses.
+    testFixturesRuntimeOnly(libs.zonky.postgres.binaries.darwin.arm64v8)
 }
 
 // The guard behind the driver's runtime-only scope: keeping it off the compile

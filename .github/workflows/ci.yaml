@@ -36,11 +36,15 @@ jobs:
           distribution: temurin
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v6
-      - run: ./gradlew check
+      # Two targets, because the assembled run hangs off one of its own. It
+      # starts three programs and a database, so an ordinary local build does
+      # not pay for it — which means this run is the whole of the guard: a
+      # change that breaks the assembled system passes `check` and fails here.
+      - run: ./gradlew check systemTest
 
-      # A failed run's console tail is not enough to diagnose twenty database
-      # integration tests; the reports are. Uploaded only on failure, which is
-      # the only time anybody reads them.
+      # A failed run's console tail is not enough to diagnose the database
+      # suites, still less the assembled run; the reports are. Uploaded only on
+      # failure, which is the only time anybody reads them.
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v5

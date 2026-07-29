@@ -8,6 +8,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * own freshly created, fully migrated database on it. The binaries are real
  * PostgreSQL, fetched as ordinary dependencies and started from a temp
  * directory — no Docker, no installed database.
+ *
+ * This server is never stopped, and nothing here offers to stop it: it is shared
+ * by every caller in the JVM, so taking it away would take all of them with it.
+ * A caller that has to take a database away and bring it back builds a
+ * [RestartablePostgres] of its own instead.
  */
 object EmbeddedPostgresSupport {
     private val databaseCounter = AtomicInteger()

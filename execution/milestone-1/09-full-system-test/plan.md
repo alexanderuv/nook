@@ -263,7 +263,7 @@ depends on it.
 
 ## Steps
 
-- [ ] **STEP1** — Create `:system-test` with its target, and give the run a
+- [x] **STEP1** — Create `:system-test` with its target, and give the run a
   database it controls: the module applying `nook.kotlin-jvm` alone, a
   `systemTest` suite whose sources are `src/systemTest/kotlin`, the module added
   to `settings.gradle.kts`; `EmbeddedPostgresSupport` moved into
@@ -280,7 +280,15 @@ depends on it.
   table with the rows still there (ASM2, ASM3, and the discovery's read-not-run
   limitation).
 
-- [ ] **STEP2** — Launch the three programs from their distributions, and show
+  Diverged: one of the twenty-two callers had to change after all. Applying
+  `java-test-fixtures` replaces `:core-service`'s own main output on its test
+  classpath with the module's jar, and `MigrationTest` listed the packaged
+  changelog as a directory of files. It now reads the same files through
+  Liquibase's own reading of the classpath — the one `migrateDatabase` applies
+  them with — which sees them wherever the build leaves them. The other
+  twenty-one are untouched.
+
+- [x] **STEP2** — Launch the three programs from their distributions, and show
   they come up in either order: the suite's task depending on the three
   `installDist` tasks and passing their folders in; one launcher that starts a
   distribution's start script with the `NOOK_*` settings composed exactly,
@@ -295,7 +303,7 @@ depends on it.
   is shown is what an operator meets (REQ1, REQ3, REQ4, EDGE1, EDGE2, EDGE10,
   AC1, AC14).
 
-- [ ] **STEP3** — Run the milestone's loop over MCP, and read back who wrote
+- [x] **STEP3** — Run the milestone's loop over MCP, and read back who wrote
   every row: a project created through the web API with a token naming `alex`;
   one connection opened at that project's address by a client naming itself
   `claude-code` and presenting the same token on every request; over that
@@ -313,7 +321,7 @@ depends on it.
   needed no intervention after the project existed (REQ5, REQ6, REQ7, REQ9,
   REQ10, REQ11, REQ12, AC3, AC4, AC6).
 
-- [ ] **STEP4** — Run the same loop through the web API alone, with the MCP
+- [x] **STEP4** — Run the same loop through the web API alone, with the MCP
   server not running at all: an empty database, the core and the web app
   started, and the same sequence carried out as ordinary calls to `/api`;
   verify: the listing holds exactly the first task and the bug in the order the
@@ -322,7 +330,7 @@ depends on it.
   it wrote records the person its token named and no agent at all (REQ8, REQ11,
   AC5).
 
-- [ ] **STEP5** — Put two adapters on one database: one project, and a hundred
+- [x] **STEP5** — Put two adapters on one database: one project, and a hundred
   rounds in which an item of the same name is created at the same moment by a
   tool call and by a web API call; then a hundred rounds in which a caller sends
   a create carrying two blocker edges to the web API and drops its connection
@@ -333,7 +341,19 @@ depends on it.
   hundred items is afterwards either present with both blocker edges or absent
   altogether (REQ13, REQ14, EDGE5, EDGE6, EDGE8, AC8, AC9).
 
-- [ ] **STEP6** — Take the core away, then the database, and bring each back:
+  Diverged: the abandoned write is an `update_item`, not a create. No operation
+  makes an item and its blockers in one call — `create_item` takes no blockers —
+  so what is abandoned is the one write that puts a row and its edges in one
+  transaction, exactly as this plan's own analysis of the check one layer down
+  says. The item is therefore always present afterwards; what is checked is that
+  its new name and both its edges arrived together or not at all. Spec-7's AC9
+  records the same reading. And the caller giving up is not enough on its own —
+  a wait cut to a millisecond can end before the request is on the wire, which
+  abandons nothing — so what is checked is that at least one caller left while
+  the core went on to finish, which is the only arrangement a half-written row
+  was ever possible in.
+
+- [x] **STEP6** — Take the core away, then the database, and bring each back:
   with all three programs up, the core's process stopped and a call made to the
   web API, then the core started again at the same address and another call
   made; then the database closed and a call made to each adapter, and the
@@ -345,7 +365,7 @@ depends on it.
   those reasons, and once it is back a later call to each succeeds with no
   program restarted (REQ15, REQ16, EDGE3, EDGE4, AC10 in part, AC11).
 
-- [ ] **STEP7** — Ask the gate and the database separation of the running
+- [x] **STEP7** — Ask the gate and the database separation of the running
   system: a well-formed call to each adapter carrying no `Authorization` header,
   with the row counts read before and after; the same two calls repeated with
   the core stopped; the same two calls presenting a valid token; each adapter's
@@ -371,6 +391,18 @@ depends on it.
   `:mcp-server` and `:web-app` still resolve no database library; and every one
   of spec-7's fourteen criteria appears in the mapping against either a test that
   exists or a stated reason it is deferred.
+
+  Done except for the push: spec-7 carries the three narrowings in place, the
+  continuous-integration run asks for `./gradlew check systemTest`, and this
+  epic's README carries the results, the criterion-to-test mapping and what is
+  deferred. `./gradlew clean` then `check systemTest --no-build-cache` is green —
+  441 checks under `check`, 13 under `systemTest` — and both adapters still
+  resolve no database library. What is left is committing and pushing, and the
+  verdict of the run that follows.
+
+  Added to the blast radius: `CLAUDE.md`, which now says a fifth module exists
+  and that the build has two targets. A session guide that described four modules
+  and one target would send the next reader looking for a run that is not there.
 
 ## Caveats & rabbit holes
 
@@ -416,7 +448,11 @@ depends on it.
   set, and the new module needs the same declarations to run here and on the
   Linux the continuous-integration run uses; instead: copy those two
   declarations across with the moved helper, and expect the run to be unavailable
-  on anything else.
+  on anything else. Diverged, and for the better: the declarations moved *with*
+  the helper into `:core-service`'s test fixtures rather than being copied into
+  the new module, so whoever takes the fixtures gets the binaries to run them
+  with and there is no second list to keep in step. Both platform sets resolve
+  onto the new suite's runtime classpath.
 
 - **rabbit-hole: pointing a coding agent's client at the assembled system** —
   three epics have now recorded it, spec-7's first assumption rests on it, and it
@@ -515,7 +551,14 @@ uses a stand-in for anything.
   mid-build divergence folded back into this text.
 
 - Run both standing checks through a separate agent handed only this plan and
-  the final diff, none of the builder's conversation.
+  the final diff, none of the builder's conversation. **Run by the builder
+  instead, and still owed to a separate reader.** The comment-hygiene sweep
+  found two artifact references in code comments and both were rewritten; the
+  conformance sweep found the blast radius held — no production code touched in
+  the four modules, nothing of the core reached except the database fixture, no
+  rule re-checked, no comparison of the two adapters' answers, and no bounds of
+  this module's own. What a separate reader adds is independence, and that has
+  not been had.
 
 Done when: `./gradlew check` is green and `./gradlew systemTest` is green, both
 locally from a clean checkout and in the continuous-integration run, which

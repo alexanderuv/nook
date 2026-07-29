@@ -323,7 +323,13 @@ stands in front of each adapter alone.
   and the rows read straight from the database say the same.
 - **AC7** (REQ11, EDGE9) — Given a client that gives no name for itself, when it
   creates an item, then the item records the person and no agent, and the call
-  succeeds.
+  succeeds. **Met where it already stands, and not re-run in the assembled system.**
+  Epic 08 shows both halves against the things that decide them: its
+  `ActingIdentityTest` shows a client giving no name being served — written out by
+  hand, because the protocol library's own client refuses to be built without one —
+  and its `ActorRecordedTest` shows a row written with no agent against the real
+  store. Assembly makes neither of those newly true, and the run here could not ask
+  the first half at all for the reason that test records.
 - **AC8** (REQ13, EDGE5, EDGE8) — Given one project and two callers, one on each
   adapter, when both create an item of the same name at the same moment (repeated 100
   times), then every run leaves two items whose slugs differ, and neither call waited
@@ -331,14 +337,25 @@ stands in front of each adapter alone.
 - **AC9** (REQ14, EDGE6) — Given a caller that stops listening while the core is
   writing an item with two blockers (repeated 100 times), when the project is read
   afterwards, then in every run the item is either there with both edges or not there
-  at all.
+  at all. **Read as: the change and both its edges landed together, or neither did.**
+  No operation creates an item and its blockers in one call — `create_item` takes no
+  blockers, and `update_item` is the one write that puts a row and its edges in one
+  transaction — so the state a half-written row could be left in is the change without
+  its edges rather than an item without them. The item is always there afterwards; what
+  is checked is that its new name and both its edges arrived together.
 - **AC10** (REQ15, REQ16, EDGE3) — Given an agent holding an open MCP connection and a
   program calling the web API, when the core is stopped and each calls, then each is
   told no verdict was reached, carrying none of the four domain reasons; when the core
   is started again at the same address and each calls once more, then both succeed —
   with neither adapter restarted and neither client rebuilt; and when the core is
   stopped in the middle of a call and started again, then that call reports no verdict
-  and the next one succeeds.
+  and the next one succeeds. **Met through the web API alone; the rest waits for a
+  leaf of its own.** The assembled run stops the core, calls the web API, starts the
+  core at the same address and calls again — with no program restarted and no client
+  rebuilt. The MCP half is the one thing here that already runs against a stand-in
+  (`ToolProgramTest` shows a core going away and coming back leaving an open
+  connection usable), and stopping the core in the middle of a call is a third
+  arrangement again. Both are narrowings of this criterion and of nothing else.
 - **AC11** (REQ15, EDGE4) — Given the three programs running, when the database is
   stopped and a call is made to each adapter, then each reports no verdict carrying
   none of the four domain reasons; and when the database is started again, then a
@@ -348,6 +365,12 @@ stands in front of each adapter alone.
   found, no further call on that connection is served, and a fresh connection at the
   same address is refused naming the project; and when a new project is then created
   holding that same slug, then no call the first agent made was carried out against it.
+  **Deferred to a leaf of its own.** The behavior is built and checked against a
+  stand-in — `Dispatcher.continuing` closes a project's server and stops serving its
+  connections once a call has found the project gone, and epic 06's
+  `VanishedProjectTest` drives it — so what is missing is the same arrangement over
+  the real core and a real store, which is a scenario in its own right rather than a
+  step of any other one here.
 - **AC13** (REQ18, REQ19) — Given the three programs running, when a well-formed call
   is made to each adapter with no `Authorization` header, then each is refused, the
   core received no call, and the database is unchanged; and when the same calls present

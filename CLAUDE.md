@@ -8,8 +8,10 @@ seven project-scoped operations as tools at one address per project, and
 `:web-app`, which serves all eleven at `/api`. Both adapters speak JSON-RPC 2.0
 over one answering side held in `:contract`. Both now require a bearer token
 (`NOOK_TOKEN_SECRET`), take the person from its `sub` claim, and record that
-person plus the acting agent on every row the operations write. The document
-layer and the git-backed artifact store are still design only.
+person plus the acting agent on every row the operations write. All three run
+together in `:system-test`, where the milestone's loop has run over MCP and over
+`/api` against three real programs and one real database. The document layer and
+the git-backed artifact store are still design only.
 
 `/api` is the **web UI's** back end (the UI itself is milestone 4), not a public
 integration surface: humans reach Nook through the UI, agents through MCP, and
@@ -50,3 +52,8 @@ an operation to add, not as a contract to break.
 - **Document kinds** are defined in `docs/02-document-layer.md` and stored as
   smallint codes (see the DB changelog).
 - Enums throughout the schema are smallint codes, never strings.
+- **Two build targets.** `./gradlew check` is the ordinary build. `./gradlew
+  systemTest` runs `:system-test`, which starts the three programs from their
+  installed distributions against a database of its own; it is asked for by name
+  rather than hanging off `check`, and the continuous-integration run asks for
+  both. A change that breaks the assembled system passes a local `check`.
