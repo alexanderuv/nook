@@ -30,7 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
  * and one that named a person would be offering a rule about who may read.
  *
  * Built without one, it names nobody — every mutation through it is refused, and
- * every read is served. That is what a door with a defect gets, and it is
+ * every read is served. That is what an adapter with a defect gets, and it is
  * deliberately not a row crediting nobody.
  */
 class CoreCatalog(

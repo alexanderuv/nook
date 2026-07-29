@@ -31,23 +31,23 @@ private const val SERVED = 200
  * through, and that nothing of the protocol runs before it.
  *
  * The store being unchanged is the stand-in core recording nothing: a refused
- * call must not reach the core at all, and the one question this door asks for
+ * call must not reach the core at all, and the one question this adapter asks for
  * itself — which project an address names — is counted apart from tool calls
  * precisely so that "nothing reached the core" can be said without it meaning
- * "the door never asked".
+ * "the adapter never asked".
  */
 class GatedConnectionTest {
 
     private val project = aProject()
 
-    private fun door(check: (StandInCore, FrontDoor) -> Unit) {
+    private fun adapter(check: (StandInCore, RunningAdapter) -> Unit) {
         val core = StandInCore().apply { projects += project }
-        FrontDoor(core).use { check(core, it) }
+        RunningAdapter(core).use { check(core, it) }
     }
 
     private val at get() = "$TOOLS_PATH/${project.slug}"
 
-    /** Every token this door must refuse, under the name of what is wrong with it. */
+    /** Every token this adapter must refuse, under the name of what is wrong with it. */
     private val badTokens: Map<String, String> = mapOf(
         "signed with something else" to tokenFor(ALEX, secret = ANOTHER_SECRET),
         "expired an hour ago" to tokenFor(ALEX, until = Instant.now().minus(1, ChronoUnit.HOURS)),
@@ -62,13 +62,13 @@ class GatedConnectionTest {
 
     @Test
     fun `a call presenting no bearer token at all is refused, and nothing of the protocol runs`() {
-        door { core, door ->
+        adapter { core, adapter ->
             listOf(
                 "no Authorization header" to null,
                 "a header carrying something that is not a bearer token" to "Something-Else abcdef",
                 "a bearer scheme carrying nothing" to "Bearer ",
             ).forEach { (what, header) ->
-                val answered = door.openingAt(at, presenting = header)
+                val answered = adapter.openingAt(at, presenting = header)
 
                 assertEquals(UNAUTHORIZED, answered.status, what)
                 assertTrue(
@@ -83,9 +83,9 @@ class GatedConnectionTest {
 
     @Test
     fun `each token that does not hold up is refused, and none of them reaches the core`() {
-        door { core, door ->
+        adapter { core, adapter ->
             badTokens.forEach { (what, token) ->
-                val answered = door.openingAt(at, presenting = presenting(token))
+                val answered = adapter.openingAt(at, presenting = presenting(token))
 
                 assertEquals(UNAUTHORIZED, answered.status, what)
                 assertTrue(answered.header(WWW_AUTHENTICATE) != null, "$what came back without a challenge")
@@ -97,8 +97,8 @@ class GatedConnectionTest {
 
     @Test
     fun `a client that opens a connection without a token gets no session and can list no tool`() {
-        door { core, door ->
-            val client = door.clientAt(project.slug, Presenting(token = null))
+        adapter { core, adapter ->
+            val client = adapter.clientAt(project.slug, Presenting(token = null))
 
             assertTrue(runCatching { client.initialize() }.isFailure, "a connection opened without a token")
             assertTrue(runCatching { client.listTools() }.isFailure, "tools were listed on a connection never opened")
@@ -107,11 +107,11 @@ class GatedConnectionTest {
     }
 
     @Test
-    fun `a refused call leaves the door serving, and the next valid one is served normally`() {
-        door { _, door ->
-            assertEquals(UNAUTHORIZED, door.openingAt(at, presenting = null).status)
+    fun `a refused call leaves the adapter serving, and the next valid one is served normally`() {
+        adapter { _, adapter ->
+            assertEquals(UNAUTHORIZED, adapter.openingAt(at, presenting = null).status)
 
-            val client = door.connectedAt(project.slug)
+            val client = adapter.connectedAt(project.slug)
             assertTrue(client.listTools().tools().isNotEmpty(), "no tool was offered after a refused call")
             assertEquals(false, client.getItem().isError(), "a tool call was not served after a refused call")
         }
@@ -119,12 +119,12 @@ class GatedConnectionTest {
 
     @Test
     fun `a client naming itself with what the store holds is served, and one character more is refused`() {
-        door { _, door ->
+        adapter { _, adapter ->
             val asWideAsItGets = "c".repeat(MAX_ACTOR_LENGTH)
-            assertEquals(SERVED, door.openingNamed(at, asWideAsItGets).status, "a name the store can hold was refused")
+            assertEquals(SERVED, adapter.openingNamed(at, asWideAsItGets).status, "a name the store can hold was refused")
 
             val tooLong = "c".repeat(MAX_ACTOR_LENGTH + 1)
-            val refused = door.openingNamed(at, tooLong)
+            val refused = adapter.openingNamed(at, tooLong)
             assertEquals(BAD_REQUEST, refused.status, "a name wider than the store can hold was served")
             assertTrue(
                 refused.said.contains("${MAX_ACTOR_LENGTH + 1}") && refused.said.contains("$MAX_ACTOR_LENGTH"),
@@ -135,8 +135,8 @@ class GatedConnectionTest {
 
     @Test
     fun `an ordinary client opens a connection, lists its tools, and calls one through the gate`() {
-        door { core, door ->
-            val client = door.connectedAt(project.slug)
+        adapter { core, adapter ->
+            val client = adapter.connectedAt(project.slug)
 
             assertEquals(
                 declaredTools.map { it.declaration.name() }.toSet(),

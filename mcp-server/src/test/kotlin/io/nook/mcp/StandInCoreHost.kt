@@ -15,7 +15,7 @@ import org.eclipse.jetty.server.ServerConnector
  * The stand-in core, reachable the way the real one is: over the connection the
  * calling library speaks.
  *
- * Everything else in this module hands the front door a catalog directly, which
+ * Everything else in this module hands the adapter a catalog directly, which
  * is the right shape for asking what crossed. This one exists for the two
  * questions that only a real connection can answer — whether the program the
  * operator starts actually reaches a core it was told about, and what happens
@@ -69,7 +69,7 @@ class StandInCoreHost(core: StandInCore, private val port: Int) : AutoCloseable 
  * away. That is what makes this a stand-in for the core rather than a second
  * core.
  *
- * Who a call is for arrives beside the request, in the two headers a door
+ * Who a call is for arrives beside the request, in the two headers an adapter
  * sends, and is bound before anything is run — again as the real core does it.
  * Nothing here asks a caller for a credential, and the real core asks for none
  * either.

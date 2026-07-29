@@ -12,11 +12,11 @@ const val PORT_SETTING: String = "NOOK_WEB_PORT"
 /** Where the core is, as the address its connection answers at. */
 const val CORE_ADDRESS_SETTING: String = "NOOK_CORE_ADDRESS"
 
-/** What a token presented at this door is checked against. */
+/** What a token presented at this adapter is checked against. */
 const val TOKEN_SECRET_SETTING: String = "NOOK_TOKEN_SECRET"
 
 /**
- * The human surface's front door as a program: the connection it reaches the
+ * The web API as a program: the connection it reaches the
  * core by, and the one address it serves the eleven operations at.
  *
  * Three settings come from outside, and none has a default. A default port

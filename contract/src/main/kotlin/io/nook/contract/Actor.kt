@@ -24,22 +24,22 @@ package io.nook.contract
 public data class Actor(public val subject: String? = null, public val agent: String? = null) {
 
     public companion object {
-        /** A call naming neither: what an unbound caller sends, and what a defect at a door would. */
+        /** A call naming neither: what an unbound caller sends, and what a defect at an adapter would. */
         public val NOBODY: Actor = Actor()
     }
 }
 
 /**
- * The two names a door tells the core beside a request, rather than inside it.
+ * The two names an adapter tells the core beside a request, rather than inside it.
  *
  * They are Nook's own, and that is a deliberate exception to taking the names
- * the world already wrote. No published specification registers a header for a
- * front door telling a service behind it whose identity it has already checked:
+ * the world already wrote. No published specification registers a header for
+ * an adapter telling a service behind it whose identity it has already checked:
  * the standards here all describe a *caller* presenting a credential, and the
  * one that would apply — handing the caller's own token onward — is what the
  * protocol's security rules forbid outright. So the meaning is RFC 8693's and
  * only the two names are Nook's, and they are read nowhere but on the
- * connection between a door and the core.
+ * connection between an adapter and the core.
  */
 public const val SUBJECT_HEADER: String = "Nook-Subject"
 

@@ -235,7 +235,7 @@ rather than faked with hand-written SQL.
   row, no read carries a clause about deletion and no operation can forget one.
   There is no argument, filter value, or operation by which a caller could ask
   for a deleted row — the absence is the design, and a test asserts the surface
-  offers no such door. The entity classes carry no deleted mark for the same
+  offers no such adapter. The entity classes carry no deleted mark for the same
   reason there is no column: the state does not exist.
 
   This is what the reversal bought back. Under the mark, every query on both

@@ -39,8 +39,8 @@ class VanishedProjectTest {
 
     @Test
     fun `a refusal saying the project is gone ends the connection, after telling the agent why`() {
-        FrontDoor(core).use { door ->
-            val client = door.connectedAt(project.slug)
+        RunningAdapter(core).use { adapter ->
+            val client = adapter.connectedAt(project.slug)
             assertEquals(false, client.getItem().isError(), "the connection was not serving to begin with")
 
             core.projects.remove(project)
@@ -58,9 +58,9 @@ class VanishedProjectTest {
 
     @Test
     fun `every connection to that project ends, not only the one that found out`() {
-        FrontDoor(core).use { door ->
-            val whoFindsOut = door.connectedAt(project.slug)
-            val theOther = door.connectedAt(project.id.toString())
+        RunningAdapter(core).use { adapter ->
+            val whoFindsOut = adapter.connectedAt(project.slug)
+            val theOther = adapter.connectedAt(project.id.toString())
 
             core.projects.remove(project)
             assertEquals(true, whoFindsOut.getItem().isError())
@@ -73,8 +73,8 @@ class VanishedProjectTest {
 
     @Test
     fun `a refusal about an item leaves the connection serving`() {
-        FrontDoor(core).use { door ->
-            val client = door.connectedAt(project.slug)
+        RunningAdapter(core).use { adapter ->
+            val client = adapter.connectedAt(project.slug)
             core.answering = {
                 throw StructuredErrorException(
                     StructuredError(ErrorCode.NOT_FOUND, "no item matches that", Missing.ITEM.asDetails()),
@@ -91,11 +91,11 @@ class VanishedProjectTest {
 
     @Test
     fun `a connection opened afterwards at the same address is refused naming the project`() {
-        FrontDoor(core).use { door ->
-            door.connectedAt(project.slug).getItem()
+        RunningAdapter(core).use { adapter ->
+            adapter.connectedAt(project.slug).getItem()
             core.projects.remove(project)
 
-            val answered = door.openingAt("$TOOLS_PATH/${project.slug}")
+            val answered = adapter.openingAt("$TOOLS_PATH/${project.slug}")
 
             assertEquals(404, answered.status)
             assertTrue(
@@ -107,8 +107,8 @@ class VanishedProjectTest {
 
     @Test
     fun `a handle given to a new project never carries the old connection's calls`() {
-        FrontDoor(core).use { door ->
-            val old = door.connectedAt(project.slug)
+        RunningAdapter(core).use { adapter ->
+            val old = adapter.connectedAt(project.slug)
 
             // Deleted, and the handle it freed given to a project of its own.
             core.projects.remove(project)
@@ -116,7 +116,7 @@ class VanishedProjectTest {
             core.projects += replacement
 
             assertEquals(true, old.getItem().isError(), "the first call after the deletion was not refused")
-            val fresh = door.connectedAt(project.slug)
+            val fresh = adapter.connectedAt(project.slug)
             assertTrue(
                 fresh.serverInstructions.contains(replacement.id.toString()),
                 "a connection opened at the freed handle did not reach the project that now holds it",

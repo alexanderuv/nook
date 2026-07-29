@@ -69,14 +69,14 @@ what says the encoding did not move.
 Two things are deliberately absent from a tool's arguments. There is no closed
 list of allowed values for the vocabularies — a list here would have the protocol
 library turn a mistyped status back in its own wording before the core saw it,
-so the same call would reach two different verdicts depending on which door it
+so the same call would reach two different verdicts depending on which adapter it
 came in by, and the agent would lose the refusal that spells out the words it
 could have written. And there is no default for anything: a field the caller left
 out arrives left out, which is the whole of what keeps "leave this alone" apart
 from "set this to nothing". What is present is the marker refusing any argument
 the shape does not define.
 
-**A connection's project is settled at the door and never again.** One protocol
+**A connection's project is settled when the connection opens and never again.** One protocol
 server per project, because what a connection is told on opening is a single
 piece of text held on the server — a shared one could say something true of every
 project or one project's own words, never both. The core is asked which project
@@ -96,7 +96,7 @@ things a call named was missing: `:contract` gained `Missing`, and
 in the details a refusal already carries. A refusal naming the project closes
 that project's server — ending every connection held against it — while a
 refusal naming an item leaves the connection serving. The closing happens at the
-door on the next request rather than inside the call that found out, so the
+adapter on the next request rather than inside the call that found out, so the
 agent still receives the refusal that told it.
 
 The address a connection was opened at is never what a call is made with. Every
@@ -134,17 +134,17 @@ planning artifacts):
 | AC20 | `ToolProgramTest` — a core that goes away and comes back leaves the connection usable, with the agent never reconnecting and nothing restarted |
 | AC21 | `ManyAtOnceTest` — three connections, two on one project and one on another, call at once with one call held open, and neither fast call waits on it or sees another connection's project. Two agents creating the same name at once is the store's own arbitration, held by epic 05's `WriteServiceSlugRaceAcrossConnectionTest` |
 | AC22 | `DerivedToolTest` and `OfferedToolsTest` — an unmodified client completes the handshake, lists the tools and calls one; `ManyAtOnceTest` — a tool call sent before the handshake is not served and reaches nothing; `OfferedToolsTest` — a client asking for resources is offered none |
-| AC23 | `ToolProgramTest` — a front door bound to loopback answers there and nowhere else this machine can be reached, to a caller presenting a valid bearer token (epic 08 superseded REQ45's "no credential"); `RefusedConnectionTest` — an opening exchange a web page sent is turned away |
+| AC23 | `ToolProgramTest` — an adapter bound to loopback answers there and nowhere else this machine can be reached, to a caller presenting a valid bearer token (epic 08 superseded REQ45's "no credential"); `RefusedConnectionTest` — an opening exchange a web page sent is turned away |
 | AC24 | `ToolProgramTest` — told both addresses, a client connects and calls a tool against the core; a program started without a setting stops and names the one it is missing |
 | AC25 | Epic 09 — the milestone's loop needs the real core over a real store |
 | AC26 | Epic 09 — epics 03 and 04's criteria re-run through the tools need the same |
 
 AC23's test earns its verdict the way epic 05's did. An address that cannot reach
-a front door listening on every address proves nothing about what the loopback
+an adapter listening on every address proves nothing about what the loopback
 binding refuses — the network turned the call away, not the binding. So it first
-stands up a door bound to everything and establishes which of this machine's
+stands up an adapter bound to everything and establishes which of this machine's
 addresses reach it at all; only those are then tried against the loopback-bound
-door, and on a machine with no such address it stops and says so instead of
+adapter, and on a machine with no such address it stops and says so instead of
 passing emptily. The binding is not the whole of the protection, though: a page
 open in a browser on this machine reaches the loopback address as readily as an
 agent does, so the transport's origin check is turned on — anything carrying a
@@ -157,7 +157,7 @@ that is not empty, each vocabulary is spelled out in full somewhere a caller
 reads it, and each hand-written conversion accepts exactly the fields it
 declares), and `ConnectedProjectTest`'s count of what the core was asked — the
 address is resolved once per connection, not once per call, so a mistyped one is
-discovered at the door rather than again on every call.
+discovered when the connection opens rather than again on every call.
 
 Everything above runs against a stand-in core: forty-six checks in this module,
 none of them needing a database, and `checkPersistenceBoundary` still passes for

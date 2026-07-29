@@ -34,16 +34,16 @@ class ActingIdentityTest {
 
     private val project = aProject()
 
-    private fun door(check: (StandInCore, FrontDoor) -> Unit) {
+    private fun adapter(check: (StandInCore, RunningAdapter) -> Unit) {
         val core = StandInCore().apply { projects += project }
-        FrontDoor(core).use { check(core, it) }
+        RunningAdapter(core).use { check(core, it) }
     }
 
     @Test
     fun `one connection whose token changes records each call's own person, with the agent unchanged`() {
-        door { core, door ->
+        adapter { core, adapter ->
             val presenting = Presenting(tokenFor(ALEX))
-            val client = door.connectedAt(project.slug, presenting)
+            val client = adapter.connectedAt(project.slug, presenting)
 
             client.getItem()
             presenting.token = tokenFor(JORDAN)
@@ -64,9 +64,9 @@ class ActingIdentityTest {
 
     @Test
     fun `two connections working at once never take each other's pair`() {
-        door { core, door ->
-            val onAlexs = door.connectedAt(project.slug, Presenting(tokenFor(ALEX)), AN_AGENT)
-            val onJordans = door.connectedAt(project.id.toString(), Presenting(tokenFor(JORDAN)), ANOTHER_AGENT)
+        adapter { core, adapter ->
+            val onAlexs = adapter.connectedAt(project.slug, Presenting(tokenFor(ALEX)), AN_AGENT)
+            val onJordans = adapter.connectedAt(project.id.toString(), Presenting(tokenFor(JORDAN)), ANOTHER_AGENT)
 
             val each = 100
             val threads = Executors.newFixedThreadPool(8)
@@ -106,8 +106,8 @@ class ActingIdentityTest {
             "a client naming itself with an empty string" to openingFrom(""),
             "a client giving no name for itself at all" to OPENING_NAMING_NOBODY,
         ).forEach { (what, opening) ->
-            door { core, door ->
-                val at = "${door.address}$TOOLS_PATH/${project.slug}"
+            adapter { core, adapter ->
+                val at = "${adapter.address}$TOOLS_PATH/${project.slug}"
                 val opened = postedAt(at, opening)
                 assertEquals(200, opened?.status, "$what was not served")
 
@@ -123,12 +123,12 @@ class ActingIdentityTest {
 
     @Test
     fun `the requests a long-lived connection makes for itself are gated like every call it sends`() {
-        door { _, door ->
-            val opened = door.openingAt("$TOOLS_PATH/${project.slug}")
+        adapter { _, adapter ->
+            val opened = adapter.openingAt("$TOOLS_PATH/${project.slug}")
             val session = opened.header(HttpHeaders.MCP_SESSION_ID)
             assertTrue(session != null, "the opening exchange issued no session to continue on")
 
-            val at = "${door.address}$TOOLS_PATH/${project.slug}"
+            val at = "${adapter.address}$TOOLS_PATH/${project.slug}"
             listOf("GET", "DELETE").forEach { method ->
                 assertEquals(
                     UNAUTHORIZED,

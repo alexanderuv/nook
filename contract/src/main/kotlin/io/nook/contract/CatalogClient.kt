@@ -46,13 +46,13 @@ public val DEFAULT_WAIT_LIMIT: Duration = 30.seconds
  *
  * One web client serves every call and outlives them all, so a caller built
  * before the core is up recovers on its own once the core is there, without
- * being rebuilt. [close] releases it. A door binding an identity to each call
+ * being rebuilt. [close] releases it. An adapter binding an identity to each call
  * takes a view of that one client rather than a client of its own — see
  * [forActor] — because fifty clients cost threads that are not given back, and
- * a door making one per person would accumulate them.
+ * an adapter making one per person would accumulate them.
  *
  * Built as it is here it names nobody, so its writes are refused by the core.
- * That is deliberate: a door tells the core who a call is for, and one that
+ * That is deliberate: an adapter tells the core who a call is for, and one that
  * forgot must fail rather than write a row crediting nobody.
  *
  * [waitLimit] is taken here rather than fixed, because the connection has to be
@@ -218,7 +218,7 @@ internal class CoreConnection(
  * The eleven operations as one identity makes them: every call over the shared
  * [core] connection, each carrying [actor] beside it.
  *
- * This is what a door holds for the duration of one call and lets go of after,
+ * This is what an adapter holds for the duration of one call and lets go of after,
  * which is why it holds no resource of its own and offers no way to close one.
  */
 private class BoundCatalog(private val core: CoreConnection, private val actor: Actor) : OperationCatalog {

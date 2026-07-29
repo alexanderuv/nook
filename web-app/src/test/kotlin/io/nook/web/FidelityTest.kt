@@ -49,13 +49,13 @@ import kotlinx.serialization.json.putJsonArray
  */
 class FidelityTest {
 
-    private val doors = BothDoors()
+    private val both = CoreAndApi()
 
-    private val core = doors.core
+    private val core = both.core
 
     @AfterTest
     fun letGo() {
-        doors.close()
+        both.close()
     }
 
     private fun call(method: String, params: JsonObjectBuilder.() -> Unit = {}): String =
@@ -64,7 +64,7 @@ class FidelityTest {
     /** What the core was invoked with when [body] was sent to the app, and nothing else. */
     private fun reaching(body: String): Invocation {
         core.invocations.clear()
-        assertIs<RpcReply.Answered>(doors.answer(body), body)
+        assertIs<RpcReply.Answered>(both.answer(body), body)
         return core.invocations.single()
     }
 
@@ -195,7 +195,7 @@ class FidelityTest {
         core.answering = { item }
         assertEquals(
             catalogJson.encodeToJsonElement(ProjectItem.serializer(), item),
-            assertIs<RpcReply.Answered>(doors.answer(call("get_item") { put("project", PROJECT); put("ref", "x") }))
+            assertIs<RpcReply.Answered>(both.answer(call("get_item") { put("project", PROJECT); put("ref", "x") }))
                 .result,
         )
 
@@ -204,7 +204,7 @@ class FidelityTest {
         assertEquals(
             catalogJson.encodeToJsonElement(Release.serializer(), release),
             assertIs<RpcReply.Answered>(
-                doors.answer(call("create_release") { put("project", PROJECT); put("name", "Autumn") }),
+                both.answer(call("create_release") { put("project", PROJECT); put("name", "Autumn") }),
             ).result,
         )
     }
@@ -216,14 +216,14 @@ class FidelityTest {
             call("delete_item") { put("project", PROJECT); put("ref", "add-search") },
             call("delete_project") { put("ref", PROJECT) },
         ).forEach { body ->
-            val answered = assertIs<RpcReply.Answered>(doors.answer(body), body)
+            val answered = assertIs<RpcReply.Answered>(both.answer(body), body)
             assertNull(answered.result, "a delete carried an entity")
         }
 
         // Nothing about a success looks like being turned down, which is what
         // makes "no entity" readable as the success it is.
         core.answerNormally()
-        assertIs<RpcReply.Failed>(doors.answer(call("get_item") { put("project", PROJECT); put("ref", NOT_THERE) }))
+        assertIs<RpcReply.Failed>(both.answer(call("get_item") { put("project", PROJECT); put("ref", NOT_THERE) }))
     }
 
     @Test
@@ -232,7 +232,7 @@ class FidelityTest {
         core.answering = { many }
 
         val began = System.nanoTime()
-        val answered = assertIs<RpcReply.Answered>(doors.answer(call("list_items") { put("project", PROJECT) }))
+        val answered = assertIs<RpcReply.Answered>(both.answer(call("list_items") { put("project", PROJECT) }))
         val took = (System.nanoTime() - began).nanoseconds
 
         // Inside the wait limit, said out loud rather than left to the fact that

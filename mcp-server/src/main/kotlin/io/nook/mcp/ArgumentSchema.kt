@@ -19,7 +19,7 @@ import kotlinx.serialization.descriptors.StructureKind
  * core validates them and spells out the words a caller could have written, and
  * a list here would have the protocol library turn a mistyped status back in its
  * own wording before the core ever saw it — the same call reaching two different
- * verdicts depending on which door it came in by. And there is no default for
+ * verdicts depending on which adapter it came in by. And there is no default for
  * anything: a field the caller left out arrives left out.
  *
  * What is present is the marker refusing any argument the shape does not

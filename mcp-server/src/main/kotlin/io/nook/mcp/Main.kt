@@ -6,17 +6,17 @@ import io.nook.contract.UnusableSecretException
 import java.util.concurrent.CountDownLatch
 import kotlin.system.exitProcess
 
-/** The port the agent's front door answers on. */
+/** The port the MCP server answers on. */
 const val PORT_SETTING: String = "NOOK_MCP_PORT"
 
 /** Where the core is, as the address its connection answers at. */
 const val CORE_ADDRESS_SETTING: String = "NOOK_CORE_ADDRESS"
 
-/** What a token presented at this door is checked against. */
+/** What a token presented at this adapter is checked against. */
 const val TOKEN_SECRET_SETTING: String = "NOOK_TOKEN_SECRET"
 
 /**
- * The agent's front door as a program: the connection it reaches the core by,
+ * The MCP server as a program: the connection it reaches the core by,
  * and the addresses it serves projects at.
  *
  * Three settings come from outside, and none has a default. A default port
@@ -52,7 +52,7 @@ fun main() {
     val dispatcher = Dispatcher(core)
     val server = ToolServer(Gate(tokens, dispatcher), LOOPBACK, port)
 
-    println("the agent's front door is answering on ${server.start()}$TOOLS_PATH/{project}")
+    println("the MCP server is answering on ${server.start()}$TOOLS_PATH/{project}")
 
     // Nothing more for this thread to do. The process runs until it is asked to
     // stop, and lets go of the port, the connections and the core on the way out.

@@ -25,7 +25,7 @@ import org.junit.jupiter.api.TestInstance
  * the core under test is in this process either way; what crosses the connection
  * is the call, not the store.
  *
- * Every caller here is bound to the same identity, because that is what a door
+ * Every caller here is bound to the same identity, because that is what an adapter
  * does: no mutation reaches the core naming nobody, so a suite carried over
  * from before there were identities asserts what it always did, with only the
  * identity it now presents added. What a *different* identity produces, and
@@ -82,7 +82,7 @@ abstract class CatalogBehavior {
     }.forActor(SOMEBODY)
 
     companion object {
-        /** Who every call in a behavior suite is made for, standing in for a door that has read a token. */
+        /** Who every call in a behavior suite is made for, standing in for an adapter that has read a token. */
         val SOMEBODY: Actor = Actor(ALEX, AN_AGENT)
     }
 

@@ -37,7 +37,7 @@ class RefusedConnectionTest {
      * over: its connection never opens, and a tool call attempted anyway is not
      * served.
      */
-    private fun FrontDoor.turnedAwayAt(projectRef: String) {
+    private fun RunningAdapter.turnedAwayAt(projectRef: String) {
         val client = clientAt(projectRef)
         runCatching { client.initialize() }
             .onSuccess { fail("a connection at '$projectRef' was served") }
@@ -47,42 +47,42 @@ class RefusedConnectionTest {
 
     @Test
     fun `a mistyped project is refused in the opening exchange, naming what was asked for`() {
-        FrontDoor(core).use { door ->
-            val answered = door.openingAt("$TOOLS_PATH/serch-revamp")
+        RunningAdapter(core).use { adapter ->
+            val answered = adapter.openingAt("$TOOLS_PATH/serch-revamp")
 
             assertEquals(UNAVAILABLE, answered.status)
             assertTrue(
                 answered.said.contains("serch-revamp"),
                 "the refusal does not name the project asked for; it said: ${answered.said}",
             )
-            door.turnedAwayAt("serch-revamp")
+            adapter.turnedAwayAt("serch-revamp")
             assertEquals(emptyList(), core.toolCalls, "a refused connection reached the core")
         }
     }
 
     @Test
     fun `an address naming no project at all is refused the same way`() {
-        FrontDoor(core).use { door ->
-            val trailing = door.openingAt("$TOOLS_PATH/")
-            val bare = door.openingAt(TOOLS_PATH)
+        RunningAdapter(core).use { adapter ->
+            val trailing = adapter.openingAt("$TOOLS_PATH/")
+            val bare = adapter.openingAt(TOOLS_PATH)
 
             listOf(trailing, bare).forEach {
                 assertEquals(UNAVAILABLE, it.status)
                 assertTrue(it.said.contains("no project"), "the refusal says nothing about a project: ${it.said}")
             }
-            door.turnedAwayAt("")
+            adapter.turnedAwayAt("")
             assertEquals(emptyList(), core.toolCalls, "a refused connection reached the core")
         }
     }
 
     @Test
     fun `an address carrying more than a project reference is refused, naming the whole of it`() {
-        FrontDoor(core).use { door ->
+        RunningAdapter(core).use { adapter ->
             // Everything after the mount is the reference, rather than the first
             // piece of it: no reference holds a slash, so an address with more
             // in it is one nobody wrote — and reading only the first piece would
             // serve it as though they had.
-            val answered = door.openingAt("$TOOLS_PATH/search-revamp/and-then-some")
+            val answered = adapter.openingAt("$TOOLS_PATH/search-revamp/and-then-some")
 
             assertEquals(UNAVAILABLE, answered.status, "an address nobody wrote was served as one that was")
             assertTrue(
@@ -94,8 +94,8 @@ class RefusedConnectionTest {
 
     @Test
     fun `a configuration placeholder nobody filled in comes back as the person wrote it`() {
-        FrontDoor(core).use { door ->
-            val answered = door.openingAt("$TOOLS_PATH/%7B%7BPROJECT_SLUG%7D%7D")
+        RunningAdapter(core).use { adapter ->
+            val answered = adapter.openingAt("$TOOLS_PATH/%7B%7BPROJECT_SLUG%7D%7D")
 
             assertEquals(UNAVAILABLE, answered.status)
             assertTrue(
@@ -108,8 +108,8 @@ class RefusedConnectionTest {
     @Test
     fun `a core that cannot be reached says so, and never that the project is missing`() {
         core.resolving = { unreachableCore() }
-        FrontDoor(core).use { door ->
-            val answered = door.openingAt("$TOOLS_PATH/search-revamp")
+        RunningAdapter(core).use { adapter ->
+            val answered = adapter.openingAt("$TOOLS_PATH/search-revamp")
 
             assertEquals(CORE_UNREACHABLE, answered.status)
             assertTrue(
@@ -120,18 +120,18 @@ class RefusedConnectionTest {
                 answered.said.contains("search-revamp"),
                 "an unreachable core was reported as a project that does not exist: ${answered.said}",
             )
-            door.turnedAwayAt("search-revamp")
+            adapter.turnedAwayAt("search-revamp")
             assertEquals(emptyList(), core.toolCalls, "a refused connection reached the core")
         }
     }
 
     @Test
     fun `an opening exchange a web page sent is turned away`() {
-        FrontDoor(core).use { door ->
+        RunningAdapter(core).use { adapter ->
             // A page open in a browser on this machine reaches the loopback
             // address as readily as an agent does, and this server asks for no
             // credential — so the binding alone would not keep it out.
-            val fromAPage = door.openingAt("$TOOLS_PATH/search-revamp", origin = "http://a.page.example")
+            val fromAPage = adapter.openingAt("$TOOLS_PATH/search-revamp", origin = "http://a.page.example")
 
             assertEquals(FROM_A_PAGE, fromAPage.status, "a page in a browser was served; it said: ${fromAPage.said}")
             assertEquals(emptyList(), core.toolCalls, "a call a page made reached the core")
@@ -139,9 +139,9 @@ class RefusedConnectionTest {
     }
 
     @Test
-    fun `the same door serves the project that does exist`() {
-        FrontDoor(core).use { door ->
-            val opened = door.openingAt("$TOOLS_PATH/search-revamp")
+    fun `the same adapter serves the project that does exist`() {
+        RunningAdapter(core).use { adapter ->
+            val opened = adapter.openingAt("$TOOLS_PATH/search-revamp")
 
             assertEquals(200, opened.status, "a good address was refused; it said: ${opened.said}")
         }

@@ -8,24 +8,24 @@ Documents, in the order they were produced:
 - [spec-6.md](./spec-6.md) — the requirements contract. Its load-bearing
   decisions: **two identities are recorded, not one**, because on the agent
   surface a coding agent does the work and a person the agent is working for is
-  whose project it is; **both doors gain a gate at the same time**, which is what
-  makes the identity the same whichever door a call arrives at; the person comes
+  whose project it is; **both adapters gain a gate at the same time**, which is what
+  makes the identity the same whichever adapter a call arrives at; the person comes
   from the token's `sub` claim and from nothing a caller can write; and the two
   identities cross to the core beside the request rather than inside it.
 - [discovery.md](./discovery.md) — a throwaway program built against the real
   `:contract` module, settling how: the token travels with each request and the
-  client's name with the connection; one token library serves both doors and is
+  client's name with the connection; one token library serves both adapters and is
   the smallest of three; the tempting way to carry an identity is the one that
   silently attributes a write to the wrong person; and nothing about the request
   changes.
 - [plan.md](./plan.md) — the build route, steps ticked as execution proceeded.
   Its four decisions taken before the steps: that the identity binds to a
   short-lived view of the catalog rather than to a twelfth argument; that both
-  doors hold a shared secret rather than a public key; that nothing here mints a
-  token; and that the intended recipient is `nook` at both doors, fixed in code.
+  adapters hold a shared secret rather than a public key; that nothing here mints a
+  token; and that the intended recipient is `nook` at both adapters, fixed in code.
 
 One of spec-6's eighteen acceptance criteria is deliberately not met here —
-AC17, the milestone's loop run against the real store with both doors up. It
+AC17, the milestone's loop run against the real store with both adapters up. It
 belongs to [epic 09](../09-full-system-test/), which spec-6 already assigns it
 to and which already records the same debt from epics 06 and 07.
 
@@ -43,20 +43,20 @@ make. `item_dependency` records nobody, by having no audit column to record one
 in; `document` keeps its audit columns and gains no agent columns until the
 document layer writes it.
 
-**Both front doors now ask for a bearer token, and this reverses a settled
+**Both adapters now ask for a bearer token, and this reverses a settled
 decision.** [Spec-4](../06-mcp-server/spec-4.md) REQ45 and
 [spec-5](../07-web-api/spec-5.md) REQ31 each said the surface requires no
 credential; both are amended in place, pointing here. A call presenting no valid
 token comes back 401 carrying `WWW-Authenticate` in the fuller form
 [RFC 6750](https://www.rfc-editor.org/rfc/rfc6750) §3 defines — the realm, that
 the token was what was wrong, and what was wrong with it. The loopback binding
-stays at both doors and at the core, and its job changed: it is no longer the
+stays at both adapters and at the core, and its job changed: it is no longer the
 whole of the protection but what keeps a token travelling in the clear off any
 other machine.
 
 **One reading of a token, mounted twice.** `BearerTokens` lives in `:contract`
 beside the shared answering function, for the same reason that does: two
-readings in two modules would make "the identity is the same whichever door a
+readings in two modules would make "the identity is the same whichever adapter a
 call arrives at" a promise two programs keep rather than a fact, and the first
 time one of them added a check the other did not, it would stop being true. It
 uses Nimbus in its assembled one-call form — the parse-then-verify calls report a
@@ -64,7 +64,7 @@ bad signature by *returning* a value, so one missing `if` accepts every token
 whoever signed it — and adds the four checks no token library makes: a `sub` that
 is empty, only spaces, longer than 200 characters, or holding a NUL character is
 not a person this store can attribute a row to. Everything else is recorded
-verbatim: emoji and non-Latin script come back byte for byte, because a door that
+verbatim: emoji and non-Latin script come back byte for byte, because an adapter that
 normalised anything would credit a row to somebody the token never named. The
 core gains a jar it never calls, which is what that guarantee costs.
 
@@ -85,36 +85,36 @@ as one call's identity sees them. The calling library's view shares the one web
 client and sends `Nook-Subject` and `Nook-Agent` beside the request; the core's
 view hands the pair to the write path as a parameter. The thread-shaped
 alternative was refused outright: it fails on every call once the work moves to a
-thread allowed to sit and wait — which is exactly what both doors do — and where
+thread allowed to sit and wait — which is exactly what both adapters do — and where
 it passes it silently records one person's write under whoever used that thread
 last. A view costs one small object per call and no threads at all.
 
 **The request the core receives is what it received before this epic.** Byte for
 byte, field for field: the two identities ride beside it in headers of Nook's
-own, and no token of a caller's goes past either door — which the protocol's own
+own, and no token of a caller's goes past either adapter — which the protocol's own
 security rules require and which is why those two headers exist at all. The core
 still asks its callers for no credential: only the machine it runs on can reach
 it, and that stays the whole of its protection.
 
 **A mutation reaching the core naming no person is refused.** The store carries a
 fallback for the rows that predate any of this, and it must stay unreachable
-through the connection — so a door with a defect gets a `validation_failed`
+through the connection — so an adapter with a defect gets a `validation_failed`
 rather than a row nobody can attribute. The four reads take nothing and are
 served whether a call names a person or not: recording who acted is not deciding
 who may look.
 
 **What a caller cannot do.** None of the five fields is an argument any operation
 defines, so each is refused by the rule that was already there for a field nobody
-defined — at both doors and as a tool argument, with no list here to forget a
+defined — at both adapters and as a tool argument, with no list here to forget a
 sixth name. A caller writing the two crossing headers onto its own request
-reaches a door that never reads them; the person comes from the token and from
+reaches an adapter that never reads them; the person comes from the token and from
 nowhere else.
 
 ### Configuration
 
-Each door reads what it checks a token against from `NOOK_TOKEN_SECRET`, beside
+Each adapter reads what it checks a token against from `NOOK_TOKEN_SECRET`, beside
 the port and the core's address it already read. The reading is built at startup,
-so a door given a secret it could check nothing with — absent, or shorter than
+so an adapter given a secret it could check nothing with — absent, or shorter than
 the 256 bits the signing requires — stops before it serves anything, naming the
 setting rather than the key length the library complains about.
 
@@ -123,7 +123,7 @@ configuration; nothing in this epic mints one, and no command, task or fourth
 entry point ships here. The web UI arriving in milestone 4 will be handed one by
 signing in through the browser instead.
 
-Both doors holding the *same* secret is a decision with a stated cost: either
+Both adapters holding the *same* secret is a decision with a stated cost: either
 could mint a token it would then accept, which a key pair would have prevented.
 That is the trade a loopback-only milestone can take, and the login server
 deferred to [08 — Deployment & cloud](../../../docs/08-deployment-and-cloud.md)
@@ -138,23 +138,23 @@ planning artifacts):
 | Criterion | Test |
 | --- | --- |
 | AC1 | `ActingIdentityTest` in `:mcp-server` — a connection's tool calls record the person its token named and the agent its client announced; `ActorRecordedTest` in `:core-service` — a created row names its person in both audit fields and its agent in both agent fields, read back off the store as well as off the write |
-| AC2 | `GatedApiTest` in `:web-app` — every call through this door names its person and no acting agent; `ActorRecordedTest` — a project records the person as its owner, and a row written with no agent records none |
+| AC2 | `GatedApiTest` in `:web-app` — every call through this adapter names its person and no acting agent; `ActorRecordedTest` — a project records the person as its owner, and a row written with no agent records none |
 | AC3 | `ActorRecordedTest` — a change replaces what last touched a row and leaves what created it alone; a person changing an agent's row leaves the created agent and clears the updated one; an agent changing a person's row leaves the created agent empty; an update naming no field at all still succeeds |
 | AC4 | `UnnameableActorTest` in `:core-service` — a project's owner still reads what it read when it was created, after every operation in the catalog has run against it |
-| AC5 | `WhoWroteItCrossesTest` in `:web-app` — a project, an item under an epic with two blockers, and a release each arrive carrying who wrote them, equal to the entity the core produced; `WhoWroteItCrossesTest` in `:mcp-server` — the same for the entities that cross that door, against the same shared stand-in. The agent surface serves the seven project-scoped operations and so reads no project at all: the project half of this criterion is the web API's, and the assembled comparison is epic 09's |
+| AC5 | `WhoWroteItCrossesTest` in `:web-app` — a project, an item under an epic with two blockers, and a release each arrive carrying who wrote them, equal to the entity the core produced; `WhoWroteItCrossesTest` in `:mcp-server` — the same for the entities that cross that adapter, against the same shared stand-in. The agent surface serves the seven project-scoped operations and so reads no project at all: the project half of this criterion is the web API's, and the assembled comparison is epic 09's |
 | AC6 | `UnnameableActorTest` — each of the five sent as an argument is refused as a field the operation does not define, with the store unchanged; `SmuggledActorTest` in `:mcp-server` — each of the five sent as a tool argument is turned back naming the one at fault, and no declared tool offers an argument for either identity; `GatedApiTest` — a caller naming somebody else in headers of its own is recorded as the person its token named |
 | AC7 | `UnnameableActorTest` — replacing a blocker set advances the item and the edges hold no such field at all; deleting an epic takes its children and leaves no row anywhere naming who removed them |
 | AC8 | `GatedConnectionTest` in `:mcp-server` and `GatedApiTest` in `:web-app` — a call with no `Authorization` header and one carrying something that is not a bearer token each come back 401 carrying `WWW-Authenticate`, with the stand-in core recording nothing, and the next valid call served normally |
-| AC9 | `GatedConnectionTest` and `GatedApiTest` — the same table of tokens that do not hold up, at each door: signed with something else, expired, issued for another recipient, carrying no `sub`, an empty one, one of only spaces, and one of 201 characters; `BearerTokenTest` in `:contract` — the twelve-token table itself, including the two that must be read |
+| AC9 | `GatedConnectionTest` and `GatedApiTest` — the same table of tokens that do not hold up, at each adapter: signed with something else, expired, issued for another recipient, carrying no `sub`, an empty one, one of only spaces, and one of 201 characters; `BearerTokenTest` in `:contract` — the twelve-token table itself, including the two that must be read |
 | AC10 | `GatedApiTest` — a call refused for its token and one refused for its contents differ in numeric status, and only the second carries one of the four domain reasons |
 | AC11 | `GatedConnectionTest` — a client opening a connection without a token gets no session and can list no tool; an ordinary client opens a connection, lists its tools and calls one through the gate |
 | AC12 | `ActingIdentityTest` — a client naming itself with an empty string and one giving no name at all are both served, recording no acting agent; `GatedConnectionTest` — a client naming itself with 200 characters is served and one with 201 is refused saying the name is too long |
 | AC13 | `IdentityCrossingTest` in `:contract` — driven against a recording core, the request body is byte for byte the one sent before this epic, the two identities arrive as headers, no header carries a token, and sixteen callers making ten calls each are all 160 attributed correctly |
 | AC14 | `ActorRecordedTest` — each of the seven mutations across the connection naming no person fails as a validation failure writing nothing, and each of the four reads naming none is served, the core asking for no credential of its own |
-| AC15 | `ToolProgramTest` in `:mcp-server` and `WebProgramTest` in `:web-app` — each door started without `NOOK_TOKEN_SECRET` stops and names it; started with a secret it could check no token with it stops and names it; started with a usable one it serves a call presenting a token minted against that same secret |
+| AC15 | `ToolProgramTest` in `:mcp-server` and `WebProgramTest` in `:web-app` — each adapter started without `NOOK_TOKEN_SECRET` stops and names it; started with a secret it could check no token with it stops and names it; started with a usable one it serves a call presenting a token minted against that same secret |
 | AC16 | `BearerTokenTest` — a person written in emoji and another script comes back byte for byte; `ActorRecordedTest` — the same survives the store; `ActingIdentityTest` — two connections driven from eight threads with 100 calls each record 200 calls, none carrying the other's pair |
-| AC17 | Epic 09 — the milestone's loop needs the real core over a real store with both doors up |
-| AC18 | Every acceptance criterion of spec-4 and spec-5 runs again through each module's own test helpers, which now present a valid token on every request — `FrontDoor` in `:mcp-server` and `sentTo` in `:web-app`. Every one of those checks reaches the verdict it reached before this epic, unedited but for the identity it now presents |
+| AC17 | Epic 09 — the milestone's loop needs the real core over a real store with both adapters up |
+| AC18 | Every acceptance criterion of spec-4 and spec-5 runs again through each module's own test helpers, which now present a valid token on every request — `RunningAdapter` in `:mcp-server` and `sentTo` in `:web-app`. Every one of those checks reaches the verdict it reached before this epic, unedited but for the identity it now presents |
 
 ### What this epic changed elsewhere
 

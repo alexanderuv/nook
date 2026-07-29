@@ -18,7 +18,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 
 // Rows to contract entities, shared by both paths: a read returns exactly what
 // the write that produced it returned. Who wrote a row comes out with it,
-// unaltered — the store holds exactly the two names a door told the core, and
+// unaltered — the store holds exactly the two names an adapter told the core, and
 // what a caller reads back is those. An unknown stored code is a corrupted
 // store, not a caller error — this service is the single writer and never
 // stores one — so it fails loudly instead of mapping to anything.

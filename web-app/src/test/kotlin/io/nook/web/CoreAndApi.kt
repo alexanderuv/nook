@@ -41,7 +41,7 @@ import kotlinx.coroutines.withContext
  * The real one lives beside the store, which this module may not reach in any
  * source set — so what stands in for it here is what is left of it once the
  * store is taken away, which is exactly the three things above. That is what
- * makes "the same request, sent to both doors" a fair comparison rather than a
+ * makes "the same request, sent to both addresses" a fair comparison rather than a
  * comparison with a second implementation.
  *
  * [port] may be fixed by the caller rather than chosen by the machine, because
@@ -95,7 +95,7 @@ private fun Application.coreRoute(catalog: OperationCatalog) {
 }
 
 /**
- * Who the call is for arrives beside the request, in the two headers a door
+ * Who the call is for arrives beside the request, in the two headers an adapter
  * sends, and is bound before anything is run — as the real core does it. No
  * credential is asked for here, and the real core asks for none either.
  */
@@ -109,14 +109,14 @@ private suspend fun ApplicationCall.answerWith(catalog: OperationCatalog) {
 }
 
 /**
- * Both doors over one stand-in core: the core's own connection, and the app in
+ * Both addresses over one stand-in core: the core's own connection, and the app in
  * front of it with the calling library between.
  *
  * Every check in this module goes through here, because what this surface is
  * for is being the same contract as the connection behind it — and a check that
  * stood up only the app would have nothing to say that against.
  */
-class BothDoors(
+class CoreAndApi(
     val core: StandInCore = StandInCore(),
     waitLimit: kotlin.time.Duration = DEFAULT_WAIT_LIMIT,
     corePort: Int = 0,
@@ -137,7 +137,7 @@ class BothDoors(
     /** Where the app is, without the address the operations are at. */
     val appAddress: String = app.address
 
-    /** What each door answered to [body], for the checks that compare the two. */
+    /** What each adapter answered to [body], for the checks that compare the two. */
     fun bothAnswers(body: String): Pair<RpcReply, RpcReply> =
         replyFrom(coreAddress, body) to replyFrom(apiAddress, body)
 
@@ -208,9 +208,9 @@ fun sentTo(
 /**
  * The reply [address] gave to [body], read as a reply.
  *
- * [naming] is who the call is for, as a door tells the core beside the request.
+ * [naming] is who the call is for, as an adapter tells the core beside the request.
  * Only a check reaching the core directly supplies it — there it is standing in
- * for a door, and a door says who its call is for. The app takes the person
+ * for an adapter, and an adapter says who its call is for. The app takes the person
  * from the token alone and reads no such header, which is the whole of why a
  * caller cannot name somebody else.
  */

@@ -73,10 +73,11 @@ Silently sort every section into three buckets:
   chain already fixes (Phase 2) is never a gap — deriving it is drafting, not
   asking.
 
-Interview the gaps one question per turn. Order by leverage: whatever the
-template itself calls most important first (a PRD's Problem, a manifesto's
-Vision), then whatever each answer unblocks. The finished document keeps
-template order regardless of interview order.
+Interview the gaps one question per turn, numbered in one running series across
+the whole interview. Order by leverage: whatever the template itself calls most
+important first (a PRD's Problem, a manifesto's Vision), then whatever each
+answer unblocks. The finished document keeps template order regardless of
+interview order.
 
 For each question:
 
@@ -134,10 +135,10 @@ For each question:
 - **A settled answer stays settled** — never re-ask it. Research the user
   asked for that confirms their direction gets reported and its consequences
   declared; the question reopens only if the findings contradict it.
-- **1–2 recommendations**, one-sentence rationale each, default marked when
-  one is clearly stronger. Ground them in the project's own corpus first (its
-  specs, design docs, existing documents); research outward only when the
-  corpus is silent.
+- **Recommend one option by letter**, with a one-sentence rationale. Ground it
+  in the project's own corpus first (its specs, design docs, existing
+  documents); research outward only when the corpus is silent. Where two are
+  genuinely equal, say so rather than inventing a preference.
 - **The guidance comment is the acceptance test.** When an answer fails the
   template's own stated test (an adjective where it demands a number, a
   solution-shaped "problem", a requirement tracing to no goal), push back once
@@ -154,10 +155,6 @@ For each question:
   (spec-altitude detail in a PRD, architecture in a manifesto) gets flagged
   and parked — offer to note it as input for that other document, don't
   absorb it.
-- `AskUserQuestion` carries any question whose options fit its dialog, which
-  after the closed-question rule is nearly all of them. Use prose only when an
-  option needs more room than the dialog gives it — and name the candidate
-  answers there too.
 - **Open questions are exhausted by interviewing, not deposited.** As long as
   an open question remains that the user could settle, the interview
   continues — an open-questions entry is reserved for what the user *also*
@@ -165,6 +162,55 @@ For each question:
   investigation); it records an asked question, never an unasked one.
   (A template whose open-questions section is an *output* of the work —
   discovery's, for instance — carries its own rule; the template wins.)
+
+#### How a question is laid out
+
+Write every question into the reply as text. Do **not** use `AskUserQuestion`
+for it: its dialog cannot hold a context paragraph, lettered options and a
+recommendation at once, and the user answers by typing rather than by picking
+from a list.
+
+Head each question with its number in the running series and a title that names
+the decision, so the heading alone says what is being settled. **The title obeys
+the plain-words tenet like everything else** — an everyday phrase understood
+cold, never a stack of hyphenated coinages or compressed shorthand the reader
+has to unpack ("Which tests run again against the real database", never "Which
+stand-in-proved checks the assembled run repeats for real"). Under it, in this
+order:
+
+1. **Context** — one paragraph of one or two sentences: the fact the answer
+   turns on and where it comes from (the sibling spec, the earlier epic, the
+   published standard). Not the chain of reading that got you there.
+2. **The question** — on its own line, one sentence, stating the choice.
+3. **Options** — lettered **A**, **B**, **C** (two to four), each a short label
+   and one sentence of what the user's world looks like under it. Each names the
+   prior art it comes from where it has one.
+4. **A recommendation** — which letter, and one sentence of why. Where the
+   options are genuinely equal, say that instead of manufacturing a preference.
+5. **An open door** — one line inviting an answer none of the letters names.
+
+The shape, on a real decision:
+
+> **Question 3 — Where the assembled system's programs are started from**
+>
+> `ToolProgramTest` already launches the MCP server as a real operating-system
+> process with `ProcessBuilder`, against a stand-in core; nothing yet starts all
+> three programs at once.
+>
+> **The question:** do the core, the MCP server and the web app run here as
+> separate processes, or as servers built inside one test process?
+>
+> - **A — Three real processes.** Each started from its own `main` with its
+>   `NOOK_*` settings in the environment, against embedded Postgres.
+> - **B — One test process.** `CatalogServer`, `ToolServer` and `WebApi` built in
+>   the test JVM on real loopback ports; the three `main` functions never run.
+> - **C — Core as a process, adapters in-process.** The store and the connection
+>   are real; the adapters' own startup is not.
+>
+> **Recommendation:** A — it is the only shape in which the settings each program
+> reads at startup are exercised at all.
+>
+> Or answer in your own words, if a constraint here accounts for none of these.
 
 #### Voice
 
@@ -175,11 +221,10 @@ You are a colleague asking a question, not a process reporting status.
 - One short question in plain words, with just enough context to answer it.
   If answering requires reading three paragraphs first, the question isn't
   ready to ask.
-- **The length budget is real.** A question is at most three sentences: one
-  naming the decision, one carrying the fact the answer turns on, one asking.
-  A label is at most six words; a description is one sentence. Run longer and
-  you are explaining your reasoning rather than asking — cut the explanation,
-  never the facts.
+- **The length budget is real.** The context paragraph is one or two sentences
+  and the question itself is one; an option's label is at most six words and its
+  description one sentence. Run longer and you are explaining your reasoning
+  rather than asking — cut the explanation, never the facts.
 - **Name the thing, then gloss it — never paraphrase it away.** Precision is
   not jargon. Write "the loopback address (`127.0.0.1`)", not "the address a
   machine uses to reach itself"; "the fault reply's `message` field", not "the
@@ -194,12 +239,12 @@ You are a colleague asking a question, not a process reporting status.
 - **Show the consequence, not the category.** For a technical choice, one
   concrete line of what happens beats a paragraph of characterization: "a typo
   in the config stops the program at startup" against "the program starts on
-  defaults nobody chose". A code fragment, a wire payload, or a filename in
-  the option's `preview` does this better than any sentence — reach for it
-  first.
+  defaults nobody chose". A code fragment, a wire payload, or a filename does
+  this better than any sentence — reach for it first, in a fenced block under
+  the option it belongs to when it needs more than a line.
 - **Self-contained means it stands without the chat, not that it recaps your
-  reading.** Prose you write before the tool call may never be seen, so the
-  question must carry the one fact the answer turns on. It must not carry the
+  reading.** The question must carry the one fact the answer turns on. It must
+  not carry the
   chain of documents you read to find that fact: name a source in a clause
   ("spec-5 requires…", "epic 05 did this, and it cost…"), never in a sentence
   of its own.
@@ -216,7 +261,7 @@ You are a colleague asking a question, not a process reporting status.
   calls reported with the finished file.
 - Quote the template only when pushing back, and only the one relevant line.
 
-Calibration, on a real decision:
+Calibration, on the context paragraph of a real question:
 
 > **Too long** — "The discovery for epic 07 left exactly one thing for you to
 > settle before a plan can be written, and it is a change to something already
@@ -228,11 +273,11 @@ Calibration, on a real decision:
 >
 > **Right** — "A fault reply carries only `message`, so a caller can't tell
 > 'the core was unreachable' from 'the core answered and broke' — and spec-5
-> needs that distinction, since only the first is worth retrying. Add a
-> `reached` field to the reply, or make the message start with a fixed word?"
+> needs that distinction, since only the first is worth retrying."
 
-Same decision, same facts, a quarter of the words — and the short one names
-the field, which the long one spent two sentences avoiding.
+Same facts, a quarter of the words — and the short one names the field, which
+the long one spent two sentences avoiding. The choice itself then goes on its
+own line, and the two candidates become options A and B.
 
 When the questions run out, the interview is over and the document gets
 written — in that same turn, without asking permission to write it. Never dump

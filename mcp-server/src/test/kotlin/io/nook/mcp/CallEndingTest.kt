@@ -44,13 +44,13 @@ class CallEndingTest {
 
     private val core = StandInCore().apply { projects += project }
 
-    private val door = FrontDoor(core)
+    private val adapter = RunningAdapter(core)
 
-    private val client = door.connectedAt(project.slug)
+    private val client = adapter.connectedAt(project.slug)
 
     @AfterTest
     fun letGo() {
-        door.close()
+        adapter.close()
     }
 
     /** What the core does with the next call, with the record of what reached it wiped clean. */

@@ -15,7 +15,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * below.
  *
  * The misbehaviours ride on the reference a call names rather than on a switch,
- * so one request written once can be sent to both doors and produce the same
+ * so one request written once can be sent to both addresses and produce the same
  * ending at each without anything being set up in between.
  */
 class StandInCore : RecordingCore() {

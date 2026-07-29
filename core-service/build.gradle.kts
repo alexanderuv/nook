@@ -21,7 +21,7 @@ dependencies {
     runtimeOnly(libs.postgresql.jdbc)
 
     // The names the checks are about — the person a call is made for, the agent
-    // acting — shared with both doors, so that no two modules disagree about who
+    // acting — shared with both adapters, so that no two modules disagree about who
     // `alex` is.
     testImplementation(testFixtures(project(":contract")))
     testImplementation(libs.zonky.embedded.postgres)

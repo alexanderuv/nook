@@ -37,13 +37,13 @@ class CallEndingTest {
 
     private val corePort = freePort()
 
-    private val doors = BothDoors(waitLimit = 2.seconds, corePort = corePort)
+    private val both = CoreAndApi(waitLimit = 2.seconds, corePort = corePort)
 
-    private val core = doors.core
+    private val core = both.core
 
     @AfterTest
     fun letGo() {
-        doors.close()
+        both.close()
     }
 
     private fun getItem(ref: String) = rawCall("get_item", """{"project":"search-revamp","ref":"$ref"}""")
@@ -51,7 +51,7 @@ class CallEndingTest {
     /** What the app answered, with the record of what reached the core wiped first. */
     private fun ending(body: String): Answer {
         core.invocations.clear()
-        return sentTo(doors.apiAddress, body)
+        return sentTo(both.apiAddress, body)
     }
 
     private fun replyOf(answered: Answer): RpcReply =
@@ -60,7 +60,7 @@ class CallEndingTest {
     /** The next call is served normally, which is what says the app is still serving. */
     private fun stillServing() {
         core.answerNormally()
-        assertIs<RpcReply.Answered>(doors.answer(rawCall("list_projects")), "the next call was not served normally")
+        assertIs<RpcReply.Answered>(both.answer(rawCall("list_projects")), "the next call was not served normally")
     }
 
     @Test
@@ -77,7 +77,7 @@ class CallEndingTest {
             rawCall("teleport_item"),
         )
         everyEnding.forEach { body ->
-            assertEquals(200, sentTo(doors.apiAddress, body).status, "an ending was left to the number: $body")
+            assertEquals(200, sentTo(both.apiAddress, body).status, "an ending was left to the number: $body")
         }
     }
 
@@ -98,7 +98,7 @@ class CallEndingTest {
 
         expected.forEach { (ref, refusal) ->
             val (code, data) = refusal
-            val failed = assertIs<RpcReply.Failed>(doors.answer(getItem(ref)), ref)
+            val failed = assertIs<RpcReply.Failed>(both.answer(getItem(ref)), ref)
             assertEquals(code.rpcCode, failed.error.code, ref)
             assertEquals(data, failed.error.data, ref)
             // The message is the core's own, word for word, rather than
@@ -120,7 +120,7 @@ class CallEndingTest {
             "project" to rawCall("get_item", """{"project":"$GONE","ref":"add-search"}"""),
             "item" to getItem(NOT_THERE),
         ).forEach { (missing, body) ->
-            val failed = assertIs<RpcReply.Failed>(doors.answer(body), missing)
+            val failed = assertIs<RpcReply.Failed>(both.answer(body), missing)
             assertEquals(RpcCode.NOT_FOUND, failed.error.code, missing)
             assertEquals(missing, failed.error.asStructuredError()?.details?.get("missing"), missing)
         }
@@ -133,7 +133,7 @@ class CallEndingTest {
         assertEquals(1, core.invocations.size, "a defect did not reach the core exactly once")
         stillServing()
 
-        doors.stopCore()
+        both.stopCore()
         val neverStarted = ending(getItem("add-search"))
 
         assertEquals(defect, neverStarted, "the two failures are told apart by something the caller can see")
@@ -147,7 +147,7 @@ class CallEndingTest {
 
         // And once the core is back, the same call succeeds — with nothing
         // restarted and no caller rebuilt.
-        doors.startCore()
+        both.startCore()
         stillServing()
     }
 
@@ -156,9 +156,9 @@ class CallEndingTest {
         core.patience = 30.seconds
         val outcome = AtomicReference<RpcReply>()
         core.invocations.clear()
-        val calling = thread { outcome.set(doors.answer(getItem(SLOW))) }
+        val calling = thread { outcome.set(both.answer(getItem(SLOW))) }
         Thread.sleep(300)
-        doors.stopCore()
+        both.stopCore()
         calling.join()
 
         val brokenOff = assertIs<RpcReply.Failed>(outcome.get())
@@ -167,13 +167,13 @@ class CallEndingTest {
         assertEquals(NO_VERDICT, brokenOff.error.message)
         assertEquals(1, core.invocations.size, "the interrupted call did not reach the core exactly once")
 
-        doors.startCore()
+        both.startCore()
         stillServing()
 
         // A core that answers nothing at all: the wait runs out, and the request
         // reached it once — nothing sent again on the caller's behalf.
         core.invocations.clear()
-        val silent = assertIs<RpcReply.Failed>(doors.answer(getItem(SILENT)))
+        val silent = assertIs<RpcReply.Failed>(both.answer(getItem(SILENT)))
         assertEquals(RpcCode.INTERNAL_ERROR, silent.error.code)
         assertNull(silent.error.data)
         assertEquals(NO_VERDICT, silent.error.message)
@@ -184,7 +184,7 @@ class CallEndingTest {
 
     @Test
     fun `a failure that produced no verdict names no part of Nook`() {
-        val failed = assertIs<RpcReply.Failed>(doors.answer(getItem(A_DEFECT)))
+        val failed = assertIs<RpcReply.Failed>(both.answer(getItem(A_DEFECT)))
         listOf("core", "connection", "database", "store", "catalog", "web", "app", "defect", corePort.toString())
             .forEach {
                 assertTrue(

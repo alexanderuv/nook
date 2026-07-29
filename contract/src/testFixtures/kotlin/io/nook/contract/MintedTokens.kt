@@ -14,9 +14,9 @@ import java.util.Date
 // Nook runs no server that hands tokens out, and the milestone's own token is
 // minted once by hand and written into a caller's configuration.
 //
-// They ship beside the stand-in core because both doors' checks present the
+// They ship beside the stand-in core because both adapters' checks present the
 // same ones, and two sets free to differ would leave "the identity is the same
-// whichever door a call arrives at" untested.
+// whichever adapter a call arrives at" untested.
 
 /**
  * The secret the checks sign with. Exactly 256 bits, which is the least the
@@ -25,7 +25,7 @@ import java.util.Date
  */
 public const val THE_SECRET: String = "a-secret-long-enough-for-signing"
 
-/** A second secret, for the tokens a door was never configured to accept. */
+/** A second secret, for the tokens an adapter was never configured to accept. */
 public const val ANOTHER_SECRET: String = "a-quite-different-signing-secret"
 
 /** The person most of these checks are about. */
@@ -36,7 +36,7 @@ public const val JORDAN: String = "jordan"
 
 /**
  * A person's name in emoji and non-Latin script, which must come back exactly
- * as the token held it — a door that normalised anything would credit a row to
+ * as the token held it — an adapter that normalised anything would credit a row to
  * somebody the token never named.
  */
 public const val WRITTEN_IN_ANOTHER_SCRIPT: String = "søk-🔍-用户"

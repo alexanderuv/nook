@@ -19,10 +19,10 @@ private val WHO_WROTE_IT = listOf("createdBy", "updatedBy", "createdByAgent", "u
  * Who wrote a row, crossing the agent surface: on the entity, and equal to what
  * the core produced.
  *
- * The comparison is against the stand-in both doors share, which is what makes
- * "each door's entity equals the other's" something these checks can say from
- * inside one module — two doors measured against stand-ins free to differ would
- * have been shown nothing. What the two doors do differ on is which entities
+ * The comparison is against the stand-in both adapters share, which is what makes
+ * "each adapter's entity equals the other's" something these checks can say from
+ * inside one module — two adapters measured against stand-ins free to differ would
+ * have been shown nothing. What the two adapters do differ on is which entities
  * cross them: the agent surface offers the seven project-scoped operations, so
  * no project is read here, deliberately.
  */
@@ -32,13 +32,13 @@ class WhoWroteItCrossesTest {
 
     private val core = StandInCore().apply { projects += project }
 
-    private val door = FrontDoor(core)
+    private val adapter = RunningAdapter(core)
 
-    private val client = door.connectedAt(project.slug)
+    private val client = adapter.connectedAt(project.slug)
 
     @AfterTest
     fun letGo() {
-        door.close()
+        adapter.close()
     }
 
     private fun answering(entity: Any?, tool: String, vararg arguments: Pair<String, Any?>): String {

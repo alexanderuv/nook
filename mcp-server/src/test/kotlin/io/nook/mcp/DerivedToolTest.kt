@@ -27,9 +27,9 @@ class DerivedToolTest {
 
     private val core = StandInCore().apply { projects += project }
 
-    /** Opens one connection to [project], runs [check], and lets go of the whole door. */
+    /** Opens one connection to [project], runs [check], and lets go of the whole adapter. */
     private fun connected(check: (McpSyncClient) -> Unit) {
-        FrontDoor(core).use { door -> check(door.connectedAt(project.slug)) }
+        RunningAdapter(core).use { adapter -> check(adapter.connectedAt(project.slug)) }
     }
 
     /** The changes the stand-in was asked to make, from the one call it recorded. */

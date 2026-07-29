@@ -15,7 +15,7 @@ an operation over a connection: the request is a set of named fields carrying
 carries either `result` or an `error` object of `code`, `message` and an
 optional `data`. **The core** is the program that owns the database, built by
 epics 03 and 04. **The client** is the one piece of code, shared by both front
-doors, that calls the core and reads its replies, built by epic 05. **A shape**
+adapters, that calls the core and reads its replies, built by epic 05. **A shape**
 is one of the plain data classes in `:contract` that a call carries, and **a
 shape's declaration** is the runtime information the serialization library keeps
 about it — its field names, which of them may be left out, and whether each
@@ -65,7 +65,7 @@ outside the machine can route to.
   thirty seconds, and never sends a call twice. It implements the same interface
   the core's own answering side runs a request against, which is what makes the
   web app the core's handler with one argument changed (FIND1 — twenty-five
-  requests came back word for word identical through both doors).
+  requests came back word for word identical through both adapters).
 
 - **Three refusals quote the serialization library at the caller.** A field the
   operation does not define, a value of the wrong kind, and a missing required
@@ -112,7 +112,7 @@ outside the machine can route to.
 
 - **Prior art for the two programs this one resembles.** The core's entry point
   (`core-service/src/main/kotlin/io/nook/core/Main.kt`) and the agent front
-  door's (`mcp-server/src/main/kotlin/io/nook/mcp/Main.kt`) each take a port and
+  adapter's (`mcp-server/src/main/kotlin/io/nook/mcp/Main.kt`) each take a port and
   one other address from the environment, refuse to start when either is
   missing, and fix the host to the loopback address in code rather than taking
   it as a setting — a host from a setting is one typo away from removing the
@@ -209,7 +209,7 @@ outside the machine can route to.
 - **No credential is asked for and none is checked** (REQ31). Binding to the
   loopback address is the whole of the protection (REQ30), which is why this
   program fixes that address in code exactly as the core and the agent front
-  door do, and takes only its port from a setting.
+  adapter do, and takes only its port from a setting.
 - **The eleven operations' behavior is not this epic's** (spec-1, spec-2,
   spec-5's first assumption): if an operation looks wrong through this surface,
   it is wrong in the core too.
@@ -224,7 +224,7 @@ outside the machine can route to.
 
 Convert the wire, then serve it. The order is riskiest first: the words a
 refusal carries, then the shapes, then the one answering side both programs
-share, then the client, then the agent front door that reads a refusal, and only
+share, then the client, then the MCP server that reads a refusal, and only
 then the web app — which by that point is a route, a client, and a program.
 
 **A request the surface cannot read comes back in Nook's own words.** Today
@@ -266,7 +266,7 @@ looks the operation up, runs it against whatever catalog it was handed, and maps
 every way that can end. The core hands it the catalog over its own store; the
 web app hands it the client. Neither program holds a rule about what a request
 means, and there is one piece of code deciding — which is what spec-5's
-requirement that both doors reach the same verdict rests on, rather than on
+requirement that both adapters reach the same verdict rests on, rather than on
 discipline.
 
 **The web app is that function on a route.** One address, `/api`, answering
@@ -317,7 +317,7 @@ passages still carry the wording ADR-2 replaced.
 database schema and the changelog; the three-state field's encoding and decoding
 — the check reads a payload before decoding it and the conversions do not
 change; the domain failure type and the roughly thirty test files that assert on
-it; the agent front door's tools, its dispatcher's routing, and what a
+it; the MCP server's tools, its dispatcher's routing, and what a
 connection is told when it opens; and the fourteen behavior suites epics 03 to
 05 built, which keep their two runs.
 
@@ -488,7 +488,7 @@ connection is told when it opens; and the fourteen behavior suites epics 03 to
 - **no-go: taking the host the app binds to as a setting** — the loopback
   binding is the whole of the protection on a surface that asks for no
   credential, and a host from a setting is one typo away from removing it; the
-  core and the agent front door both fix it in code; instead: fix it here too,
+  core and the MCP server both fix it in code; instead: fix it here too,
   and take only the port.
 
 - **no-go: a rule of this app's own about what a request may contain** — a check
@@ -514,8 +514,8 @@ connection is told when it opens; and the fourteen behavior suites epics 03 to
   announcement alone, and expect the rest of that module's checks to pass
   unedited.
 
-- **caveat: the two front doors differ on a request that came from a page, and
-  that is deliberate** — the agent front door turns one away, because a page in
+- **caveat: the two adapters differ on a request that came from a page, and
+  that is deliberate** — the MCP server turns one away, because a page in
   a browser reaches the loopback address as readily as an agent does; spec-5
   requires this surface to serve one exactly as it serves a request carrying no
   page at all, and names revisiting that as a condition of the surface reaching
@@ -634,7 +634,7 @@ throws a defect, or takes its time — except TEST1 to TEST5, which are
   diff: every step ticked with its verification observed, the blast radius
   respected — nothing changed in the write and read services' behavior, the
   schema, the three-state field's encoding and decoding, the domain failure type,
-  or the agent front door's tools and routing — every caveat honored, and any
+  or the MCP server's tools and routing — every caveat honored, and any
   mid-build divergence folded back into this text.
 
 - Run both standing checks through a separate agent handed only this plan and the

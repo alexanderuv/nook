@@ -10,10 +10,10 @@ of those codes belongs in code or in a code comment.
 
 Three phrases recur below. **The core** is the program that owns the database —
 the one epics 03 and 04 built. **The connection** is the link the core offers on
-the machine it runs on, and the only way the two front-door programs reach
+the machine it runs on, and the only way the two front-adapter programs reach
 anything it owns. **The calling library** is the single piece of code, shared by
-both front doors, that makes calls over that connection and reads the replies;
-building it is half of this epic, and it is what stops the two front doors from
+both adapters, that makes calls over that connection and reads the replies;
+building it is half of this epic, and it is what stops the two adapters from
 reading the same reply differently.
 
 ## Analysis
@@ -153,7 +153,7 @@ reading the same reply differently.
 
 - **[PRD-1](../prd-1.md)** frames the epic: its requirement REQ5 asks for the
   operation catalog to be exposed once by the core and reached by both front
-  doors; its goal GOAL2 wants one contract that holds wherever it could drift,
+  adapters; its goal GOAL2 wants one contract that holds wherever it could drift,
   which one shared calling library makes structural rather than hopeful on this
   connection; its goal GOAL4 wants no database dependency outside the core.
 
@@ -172,7 +172,7 @@ reading the same reply differently.
   "callers" rather than "processes", because the core cannot tell whether two
   callers sit in one program or two, so keeping them in separate programs is not a
   property the connection has to get right. What genuinely differs between the two
-  front doors is how each turns its own protocol into a call, and that is tested
+  adapters is how each turns its own protocol into a call, and that is tested
   where each is built. The discovery's follow-up Q6, which existed only because of
   the old wording, is closed on the same reasoning, and its first limitation no
   longer names a gap.
@@ -199,7 +199,7 @@ reading the same reply differently.
 - **No credential anywhere** (REQ27). The loopback binding is the whole of the
   protection, which is why this plan fixes the host in code rather than taking it
   from a setting — see Approach.
-- **Neither front door is touched.** `:mcp-server` and `:web-app` keep their
+- **Neither adapter is touched.** `:mcp-server` and `:web-app` keep their
   empty programs; their protocol surfaces, and the startup that will build a
   calling library from a setting, arrive with epics 06 and 07.
 - **No actor fields, no documents, no paging or search or sort options** —
@@ -438,7 +438,7 @@ operations.
 
 - [x] **STEP11** — Close the epic: confirm the database boundary check still
   passes for `:contract` now that it carries a web client, and that neither front
-  door nor the calling library resolves a database dependency (AC22, REQ30); run
+  adapter nor the calling library resolves a database dependency (AC22, REQ30); run
   `./gradlew check` on a clean checkout; push for the continuous-integration run;
   verify: green locally and in that run, with the new tests visibly executed.
   The boundary check passes for all three of `:contract`, `:mcp-server` and
@@ -514,7 +514,7 @@ thing.
 - **no-go: letting the numeric status carry which of the three endings a reply
   is** — an item that is not there and an address that is not there both answer
   404, so the number cannot decide the thing it was chosen to carry (FIND4);
-  instead: the reply names its own ending, and each front door maps that onto its
+  instead: the reply names its own ending, and each adapter maps that onto its
   own protocol in its own epic.
 
 - **caveat: reading the request outside the attempt that runs it** — the
@@ -581,7 +581,7 @@ thing.
   connection, it is wrong in-process too and belongs to epic 03's or epic 04's
   contract, not to this one.
 
-- **no-go: giving either front door anything** — the temptation is a startup, or a
+- **no-go: giving either adapter anything** — the temptation is a startup, or a
   first route, "since the library is right there"; instead: leave both empty
   programs, and let epics 06 and 07 add a startup that builds the library from a
   setting.
@@ -694,7 +694,7 @@ thing.
 - **Standing check, conformance sweep** — re-read this plan against the final
   diff: every step ticked with its verification observed, the blast radius
   respected — nothing changed in `WriteService`, `ReadService`, the store or
-  database packages, the changelog, or either front door — every caveat honored,
+  database packages, the changelog, or either adapter — every caveat honored,
   and any mid-build divergence already folded back into this text.
 
 - Run both standing checks through a separate agent handed only this plan and the
@@ -707,4 +707,4 @@ tests; every acceptance criterion of specs 1 and 2 passes both in-process and
 across the connection; the connection offers exactly the eleven operations and
 the calling library offers the same eleven under the same names; no call anywhere
 is sent twice; `:contract`, `:mcp-server`, and `:web-app` still resolve no
-database dependency; and both front doors are exactly as this epic found them.
+database dependency; and both adapters are exactly as this epic found them.

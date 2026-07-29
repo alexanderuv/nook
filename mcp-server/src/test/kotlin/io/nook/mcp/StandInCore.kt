@@ -12,7 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * projects an address can be resolved against, and a say in how that resolution
  * behaves.
  *
- * Which project an address names is the one question the door itself asks, and
+ * Which project an address names is the one question the adapter itself asks, and
  * it is asked outside any tool call — so it is answered here rather than through
  * the recorded answering, and counted apart from the tool calls below.
  */
@@ -29,18 +29,18 @@ class StandInCore : RecordingCore() {
     /**
      * Everything that reached the core through a tool.
      *
-     * The one question the door itself asks — which project an address names —
+     * The one question the adapter itself asks — which project an address names —
      * is not a tool call and is left out, so that "nothing reached the core" can
-     * be said about a refused connection without it meaning "the door never
+     * be said about a refused connection without it meaning "the adapter never
      * asked", which is a different claim.
      */
     val toolCalls: List<Invocation> get() = invocations.filterNot { it.operation == CatalogOperation.GET_PROJECT }
 
-    /** How many times the door asked which project an address names. */
+    /** How many times the adapter asked which project an address names. */
     val projectQuestions: List<Invocation> get() = invocationsOf(CatalogOperation.GET_PROJECT)
 
     /**
-     * The one question the door asks for itself is answered here rather than by
+     * The one question the adapter asks for itself is answered here rather than by
      * whatever a check told the rest of the core to answer — so a check that
      * scripts an answer for the tools does not thereby stop addresses from
      * resolving.

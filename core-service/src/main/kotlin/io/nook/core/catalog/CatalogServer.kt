@@ -40,7 +40,7 @@ const val LOOPBACK: String = "127.0.0.1"
  * Nothing here asks a caller for a credential, and that is unchanged: only the
  * machine the core runs on can reach it, and that stays the whole of its
  * protection. Who a call is for arrives beside the request in two headers of
- * Nook's own, put there by a door that has already checked a token — no token
+ * Nook's own, put there by an adapter that has already checked a token — no token
  * of a caller's ever reaches here, the protocol's own security rules forbidding
  * one being handed to anything behind a surface.
  *
@@ -80,12 +80,12 @@ private fun Application.catalogRoute(catalog: OperationCatalog) {
 }
 
 /**
- * The request, run against the core's own catalog, for whoever the door that
+ * The request, run against the core's own catalog, for whoever the adapter that
  * sent it says the call is for.
  *
  * The binding happens before the request is read and whatever the operation
- * turns out to be: a read records nobody but is still made for somebody, and a
- * door says who its call is for whatever the call does. The two names are taken
+ * turns out to be: a read records nobody but is still made for somebody, and an
+ * adapter says who its call is for whatever the call does. The two names are taken
  * exactly as they arrived — nothing trimmed, lowercased or filled in — because
  * a name altered here is a row crediting somebody the token never named.
  *
@@ -93,7 +93,7 @@ private fun Application.catalogRoute(catalog: OperationCatalog) {
  * this end of the connection contributes an address, an engine and a binding,
  * and the app behind the web UI contributes the same three around the same
  * function. Neither holds a rule about what a request contains, which is
- * what makes the two doors unable to reach different verdicts.
+ * what makes the two adapters unable to reach different verdicts.
  *
  * The store's work goes to threads that are allowed to sit and wait, kept off
  * the small pool the server answers on: that work waits on the database, and a

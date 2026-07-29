@@ -39,18 +39,18 @@ data class Answer(val status: Int, val said: String, val headers: Map<String, Li
 class Presenting(@Volatile var token: String? = tokenFor(ALEX))
 
 /**
- * The whole front door over a stand-in core, running: the gate, the dispatcher
+ * The whole adapter over a stand-in core, running: the gate, the dispatcher
  * behind it, the web container both are mounted in, and whatever connections a
  * test opens against it.
  *
  * Every check in this module goes through here rather than reaching for a
  * protocol server directly, because which project a connection is for is decided
- * at this door and nowhere else — a test that skipped it would be testing an
+ * at this adapter and nowhere else — a test that skipped it would be testing an
  * arrangement that never runs. The gate is here for the same reason: it is what
  * every request passes now, and a check that went around it would be measuring
- * a door that no longer exists.
+ * an adapter that no longer exists.
  */
-class FrontDoor(core: StandInCore) : AutoCloseable {
+class RunningAdapter(core: StandInCore) : AutoCloseable {
 
     private val dispatcher = Dispatcher(core)
 
@@ -184,7 +184,7 @@ fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
 /**
  * [dispatcher] behind the gate, as the program mounts it — for the checks that
- * stand a server up themselves rather than through [FrontDoor].
+ * stand a server up themselves rather than through [RunningAdapter].
  */
 internal fun gatedBy(dispatcher: Dispatcher): Gate = Gate(BearerTokens(THE_SECRET), dispatcher)
 
@@ -194,7 +194,7 @@ private val PATIENCE: Duration = Duration.ofSeconds(5)
 /** The header a caller presents its token in, written here as the checks write it. */
 private const val AUTHORIZATION = "Authorization"
 
-/** What a client says first. Written out rather than built, so what the door sees is not a client's idea of it. */
+/** What a client says first. Written out rather than built, so what the adapter sees is not a client's idea of it. */
 private const val OPENING =
     """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25",""" +
         """"capabilities":{},"clientInfo":{"name":"a plain client","version":"1"}}}"""

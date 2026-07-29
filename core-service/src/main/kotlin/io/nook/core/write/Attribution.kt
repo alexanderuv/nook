@@ -5,13 +5,13 @@ import io.nook.core.store.validationFailed
 
 // What a row records about who wrote it, read off the identity the call was made
 // for. Nothing here interprets either name: the core records exactly the two
-// values a door told it — nothing trimmed, lowercased, filled in or substituted
-// — because a door has already refused every shape the store could not hold.
+// values an adapter told it — nothing trimmed, lowercased, filled in or substituted
+// — because an adapter has already refused every shape the store could not hold.
 
 /**
  * The person this call was made for, or a refusal.
  *
- * Every mutation names somebody. A call that names nobody is a door with a
+ * Every mutation names somebody. A call that names nobody is an adapter with a
  * defect rather than a caller with a mistake, and the refusal is what keeps the
  * store's own fallback value unreachable through the connection: without it,
  * such a call would land on `system` and be indistinguishable afterwards from a

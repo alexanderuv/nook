@@ -32,13 +32,13 @@ import kotlin.time.Duration.Companion.seconds
  */
 class ManyAtOnceTest {
 
-    private val doors = BothDoors()
+    private val both = CoreAndApi()
 
-    private val core = doors.core
+    private val core = both.core
 
     @AfterTest
     fun letGo() {
-        doors.close()
+        both.close()
     }
 
     @Test
@@ -47,11 +47,11 @@ class ManyAtOnceTest {
         val order = CopyOnWriteArrayList<String>()
 
         val slowly = thread {
-            assertIs<RpcReply.Answered>(doors.answer(rawCall("get_item", """{"project":"p","ref":"$SLOW"}""")))
+            assertIs<RpcReply.Answered>(both.answer(rawCall("get_item", """{"project":"p","ref":"$SLOW"}""")))
             order += "the slow one"
         }
         Thread.sleep(300)
-        assertIs<RpcReply.Answered>(doors.answer(rawCall("list_projects")))
+        assertIs<RpcReply.Answered>(both.answer(rawCall("list_projects")))
         order += "the fast one"
         slowly.join()
 
@@ -73,7 +73,7 @@ class ManyAtOnceTest {
             anItem()
         }
 
-        val api = URI.create(doors.apiAddress)
+        val api = URI.create(both.apiAddress)
         repeat(RUNS) { run ->
             abandonMidWrite(
                 api,

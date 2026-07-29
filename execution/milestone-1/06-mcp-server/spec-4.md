@@ -2,7 +2,7 @@
 
 ## Overview & scope
 
-This spec is the requirements contract for **the agent's front door**: the app
+This spec is the requirements contract for **the MCP server**: the app
 that lets a coding agent do Nook's work by calling tools, over the Model Context
 Protocol — the shared convention by which an agent discovers what another
 program can do for it and then calls those things by name. It is the one
@@ -39,7 +39,7 @@ of nothing else. But a client's configuration is not something an agent itself
 gets to read, so the address alone would leave the agent unable to say where it
 is. So when a connection opens, the server asks the core about that project once,
 before it serves anything: the answer decides whether the address names a real
-project — refusing a mistyped one at the door rather than on every call — and it
+project — refusing a mistyped one when the connection opens rather than on every call — and it
 is also what the server tells the client about the connection, so the agent can
 name the project it is in, and read what that project is for, without calling
 anything. Nothing in that announcement is reachable through a tool, so an agent
@@ -317,7 +317,7 @@ to keep it out, because the server is not reachable from where it called.
 
 A connection can outlive the thing it names. A person can delete a project on the
 web surface while an agent sits on an open connection for hours, so checking the
-address once at the door is not enough on its own. Two things keep a connection
+address once when the connection opens is not enough on its own. Two things keep a connection
 honest without a second round of checking before every call: it holds the
 project's **id**, which is never handed to another project, whereas the slug in
 its address is freed by deletion and can be given to one — so an agent cannot be
@@ -647,11 +647,19 @@ and how it is done is a development-time choice.
   answer holds exactly the open leaves nothing is holding up — the first task and
   the bug, not the second task — in the core's own order, and the run passes
   unattended against local Postgres.
-- **AC26** (REQ3, REQ21, REQ28) — Given the acceptance criteria of
+- **AC26** — ~~Given the acceptance criteria of
   [spec-1](../03-core-write-path/spec-1.md) and
   [spec-2](../04-structure-queries/spec-2.md) that exercise the seven operations
   of REQ1, when each is driven through the matching tool instead of against the
-  core directly, then each reaches the same verdict it reaches in-process.
+  core directly, then each reaches the same verdict it reaches in-process.~~
+  **Struck by [spec-7](../09-full-system-test/spec-7.md).** Every operation
+  reaches the store through the one core, so driving a rule suite through a tool
+  cannot reach a different verdict about that rule — and what this server has of
+  its own, the translation into the protocol's shapes, is what the checks in this
+  module already exercise against a stand-in core, which is faithful for exactly
+  that. Running the two rule suites again through real programs would re-assert,
+  at the cost of a long run, what the core's own suite proves against a real
+  database.
 
 ## Definitions
 

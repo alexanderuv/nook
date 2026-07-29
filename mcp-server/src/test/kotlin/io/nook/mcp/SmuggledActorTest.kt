@@ -29,7 +29,7 @@ class SmuggledActorTest {
     private val core = StandInCore().apply { projects += project }
 
     private fun connected(check: (io.modelcontextprotocol.client.McpSyncClient) -> Unit) {
-        FrontDoor(core).use { door -> check(door.connectedAt(project.slug)) }
+        RunningAdapter(core).use { adapter -> check(adapter.connectedAt(project.slug)) }
     }
 
     private fun io.modelcontextprotocol.client.McpSyncClient.createItem(

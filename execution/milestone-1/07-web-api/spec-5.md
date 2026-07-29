@@ -2,7 +2,7 @@
 
 ## Overview & scope
 
-This spec is the requirements contract for **the human surface's front door**: the
+This spec is the requirements contract for **the web API**: the
 app that people and their own programs reach Nook through. Where the agent surface
 is a translation — the shape of the Model Context Protocol is set by someone
 else's specification — this one is deliberately not. The web app **serves the
@@ -90,8 +90,8 @@ Out of scope:
   to [05](../../../docs/05-project-and-ops.md). This spec requires only that the two
   addresses involved come from outside the program.
 - **The assembled run** — the milestone's north-star loop, and the check that one
-  request reaches the same verdict whichever door it comes in by, need the store,
-  the core, and both front doors running at once. They belong to
+  request reaches the same verdict whichever adapter it comes in by, need the store,
+  the core, and both adapters running at once. They belong to
   [epic 09](../09-full-system-test/), which already records this surface's share of
   them; this epic's own checks run against a stand-in core, needing no database and
   starting no other program, on the same bargain epic 06 took.
@@ -127,7 +127,7 @@ timestamps included; the listing holds exactly the open leaves nothing is holdin
 up, in the order the core produced them; and the delete reports success and hands
 back no entity, which the caller can still tell apart from an error.
 
-### SCEN3 — The same request, sent to two doors
+### SCEN3 — The same request, sent to two adapters
 
 **Initiator:** whoever is checking that there is one contract and not two.
 **Flow:**
@@ -557,13 +557,17 @@ chose.
   on the first, and `list_items` is asked for the leaf types with status `todo` and
   nothing holding them up, then the answer holds exactly the first task and the
   bug, in the core's own order.
-- **AC20** (REQ7, REQ8, REQ10) — Given the acceptance criteria of
+- **AC20** — ~~Given the acceptance criteria of
   [spec-1](../03-core-write-path/spec-1.md) and
   [spec-2](../04-structure-queries/spec-2.md), when every one of them is driven
   through this surface instead of against the core's services directly, then each
-  reaches the same verdict it reaches in the core's own process. This one needs the
-  real core over a real store, and belongs to [epic 09](../09-full-system-test/)
-  together with AC19 run against the assembled system.
+  reaches the same verdict it reaches in the core's own process.~~ **Struck by
+  [spec-7](../09-full-system-test/spec-7.md).** Every operation reaches the store
+  through the one core, so a rule suite driven through this surface cannot reach a
+  different verdict about that rule; and this surface serves the core's own shape
+  rather than a translation of its own, which the checks in this module already
+  hold it to against the core's own connection. AC19 still belongs to
+  [epic 09](../09-full-system-test/), which runs it against the assembled system.
 
 ## Definitions
 

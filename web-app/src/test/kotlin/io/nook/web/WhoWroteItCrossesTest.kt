@@ -25,26 +25,26 @@ private const val WHOSE_IT_IS = "ownerSubject"
  * Who wrote a row, crossing the web API: on the entity, and equal to what the
  * core produced.
  *
- * The comparison is against the stand-in both doors share — the same entities
+ * The comparison is against the stand-in both addresses share — the same entities
  * the agent surface's own checks compare against — which is what makes "each
- * door's entity equals the other's" something two modules can each say for
+ * adapter's entity equals the other's" something two modules can each say for
  * themselves. Every entity kind crosses here, the project included, which is
  * where a project is read: the agent surface offers no project read at all.
  */
 class WhoWroteItCrossesTest {
 
-    private val doors = BothDoors()
+    private val both = CoreAndApi()
 
-    private val core = doors.core
+    private val core = both.core
 
     @AfterTest
     fun letGo() {
-        doors.close()
+        both.close()
     }
 
     private fun answering(entity: Any?, body: String): JsonObject {
         core.answering = { entity }
-        return assertIs<JsonObject>(assertIs<RpcReply.Answered>(doors.answer(body)).result, body)
+        return assertIs<JsonObject>(assertIs<RpcReply.Answered>(both.answer(body)).result, body)
     }
 
     @Test

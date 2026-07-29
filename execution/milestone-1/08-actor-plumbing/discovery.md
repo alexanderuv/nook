@@ -10,13 +10,13 @@
   connections working at once, 200 calls, none recorded the other's pair. The
   protocol library already carries both — one line added to the transport is the
   whole of the plumbing.
-- **One library reads a token at both doors, and it is the smallest of the
+- **One library reads a token at both adapters, and it is the smallest of the
   three.** Nimbus JOSE+JWT is one jar with nothing behind it; Auth0's java-jwt
   brings four; jjwt six; Ktor's own token support brings thirty-seven and serves
-  only one of the two doors, because the agent surface is a Java servlet — a
+  only one of the two adapters, because the agent surface is a Java servlet — a
   request handler a web container runs for you — and not a Ktor route. All three refuse the same five bad tokens. None of them makes
   the checks spec-6 asks for on the person's name — an empty one, spaces only,
-  201 characters, a NUL character — so those are Nook's own work at both doors,
+  201 characters, a NUL character — so those are Nook's own work at both adapters,
   whichever library is chosen.
 - **The calling library has nowhere to put who a call is for, and the tempting
   way to add it is the one that silently attributes a write to the wrong
@@ -26,39 +26,39 @@
   nobody cleared recorded a second call, naming nobody, as `alex`. One client
   for the program with a small view of it bound to each call costs no threads at
   all, 100,000 views in 15 milliseconds, and got all 160 right.
-- **Nothing about the request changes, and no token goes past the doors.** The
+- **Nothing about the request changes, and no token goes past the adapters.** The
   request the core receives is byte for byte what it received before this epic;
   the two identities ride beside it in headers of their own; and no header the
   core saw carried a caller's token.
 - Recommendation in brief: take Nimbus in its assembled one-call form, at both
-  doors, built when the program starts — which turns "started with nothing to
+  adapters, built when the program starts — which turns "started with nothing to
   check tokens against" into a program that stops on its own; put the gate in
   front of the protocol library on the agent surface and in the route on the web
   API, writing the refusal the bearer-token standard describes rather than the
   bare word two Ktor plugins emit; grow the calling library with a view bound to
   one call's identity and never a thread-local; and turn away an over-long
-  client name at the door, which works but costs handing the opening request's
+  client name when the connection opens, which works but costs handing the opening request's
   body on so it can be read a second time.
 
 ## Questions
 
-- **Q1** — Can each door learn who a call is for from the token it presents, and
+- **Q1** — Can each adapter learn who a call is for from the token it presents, and
   can the agent surface learn what agent is acting from what the client names
   itself, so that neither can be named by a caller?; informs: [spec-6](./spec-6.md)'s
   requirements that the person come from the token's `sub` claim and nothing
   else, that the acting agent come from the opening exchange, that a caller be
   unable to name either, and that two connections never take each other's
   identity.
-- **Q2** — Which library reads a token, given that one door is a Java servlet
+- **Q2** — Which library reads a token, given that one adapter is a Java servlet
   and the other is a Ktor route, and can one library serve both?; informs: what
-  the build pins, the gate on both doors, and the requirement that a door
+  the build pins, the gate on both adapters, and the requirement that an adapter
   started with nothing to check tokens against stop rather than serve.
 - **Q3** — How do the two identities cross to the core without changing the
   request and without the caller's token going with them?; informs: spec-6's
   requirements about what crosses to the core — two values alongside the
   request, the request itself untouched, and no token handed onward.
 - **Q4 (emerged)** — Can a client naming itself with more than 200 characters be
-  turned away at the door, given that the protocol library serves it happily?;
+  turned away when the connection opens, given that the protocol library serves it happily?;
   informs: spec-6's requirement that such a connection not be served, and its
   edge case saying the answer must say the name is too long. Asked once the
   probes showed the library accepting a 201-character name and handing it
@@ -70,7 +70,7 @@ libraries, which the repository does not yet pin and which were taken at their
 current releases; six probe groups; a stand-in for the core rather than the
 core; no database; no real coding agent's client; no second machine; and no
 crowd larger than sixteen callers at once. That sufficed because every question
-here is about how the two doors take an identity in and pass it on, which one
+here is about how the two adapters take an identity in and pass it on, which one
 honest execution settles, and because what the core does with what it is told is
 already settled and tested by epics 03 to 05. Six things the bound leaves
 untested are recorded as limitations.
@@ -82,7 +82,7 @@ A throwaway Kotlin program in a scratch directory, with its own build, run
 built `:contract` module, so the probes drive the real calling library and the
 real reading of a request rather than imitations of them. Alongside it: the
 official Java MCP library at the pinned 2.0.0, Jetty 12.1.11 as the web
-container hosting its servlet-shaped transport, and Ktor 3.5.1 for the web door
+container hosting its servlet-shaped transport, and Ktor 3.5.1 for the web adapter
 — all the versions the repository already pins.
 
 **A JSON Web Token — the standard's own name for a signed set of claims a caller
@@ -94,15 +94,15 @@ turn, so the reading is measured against a token none of them wrote.
 **The core was a stand-in, not the core.** For the crossing it is a small server
 that records the two identity headers, the request body, and every header name
 it received, and answers with what it was told, so a probe can check what the
-core received rather than what a caller believed it sent. For the web door it is
+core received rather than what a caller believed it sent. For the web adapter it is
 `RecordingCore`, the stand-in both adapters already share. What the core does
 with an identity once it has one is [spec-3](../05-operation-catalog/spec-3.md)'s
 subject and belongs to the build, not to this report.
 
 Three token libraries were compared, on five axes: whether one library can serve
-both doors, which bad tokens each refuses without being asked, how a mistake in
+both adapters, which bad tokens each refuses without being asked, how a mistake in
 the code using it fails, what each costs the build, and what each does when the
-door is configured with a key it cannot use.
+adapter is configured with a key it cannot use.
 
 - **Nimbus JOSE+JWT 10.9.1** — the library Spring Security's own token support is
   built on. Tried in two forms: its low-level parse-then-verify calls, and its
@@ -110,16 +110,16 @@ door is configured with a key it cannot use.
 - **Auth0's java-jwt 4.6.0** — the library Ktor's own token support is built on.
 - **jjwt 0.13.0** — a third, widely used, in its api/impl/jackson trio.
 - **Ktor's own token support 3.5.1** was measured for what it costs and read for
-  what it can reach, but not built into a candidate for the agent door: it plugs
+  what it can reach, but not built into a candidate for the MCP server: it plugs
   into a Ktor route, and the agent surface is a servlet hosted by Jetty.
 
 Six probe groups drove them: the eleven kinds of token each library is asked to
-read; an agent door built the way `:mcp-server` builds one, with a gate in front
+read; an adapter built the way `:mcp-server` builds one, with a gate in front
 and the one line this epic would add to the transport, driven by the library's
 own client with the token changed mid-connection and by hand-written requests
 that say things no client library will say; two connections calling at once, 100
 times each, with different people and different agents; three ways of building
-the gate on the web door, each driven with eight kinds of call; four shapes for
+the gate on the web adapter, each driven with eight kinds of call; four shapes for
 carrying the identity to the core, driven by sixteen callers at once; and a
 client naming itself with 200 and 201 characters.
 
@@ -128,8 +128,8 @@ Not done: the real core and any database; the repository's own `:mcp-server` and
 real coding agent's client, so nothing here says whether one can be told to
 present a token; the official MCP Inspector, which epic 06 used and this report
 did not; any second machine; any second web container or web server engine; any
-load beyond sixteen callers; and a signing key pair at either door, which was
-tried once against a token and not built into a door.
+load beyond sixteen callers; and a signing key pair at either adapter, which was
+tried once against a token and not built into an adapter.
 
 ## Findings
 
@@ -262,8 +262,8 @@ fourth party to the reading · answers Q2
 | a subject of emoji and non-Latin script | read, `søk-🔍-用户` | read, `søk-🔍-用户` | read, `søk-🔍-用户` |
 
 The top six rows are the standard's own business and every library does them.
-The next five are Nook's: the four cases spec-6 names as refusals reach the door
-as ordinary tokens, and a door that does not check them will record an empty
+The next five are Nook's: the four cases spec-6 names as refusals reach the adapter
+as ordinary tokens, and an adapter that does not check them will record an empty
 person, a person made of spaces, or a name longer than the store can hold.
 Nimbus and java-jwt can be told to insist the claim is *present*, and both were
 told to here — which is why they refuse the seventh row and jjwt, which offers
@@ -272,7 +272,7 @@ in it.
 
 The last row is the one to keep: a person's name in emoji and non-Latin script
 comes back exactly as it went in, which is what spec-6's edge case asks and what
-would break if a door normalized anything.
+would break if an adapter normalized anything.
 
 ### FIND6 — Nimbus's low-level form has an answer a caller can forget to look at, and its assembled form does not
 
@@ -313,12 +313,12 @@ every token is accepted, whoever signed it.
 
 Ktor's is the odd one out in kind as well as size: it plugs into a Ktor route,
 so it could serve the web API and nothing on the agent surface, which is a
-servlet hosted by Jetty. Two doors sharing one reading of a token is the reason
-the identity is the same whichever door a call arrives at — so a library that
+servlet hosted by Jetty. Two adapters sharing one reading of a token is the reason
+the identity is the same whichever adapter a call arrives at — so a library that
 can only reach one of them would mean two readings, and the sameness would be a
 promise two pieces of code keep rather than a fact.
 
-### FIND8 — A door with nothing to check tokens against stops when it builds its reader, before it serves anything
+### FIND8 — An adapter with nothing to check tokens against stops when it builds its reader, before it serves anything
 
 **Confidence:** solid — executed at the moment a program would do it · answers Q2
 
@@ -331,13 +331,13 @@ built with a key too short -> KeyLengthException: The secret length must be at l
 built with a usable key    -> built
 ```
 
-So spec-6's requirement that a door started without that setting stop, naming
+So spec-6's requirement that an adapter started without that setting stop, naming
 what is missing, needs no mechanism of its own beyond building the reader during
 startup and letting the failure out. What it does not get for free is the
 *naming*: the message above says a secret is too short, not which setting was
 missing, so the words are the epic's to write.
 
-### FIND9 — On the web door all three ways of gating refuse identically, and only a hand-written refusal says what the standard defines
+### FIND9 — On the web adapter all three ways of gating refuse identically, and only a hand-written refusal says what the standard defines
 
 **Confidence:** solid — eight kinds of call through three apps · answers Q2
 
@@ -392,7 +392,7 @@ after closing all 50                    -> 14
 ```
 
 Seven threads for fifty identities, and closing them did not give the threads
-back within the run. A door that made one per person would accumulate them.
+back within the run. An adapter that made one per person would accumulate them.
 
 ### FIND11 — An identity held on the thread is wrong every time the work moves, and a thread nobody cleared attributes one person's write to another
 
@@ -456,10 +456,10 @@ any header holding a caller's token   -> false
 ```
 
 Two names added beside the request, nothing added to it, and nothing of the
-caller's credentials past the door — which is the protocol's own security rule
+caller's credentials past the adapter — which is the protocol's own security rule
 and the reason the two names exist at all.
 
-### FIND14 — A client naming itself with more than 200 characters can be turned away at the door, at the cost of handing the opening request's body on so it can be read twice
+### FIND14 — A client naming itself with more than 200 characters can be turned away when the connection opens, at the cost of handing the opening request's body on so it can be read twice
 
 **Confidence:** solid — three opening exchanges through a gate that checks it ·
 answers Q4
@@ -483,21 +483,21 @@ costs a wrapper around the request and nothing else.
 
 ## Implications & recommendation
 
-- **Take Nimbus JOSE+JWT, in its assembled one-call form, at both doors**
+- **Take Nimbus JOSE+JWT, in its assembled one-call form, at both adapters**
   (FIND5, FIND6, FIND7) — it is the only candidate that is one jar with nothing
   behind it, it reaches both a servlet and a Ktor route because it knows about
   neither, and its assembled form removes the one way of using it that silently
   accepts every token. Ktor's own token support is ruled out on the first count
   alone: it can gate the web API and cannot touch the agent surface, which would
   leave two readings of a token where spec-6 wants one.
-- **Write Nook's own four checks on the person's name at both doors** (FIND5) —
+- **Write Nook's own four checks on the person's name at both adapters** (FIND5) —
   no library makes them, and each unchecked case is a row in the store nobody
   can attribute: an empty name, a name of spaces, a name longer than the column,
   a name holding a NUL character. They belong beside the token reading rather
   than inside an operation, because a call that cannot be attributed must not
   reach the core at all.
 - **Build the reader when the program starts, and let its failure stop the
-  program** (FIND8) — that is spec-6's requirement about a door started with
+  program** (FIND8) — that is spec-6's requirement about an adapter started with
   nothing to check tokens against, met by ordering rather than by mechanism. The
   message it fails with is about key length and not about a missing setting, so
   the words are still the epic's to write.
@@ -531,9 +531,9 @@ costs a wrapper around the request and nothing else.
   ride beside it, which is what spec-6 requires and what keeps every check
   carried over from the two adapter epics meaningful. This is also the case epic
   07's discovery warned about, from the other side: a core answering with fields
-  the door was not built with becomes a fault, and it stays impossible only
+  the adapter was not built with becomes a fault, and it stays impossible only
   while both halves ship from one source tree.
-- **Turn away an over-long client name at the door, and hand the body on
+- **Turn away an over-long client name when the connection opens, and hand the body on
   re-readable** (FIND14) — the requirement stands as written, which is worth
   saying plainly because epic 06 found two of spec-4's did not. The mechanism is
   a wrapper around the opening request, and it is the kind of thing that looks
@@ -544,11 +544,11 @@ costs a wrapper around the request and nothing else.
 
 - **The core behind the crossing was a stand-in, and there was no store** — at
   risk: nothing here shows an identity reaching a written row and being read back
-  off it, so every claim above is about what the doors send, not about what gets
+  off it, so every claim above is about whwhen the connection openss send, not about what gets
   recorded; would raise confidence: driving spec-6's own criteria against the
   real core and store, which spec-6 already assigns to
   [epic 09](../09-full-system-test/).
-- **The doors here are the spike's, not the repository's** — at risk: both gates
+- **The adapters here are the spike's, not the repository's** — at risk: both gates
   were rebuilt to the shape `:mcp-server` and `:web-app` already have rather than
   added to those modules, so nothing here proves the change lands as cleanly in
   the real ones — in particular the dispatcher's existing routing, which the
@@ -564,14 +564,14 @@ costs a wrapper around the request and nothing else.
 - **One machine, one web container, one web server engine, and no load** — at
   risk: every result is Jetty and Ktor's CIO engine on macOS with at most
   sixteen callers, and the concurrency findings are the ones a real crowd would
-  test hardest; would raise confidence: a load probe against the built doors.
+  test hardest; would raise confidence: a load probe against the built adapters.
   (The write path, the read path, the connection, and both adapter epics have
   each left this question behind; this is the fifth instance, and one probe
   against the assembled system would answer all five.)
-- **Only a shared secret was built into a door** — at risk: a signing key pair
-  was minted and read back once, but no door was built holding only a public
-  key, so nothing here says what that costs or what a door would be configured
-  with; would raise confidence: building one door each way, which is a small
+- **Only a shared secret was built into an adapter** — at risk: a signing key pair
+  was minted and read back once, but no adapter was built holding only a public
+  key, so nothing here says what that costs or what an adapter would be configured
+  with; would raise confidence: building one adapter each way, which is a small
   change to the reader and no change to anything else.
 - **Minting the token was done in code, not by a person** — at risk: spec-6 says
   a person mints one token by hand and writes it into configuration, and none of
@@ -589,11 +589,11 @@ costs a wrapper around the request and nothing else.
 
 **Needs action:**
 
-- **Q5** — Does each door hold a shared secret, or a public key it can only
+- **Q5** — Does each adapter hold a shared secret, or a public key it can only
   verify with?; blocks: what "settable from outside the program" actually holds,
   and what the by-hand minting step produces; would take: a decision. The
   evidence both ways is thin and even — a shared secret is one line of
-  configuration and the same string at both doors, and a key pair means a door
+  configuration and the same string at both adapters, and a key pair means an adapter
   physically cannot mint a token it would then accept, which is what the
   protocol's authorization specification means by calling a server a resource
   server. Nothing here measured the cost of either.
@@ -602,7 +602,7 @@ costs a wrapper around the request and nothing else.
   `:contract`, and the same question mirrored on the core's answering side, which
   has to hand an identity to whatever runs the operation; would take: a decision,
   because the surface belongs to [spec-3](../05-operation-catalog/spec-3.md)
-  rather than to either door — FIND12 shows the view works and costs nothing, and
+  rather than to either adapter — FIND12 shows the view works and costs nothing, and
   FIND11 shows what the tempting third answer costs.
 
 **Follow-ups:**
@@ -623,5 +623,5 @@ costs a wrapper around the request and nothing else.
 - **Q9** — Does anything need doing about a token that has to be replaced?;
   matters because: one token minted to outlast the milestone is an assumption
   spec-6 records, and the day it stops holding, every caller's configuration is
-  rewritten at once and both doors refuse everything until they are; would take:
+  rewritten at once and both adapters refuse everything until they are; would take:
   nothing now — it becomes a question the login server answers.

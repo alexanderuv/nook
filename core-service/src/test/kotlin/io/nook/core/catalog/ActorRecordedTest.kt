@@ -38,7 +38,7 @@ private const val NO_AGENT = ""
  *
  * The mutations naming nobody are the other half. The store carries a fallback
  * for the rows that predate any of this, and it must stay unreachable through
- * the connection: a door with a defect gets a refusal rather than a row nobody
+ * the connection: an adapter with a defect gets a refusal rather than a row nobody
  * can attribute.
  */
 class ActorRecordedTest {

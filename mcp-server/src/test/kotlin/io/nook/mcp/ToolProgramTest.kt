@@ -20,14 +20,14 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Assumptions.abort
 
-/** What a well-formed opening exchange is answered with where the front door is listening. */
+/** What a well-formed opening exchange is answered with where the adapter is listening. */
 private const val SERVED = 200
 
 /** The protocol's own number for a call that reached no verdict at all. */
 private const val NO_VERDICT = -32603
 
 /**
- * The front door as an operator meets it: told its two addresses from outside,
+ * The adapter as an operator meets it: told its two addresses from outside,
  * stopping and naming what it is missing when it is not told, and serving an
  * ordinary client against a core reached over a real connection.
  *
@@ -187,7 +187,7 @@ class ToolProgramTest {
     }
 
     @Test
-    fun `a front door bound to loopback answers there and nowhere else this machine can be reached`() {
+    fun `an adapter bound to loopback answers there and nowhere else this machine can be reached`() {
         val elsewhere = NetworkInterface.getNetworkInterfaces().asSequence()
             .filter { it.isUp && !it.isLoopback }
             .flatMap { it.inetAddresses.asSequence() }
@@ -195,7 +195,7 @@ class ToolProgramTest {
             .map { it.hostAddress }
             .toList()
 
-        // The control. An address that cannot reach a door listening on every
+        // The control. An address that cannot reach an adapter listening on every
         // address says nothing about what the loopback binding refuses — the
         // network turned it away, not the binding.
         val everywherePort = freePort()
@@ -207,7 +207,7 @@ class ToolProgramTest {
         }
         if (reachable.isEmpty()) {
             abort<Unit>(
-                "this machine has no address off the loopback that reaches a front door listening on all of " +
+                "this machine has no address off the loopback that reaches an adapter listening on all of " +
                     "them ($elsewhere), so what the loopback binding refuses cannot be shown here",
             )
         }
@@ -220,7 +220,7 @@ class ToolProgramTest {
                 assertEquals(
                     emptyList(),
                     reachable.filter { openedAt("http://$it:$loopbackPort$TOOLS_PATH/${project.slug}") != null },
-                    "a front door bound to the loopback address answered somewhere else",
+                    "an adapter bound to the loopback address answered somewhere else",
                 )
                 // And on the loopback address it answers a caller presenting a
                 // valid token. The binding and the gate are both load-bearing
@@ -229,7 +229,7 @@ class ToolProgramTest {
                 assertEquals(
                     SERVED,
                     openedAt("http://$LOOPBACK:$loopbackPort$TOOLS_PATH/${project.slug}")?.status,
-                    "a front door bound to the loopback address did not answer there",
+                    "an adapter bound to the loopback address did not answer there",
                 )
             }
         }

@@ -3,7 +3,7 @@
 ## Context
 
 Nook defines its eleven operations once, in the shared contract library, and
-serves them on two front doors: the core service's own connection, which both
+serves them on two addresses: the core service's own connection, which both
 adapter apps call, and the web API, which serves that same shape outward
 ([01 — Interface contracts](../../docs/01-interface-contracts.md),
 [ARCHITECTURE §5](../../ARCHITECTURE.md)). The shape itself was designed here: a
@@ -25,7 +25,7 @@ and a hand-built isomorph of it, and pays to document, teach and test the second
 one.
 
 Any acceptable option had to satisfy four drivers: one contract across both front
-doors and no second design for the interface arriving in milestone 4; a caller
+adapters and no second design for the interface arriving in milestone 4; a caller
 able to reach Nook with tooling that already exists rather than tooling written
 for Nook; the ending readable from the reply rather than from the HTTP status
 number; and the four domain failures still reaching a caller as something
@@ -63,7 +63,7 @@ number against a table, and the details a failure already carries ride alongside
 it. The three domain codes sit in `-32000..-32099`, the range the specification
 reserves for implementation-defined server errors.
 
-Scope: this decides the shape of the operation catalog on both doors. It does not
+Scope: this decides the shape of the operation catalog on both adapters. It does not
 decide the document operations' arguments ([02](../../docs/02-document-layer.md)),
 and it does not reopen the MCP surface, which is JSON-RPC already by its own
 specification. Batch requests and notifications — both optional parts of the
@@ -94,7 +94,7 @@ standard — are not served: every call names one operation and expects one repl
 ## Consequences
 
 - **gain** — Nook stops having a protocol of its own: a caller reaches it with a
-  JSON-RPC client that already exists, and both front doors speak what
+  JSON-RPC client that already exists, and both adapters speak what
   `:mcp-server` already speaks; lands on: every caller, and the interface
   arriving in milestone 4.
 - **gain** — the invented endings disappear with the envelope. `answer`,

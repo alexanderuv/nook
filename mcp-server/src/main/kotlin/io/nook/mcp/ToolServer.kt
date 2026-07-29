@@ -15,7 +15,7 @@ const val LOOPBACK: String = "127.0.0.1"
 internal const val TOOLS_PATH = "/mcp"
 
 /**
- * The agent's front door as a running server: a web container, bound to one
+ * The MCP server as a running server: a web container, bound to one
  * address, handing everything under `/mcp/` to [answering].
  *
  * [host] is fixed by whoever builds this rather than taken from a setting —

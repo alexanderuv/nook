@@ -16,9 +16,9 @@ of claims, signed, so that changing one breaks the signature; its `sub` claim is
 the established name for "who this token is about". **The person** is that
 subject, and **the acting agent** is the coding agent working on their behalf,
 by the name its own client announces when it opens a connection. **The two
-doors** are the agent surface (`:mcp-server`) and the web API (`:web-app`);
+adapters** are the agent surface (`:mcp-server`) and the web API (`:web-app`);
 **the core** is the program that owns the database. **The calling library** is
-`CatalogClient` in `:contract`, the one piece of code both doors reach the core
+`CatalogClient` in `:contract`, the one piece of code both adapters reach the core
 by. **A shared secret** is one string used both to sign a token and to check it,
 as against a key pair where the two halves differ.
 
@@ -55,7 +55,7 @@ as against a key pair where the two halves differ.
   `Host` and `User-Agent`). `CatalogAnswering.kt`'s `OperationCatalog.answer`
   turns request text into reply text and reads nothing but the request.
 
-- **Both doors ask for no credential, deliberately, and both say so.**
+- **Both adapters ask for no credential, deliberately, and both say so.**
   `web-app/src/main/kotlin/io/nook/web/WebApi.kt` serves `POST /api` straight
   onto the shared answering function; `mcp-server/.../ToolServer.kt` mounts one
   servlet under `/mcp/*` and `Dispatcher.kt` routes by the address a connection
@@ -85,14 +85,14 @@ as against a key pair where the two halves differ.
   column added in one place and not the other is caught. Around fifteen
   behavior suites in `core-service/src/test/.../write` call `WriteService`
   directly. `:mcp-server` has forty-six checks and `:web-app` seven suites, all
-  written against doors that ask for nothing.
+  written against adapters that ask for nothing.
 
 ### The framing documents, linked rather than restated
 
 - **[Spec-6](./spec-6.md)** is the requirements contract: 30 requirements, 19
   edge cases, 18 acceptance criteria. Its load-bearing decisions are that two
-  identities are recorded rather than one, that both doors gain a gate at the
-  same time so the identity is the same whichever door a call arrives at, that
+  identities are recorded rather than one, that both adapters gain a gate at the
+  same time so the identity is the same whichever adapter a call arrives at, that
   the person comes from the token's `sub` claim and from nothing a caller can
   write, and that the two identities cross to the core beside the request rather
   than inside it. Two of its criteria are not this epic's: the milestone's loop
@@ -116,7 +116,7 @@ as against a key pair where the two halves differ.
   wrong on every call once the work moves to another thread, and worse where it
   passes (FIND11); a view bound to one call costs nothing and got all 160
   concurrent calls right (FIND12); the request itself crosses unchanged and no
-  token goes past the doors (FIND13); and an over-long client name can be turned
+  token goes past the adapters (FIND13); and an over-long client name can be turned
   away at the cost of handing the opening request's body on re-readable
   (FIND14).
 
@@ -133,13 +133,13 @@ as against a key pair where the two halves differ.
   behavior suite compiles untouched, and the alternative — an identity argument
   on all eleven — would put one on the four reads, which never record it.
 
-- **Both doors hold a shared secret.** The discovery left this open (Q5).
-  Decided: each door is started with one secret, the same string that signs the
+- **Both adapters hold a shared secret.** The discovery left this open (Q5).
+  Decided: each adapter is started with one secret, the same string that signs the
   milestone's token. It is one setting rather than a key pair to generate and
   store, and Nimbus refuses a secret shorter than 256 bits at the moment the
   verifier is built (FIND8), which is what turns "started with nothing to check
   tokens against" into a program that stops. The cost is stated plainly: either
-  door holds everything needed to mint a token it would then accept, which a
+  adapter holds everything needed to mint a token it would then accept, which a
   public key would have prevented. That is the trade a loopback-only milestone
   can take, and the login server deferred to
   [08](../../../docs/08-deployment-and-cloud.md) is where it stops being one.
@@ -151,9 +151,9 @@ as against a key pair where the two halves differ.
   and no fourth entry point ships here; the epic's own checks mint the tokens
   they need with Nimbus, in test code.
 
-- **The intended recipient is `nook`, at both doors, fixed in code.** A token
+- **The intended recipient is `nook`, at both adapters, fixed in code.** A token
   must be refused when it was issued for a different recipient (REQ16), which
-  means each door checks the `aud` claim. One recipient rather than one per door,
+  means each adapter checks the `aud` claim. One recipient rather than one per adapter,
   because spec-6's scenarios present the *same* token at both, and a setting for
   it would be a second copy of a value that must not differ.
 
@@ -161,7 +161,7 @@ as against a key pair where the two halves differ.
 
 - **The core keeps asking for no credential** (REQ28). Only the machine it runs
   on can reach it, and that stays the whole of its protection: the gate is on
-  the doors, and the core trusts what a door tells it.
+  the adapters, and the core trusts what an adapter tells it.
 - **No token crosses to the core** (REQ24) — the protocol's own security rules
   forbid handing a client's token to anything behind the surface.
 - **The request is unchanged** (REQ25): the same fields under the same names as
@@ -176,7 +176,7 @@ as against a key pair where the two halves differ.
 
 ## Approach
 
-Read the token in one place, gate both doors with it, bind the identity to one
+Read the token in one place, gate both adapters with it, bind the identity to one
 call, and let the write path record what it is handed. In that order, which is
 riskiest first: the gate landing in the real `:mcp-server` — in front of a
 dispatcher that already routes by session — is the one piece the discovery
@@ -188,9 +188,9 @@ assembled one-call form, which throws where the low-level calls return a value a
 caller can forget to look at (FIND6), and it adds the four checks no library
 makes: a `sub` that is empty, only spaces, longer than 200 characters, or
 holding a NUL character is not a person this store can attribute a row to
-(FIND5). It lives in `:contract` because that is where code both doors mount
+(FIND5). It lives in `:contract` because that is where code both adapters mount
 already lives — the shared answering function is there for exactly this reason —
-and two readings of a token would make "the identity is the same whichever door
+and two readings of a token would make "the identity is the same whichever adapter
 a call arrives at" a promise two programs keep rather than a fact. The core
 gains a jar it never calls, which is the price of the guarantee.
 
@@ -227,14 +227,14 @@ nobody.** The seven mutations take the identity as a parameter — its lifetime 
 the call, so it belongs on the call rather than on the service — and each
 refuses, as a failed validation, a call naming no person. That is what keeps the
 store's own `system` default unreachable through the connection (EDGE17): a
-door with a defect gets a refusal rather than an unattributable row. The four
+adapter with a defect gets a refusal rather than an unattributable row. The four
 reads take nothing and are served whether a call names a person or not (REQ27).
 
 **Why this way over the obvious alternative.** The obvious alternative is to let
-each door read its own token and pass its own headers, which needs no shared
+each adapter read its own token and pass its own headers, which needs no shared
 code and no new dependency in `:contract`. It puts two readings of a token in
 two modules, and the first time one of them adds a check the other does not, the
-identity stops being the same at both doors — which is the one thing this epic
+identity stops being the same at both adapters — which is the one thing this epic
 exists to make true.
 
 **Blast radius.** `:contract`: the three entities gain their fields, the
@@ -253,7 +253,7 @@ containment, cycle and ordering rules; the wire shape of a request; the four
 domain failure codes and the roughly thirty test files that assert on them; the
 `document` table, which keeps its audit columns and gains no agent columns until
 milestone 2; `item_dependency`, which records nobody; the loopback binding at
-both doors and in the core; and the check that turns away anything a web page
+both adapters and in the core; and the check that turns away anything a web page
 sent.
 
 **Unverified assumptions, named.** Two, and both are settled by the third and
@@ -330,13 +330,13 @@ in STEP4.
   reaching the stand-in core, and a valid call afterwards is served normally; a
   call refused for its token and a call refused for its contents differ in
   numeric status, and only the second carries one of the four domain reasons;
-  and every call through this door records no acting agent (REQ13, REQ15, REQ20,
+  and every call through this adapter records no acting agent (REQ13, REQ15, REQ20,
   REQ22, AC8, AC9, AC10).
 
 - [x] **STEP6** — Give both entry points the secret: one setting each, read at
   startup, the verifier built there, and a missing or unusable secret stopping
   the program with a message naming the setting rather than the key length
-  Nimbus complains about; verify: each door started without the setting stops
+  Nimbus complains about; verify: each adapter started without the setting stops
   and names it; started with a secret under 256 bits it stops and names it;
   started with a usable one it serves, and a token minted against that same
   secret is accepted (REQ29, REQ30, EDGE18, AC15).
@@ -360,7 +360,7 @@ in STEP4.
   REQ6, REQ27, EDGE9, EDGE10, EDGE11, EDGE14, EDGE17, AC1, AC2, AC3, AC14).
 
 - [x] **STEP8** — Check what a caller cannot do and what nothing records: each
-  of the five fields sent as an argument to each door and as a tool argument; a
+  of the five fields sent as an argument to each adapter and as a tool argument; a
   call presenting a valid token and also carrying a header of its own naming
   somebody else; every operation in the catalog run against one project in turn;
   a leaf whose blocker set is replaced; and an epic with children deleted;
@@ -375,16 +375,16 @@ in STEP4.
 - [x] **STEP9** — Re-run what the two adapter epics built, gated: every
   acceptance criterion of spec-4 and of spec-5 driven again with a valid token
   presented, through the modules' own test helpers; and one project, one item
-  under an epic with two blockers, and one release read through both doors;
+  under an epic with two blockers, and one release read through both adapters;
   verify: each criterion reaches the verdict it reached before this epic, the
-  gate turning away only calls presenting no valid token; and each door's entity
+  gate turning away only calls presenting no valid token; and each adapter's entity
   equals the other's field for field, all five fields present on every entity
   (REQ6, AC5, AC18).
 
 - [x] **STEP10** — Close the epic: amend spec-4's requirement that the agent
   surface needs no credential and spec-5's that the web API needs none, each
   with a line saying what it now asks for and why; record in this epic's README
-  what was built, the milestone's token and the setting each door reads its
+  what was built, the milestone's token and the setting each adapter reads its
   secret from, and each of spec-6's criteria against the named test that
   executes it; then run the whole build from a clean checkout and push for the
   continuous-integration run; verify: green locally and in that run with the new
@@ -401,7 +401,7 @@ in STEP4.
   reach for a thread-local however convenient it looks.
 
 - **no-go: one calling library per identity** — fifty of them cost seven threads
-  that were not given back when they were closed, and a door making one per
+  that were not given back when they were closed, and an adapter making one per
   person would accumulate them (FIND10); instead: one client for the life of the
   program, with a small view per call.
 
@@ -413,7 +413,7 @@ in STEP4.
 - **no-go: either Ktor token plugin** — one brings thirty-seven jars, both fix
   the challenge at the word `Bearer` plus a realm where the standard defines
   more, and neither can reach a Jetty servlet (FIND7, FIND9); instead: Nimbus at
-  both doors and the challenge written by hand.
+  both adapters and the challenge written by hand.
 
 - **no-go: shortening an over-long client name to fit** — it would record a name
   that is not the client's on every row that connection writes (REQ7, EDGE19);
@@ -428,13 +428,13 @@ in STEP4.
   client uses to find where to sign in** — all deferred with the login server,
   and a discovery document must name a server to send a client to, of which
   there is none; instead: one fixed token in the caller's configuration, minted
-  once against the secret both doors hold, and the browser sign-in that replaces
+  once against the secret both adapters hold, and the browser sign-in that replaces
   it when it arrives.
 
 - **caveat: the store's `system` default stays, and must stay unreachable** — it
   is what every existing row carries and dropping it is a migration this epic
   does not need; instead: refuse a mutation that names no person at the write
-  path, so nothing reaching the core through a door can ever land on it
+  path, so nothing reaching the core through an adapter can ever land on it
   (EDGE17).
 
 - **caveat: this epic edits `:mcp-server` and `:web-app`, which epics 06 and 07
@@ -451,19 +451,19 @@ in STEP4.
   test sources.
 
 - **caveat: the four reads carry an identity they never record** — a read is
-  still made through a bound catalog, because a door tells the core who a call
+  still made through a bound catalog, because an adapter tells the core who a call
   is for whatever the call does (REQ23), and a read naming nobody is served
   rather than refused (REQ27); instead: bind uniformly, and put the refusal in
   the seven mutations alone.
 
 - **caveat: `:contract` gains a library the core never calls** — one jar of 794
-  KiB, which is the price of one reading of a token serving both doors (FIND7);
+  KiB, which is the price of one reading of a token serving both adapters (FIND7);
   instead: take it, and do not "tidy" it into a module of its own, which is a
   fifth module for one class.
 
-- **caveat: a shared secret means either door could mint a token it would
+- **caveat: a shared secret means either adapter could mint a token it would
   accept** — recorded as the cost of the decision above, not discovered later;
-  instead: leave it, and let the login server be where a door stops holding
+  instead: leave it, and let the login server be where an adapter stops holding
   anything that could mint.
 
 - **rabbit-hole: pointing a real coding agent's client at the gate** — the
@@ -485,14 +485,14 @@ in STEP4.
   and spec-6 puts every one of those out of scope; instead: write the field,
   read it back, and add no filter.
 
-- **rabbit-hole: a load probe against the assembled doors** — the fifth epic in
+- **rabbit-hole: a load probe against the assembled adapters** — the fifth epic in
   a row to leave the question behind, and one run against the whole system would
   answer all five; instead: leave it, and let epic 09 decide whether to spend it.
 
 ## Test plan
 
 Every check below runs against a stand-in core — the recording core `:contract`
-already ships, or the stand-ins the two door modules already have — except
+already ships, or the stand-ins the two adapter modules already have — except
 TEST1, which needs nothing, and TEST7 and TEST8, which are `:core-service`'s and
 run against the real store on the embedded database.
 
@@ -528,7 +528,7 @@ run against the real store on the embedded database.
   the token and a refusal for the contents differ in numeric status with only
   the second carrying a domain reason; and every call records no acting agent.
 
-- **TEST6** — integration, both doors: each door started without its secret
+- **TEST6** — integration, both adapters: each adapter started without its secret
   stops naming the setting; with a secret under 256 bits it stops naming the
   setting; with a usable one it serves a call presenting a token minted against
   that same secret.
@@ -543,7 +543,7 @@ run against the real store on the embedded database.
   served; and the drift guard passes.
 
 - **TEST8** — integration, in `:core-service`: each of the five fields sent as
-  an argument is refused as a field the operation does not define, at both doors
+  an argument is refused as a field the operation does not define, at both adapters
   and as a tool argument, with the store unchanged; a call carrying a header of
   its own naming somebody else records the token's person; a project's owner is
   unchanged after every operation in the catalog has run against it; a replaced
@@ -553,7 +553,7 @@ run against the real store on the embedded database.
 - **TEST9** — integration, in `:mcp-server` and `:web-app`: every acceptance
   criterion those two epics' suites execute, run again with a valid token,
   reaching the verdict it reached before; and one project, one item under an
-  epic with two blockers, and one release read through both doors, equal field
+  epic with two blockers, and one release read through both adapters, equal field
   for field with all five fields present.
 
 - **Standing check, comment hygiene** — search the final diff for artifact
@@ -564,7 +564,7 @@ run against the real store on the embedded database.
   diff: every step ticked with its verification observed, the blast radius
   respected — nothing changed in what the eleven operations validate, in the
   wire shape of a request, in the four domain failure codes, in the `document`
-  and `item_dependency` tables, or in the loopback binding at either door —
+  and `item_dependency` tables, or in the loopback binding at either adapter —
   every caveat honored, and any mid-build divergence folded back into this text.
 
 - Run both standing checks through a separate agent handed only this plan and
@@ -572,11 +572,11 @@ run against the real store on the embedded database.
 
 Done when: a clean checkout runs `./gradlew check` green locally and in the
 continuous-integration run; seventeen of spec-6's eighteen acceptance criteria
-pass as named tests, with the assembled run recorded as epic 09's; neither door
+pass as named tests, with the assembled run recorded as epic 09's; neither adapter
 serves a call that presents no valid bearer token, and the opening exchange of a
 connection is among what they refuse; every row the eleven operations write
 names the person its call was made for and the agent its connection announced,
-and no row anywhere reads `system` through either door; the request the core
+and no row anywhere reads `system` through either adapter; the request the core
 receives is what it received before this epic and carries no token; spec-4 and
 spec-5 no longer say these surfaces need no credential; and the checks epics 03
 to 07 built are exactly as this epic found them, but for the identity they now
@@ -584,19 +584,19 @@ present.
 
 ## Rollback
 
-Reverting the code is a clean `git revert` of the epic's commits: both doors
+Reverting the code is a clean `git revert` of the epic's commits: both adapters
 stop asking for a token and the calling library stops sending the two headers,
 which returns every caller to the state epics 06 and 07 left them in.
 
 The schema is the part revert alone does not undo. Drop the two agent columns
 from `project`, `project_item` and `release` with the changelog's own rollback,
 in that order relative to the code — code first, then schema, so that no running
-door writes a column that is no longer there. The person and owner already
+adapter writes a column that is no longer there. The person and owner already
 written into `created_by`, `updated_by` and `owner_subject` stay, which is
 harmless: those columns predate this epic and reverting only stops new rows from
 being attributed.
 
-Where the door closes: once a caller's configuration carries the milestone's
-token, backing the gate out leaves that token being sent to a door that ignores
+Where turning back stops being possible: once a caller's configuration carries the milestone's
+token, backing the gate out leaves that token being sent to an adapter that ignores
 it, which is untidy rather than broken. There is no point past which this cannot
 be reversed.

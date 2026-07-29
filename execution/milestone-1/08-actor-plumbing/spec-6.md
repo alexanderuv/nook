@@ -17,14 +17,14 @@ token exchange standard ([RFC 8693](https://www.rfc-editor.org/rfc/rfc8693)) spl
 exactly this pair — the party acted for, and the party acting — and Nook follows
 that split rather than inventing one.
 
-**Both front doors gain a gate, and this is the change that reverses a settled
+**Both adapters gain a gate, and this is the change that reverses a settled
 decision.** [Spec-4](../06-mcp-server/spec-4.md) REQ45 and
 [spec-5](../07-web-api/spec-5.md) REQ31 each say the surface requires no
-credential; both are superseded here. A call to either door now carries a bearer
+credential; both are superseded here. A call to either adapter now carries a bearer
 token — the standard way a caller presents an already-issued identity over HTTP —
 and a call without one is turned away. The person is the token's `sub` claim, the
 established name for "who this token is about". This is what makes the identity
-the same whichever door a call arrives at, which is the whole point of gating both
+the same whichever adapter a call arrives at, which is the whole point of gating both
 at once rather than one at a time.
 
 **The token is not issued by anything Nook runs.** The Model Context Protocol's
@@ -34,13 +34,13 @@ outside its own scope
 ([MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)).
 Nook has no such server and this milestone builds none. Instead **one token is
 minted once, by hand, and written into configuration**: the agent's client sends
-it, the web app's caller sends it, and both doors check it against the key they
+it, the web app's caller sends it, and both adapters check it against the key they
 were configured with. Everything downstream of that check is the real mechanism,
 so putting a login server in front later replaces where a token comes from and
 nothing else.
 
-In scope: the two identities and the fields that hold them; where each door learns
-them; the gate on both doors and what it turns away; what crosses to the core and
+In scope: the two identities and the fields that hold them; where each adapter learns
+them; the gate on both adapters and what it turns away; what crosses to the core and
 what the core does with it; what a caller may not set; and what each program is
 told from outside before it starts.
 
@@ -76,7 +76,7 @@ Out of scope:
   loopback address (`127.0.0.1`), which nothing outside the machine can route to;
   encrypting the hop and checking a request's origin arrive with the login server
   ([ARCHITECTURE §8](../../../ARCHITECTURE.md)).
-- **The assembled run.** Checks needing the store, the core and both doors running
+- **The assembled run.** Checks needing the store, the core and both adapters running
   at once belong to [epic 09](../09-full-system-test/), on the bargain the two
   adapter epics already took; this epic's own checks run against a stand-in core.
 
@@ -157,13 +157,13 @@ own connection announced. Neither call's identity leaked into the other's row.
 by the rule that was already there for any field nobody defined. Who a call is
 for is settled by the token and by nothing a caller can write.
 
-### SCEN8 — Bringing the doors up
+### SCEN8 — Bringing the adapters up
 
 **Initiator:** an operator starting the milestone's programs.
 **Flow:**
-1. Both doors are started, each told from outside what to check a token against.
+1. Both adapters are started, each told from outside what to check a token against.
 2. A call passes end to end and its row is read back.
-3. A second copy of each door is started with that setting missing.
+3. A second copy of each adapter is started with that setting missing.
 **Outcome:** the first two serve and the row names the right person; each second
 copy stops immediately and names the setting it is missing, rather than starting
 up and accepting tokens nobody vouched for.
@@ -187,7 +187,7 @@ up and accepting tokens nobody vouched for.
   afterwards.
 - **REQ6** — Every entity the eleven operations hand back — project, item, and
   release — MUST carry `createdBy`, `updatedBy`, `createdByAgent` and
-  `updatedByAgent`, and a project MUST also carry `ownerSubject`; on every door,
+  `updatedByAgent`, and a project MUST also carry `ownerSubject`; on every adapter,
   from every operation that returns an entity.
 - **REQ7** — When a client names itself with more than 200 characters, the agent
   surface MUST NOT serve its connection — the name is recorded on every row that
@@ -203,23 +203,23 @@ up and accepting tokens nobody vouched for.
 
 ### Who a call is for
 
-- **REQ11** — Both doors MUST take the person a call is for from the `sub` claim
+- **REQ11** — Both adapters MUST take the person a call is for from the `sub` claim
   of the bearer token the call presents, and from nothing else.
 - **REQ12** — The agent surface MUST take the acting agent's name from the name
   the client gives for itself in the protocol's `initialize` exchange
   (`clientInfo.name`), and MUST use it for every call on that connection.
 - **REQ13** — The web API MUST record no acting agent on any call.
-- **REQ14** — Neither door MUST let a caller name the person or the agent by any
+- **REQ14** — Neither adapter MUST let a caller name the person or the agent by any
   other route: not in the request, not in an operation's arguments, not in a tool
   call, and not in a header of its own.
 
-### The gate on both doors
+### The gate on both adapters
 
-- **REQ15** — Both doors MUST refuse any call that does not present a valid bearer
+- **REQ15** — Both adapters MUST refuse any call that does not present a valid bearer
   token, with HTTP status 401, and MUST NOT serve it.
 - **REQ16** — A token MUST be refused when it is absent, when it does not verify
-  against what the door was configured with, when it was issued for a different
-  recipient than that door, or when its expiry has passed.
+  against what the adapter was configured with, when it was issued for a different
+  recipient than that adapter, or when its expiry has passed.
 - **REQ17** — A token that verifies but carries no usable `sub` — absent, empty,
   only spaces, longer than 200 characters, or holding a NUL character — MUST be
   refused on the same terms.
@@ -234,18 +234,18 @@ up and accepting tokens nobody vouched for.
 - **REQ21** — On the agent surface, the token MUST be required on every HTTP
   request of a connection, including the `initialize` exchange that opens it — so
   a connection cannot be opened, and its tools cannot be listed, without one.
-- **REQ22** — A refused call MUST leave the door serving: the next call presenting
+- **REQ22** — A refused call MUST leave the adapter serving: the next call presenting
   a valid token MUST be served normally.
 
 ### What crosses to the core
 
-- **REQ23** — Each door MUST tell the core who a call is for, as two values
+- **REQ23** — Each adapter MUST tell the core who a call is for, as two values
   alongside the request rather than inside it: `Nook-Subject` carrying the person,
   and `Nook-Agent` carrying the acting agent where there is one.
-- **REQ24** — Neither door MUST pass the caller's token on to the core. The
+- **REQ24** — Neither adapter MUST pass the caller's token on to the core. The
   protocol's own security rules forbid handing a token received from a client to
   anything behind the surface, and the core is behind this one.
-- **REQ25** — The request either door accepts MUST hold nothing about who is
+- **REQ25** — The request either adapter accepts MUST hold nothing about who is
   calling: the same fields under the same names as before this epic, nothing
   added, nothing renamed, nothing dropped — so a request written before it is
   still the request afterwards.
@@ -258,19 +258,19 @@ up and accepting tokens nobody vouched for.
   its protection ([spec-3](../05-operation-catalog/spec-3.md)).
 
 > The two names in REQ23 are Nook's own, and that is a deliberate exception. No
-> published specification registers a header for a front door telling a service
+> published specification registers a header for an adapter telling a service
 > behind it whose identity it has already checked: the standards in this area all
 > describe a caller presenting a credential, and the one that would apply — handing
 > the caller's own token onward — is the one the protocol's security rules forbid
 > outright (REQ24). So the meaning is taken from RFC 8693's pair, the party acted
 > for and the party acting, and only the two names are Nook's. They are read
-> nowhere but on the connection between a door and the core.
+> nowhere but on the connection between an adapter and the core.
 
 ### Configuration
 
-- **REQ29** — What each door checks a token against MUST be settable from outside
+- **REQ29** — What each adapter checks a token against MUST be settable from outside
   the program rather than fixed in its code.
-- **REQ30** — Started without that setting, a door MUST stop with a message naming
+- **REQ30** — Started without that setting, an adapter MUST stop with a message naming
   what is missing, rather than starting up and accepting tokens nobody vouched
   for.
 
@@ -278,7 +278,7 @@ up and accepting tokens nobody vouched for.
 
 - **EDGE1** — A call with no `Authorization` header: 401, carrying
   `WWW-Authenticate`, and nothing written.
-- **EDGE2** — A token signed by something the door was not configured with: 401 —
+- **EDGE2** — A token signed by something the adapter was not configured with: 401 —
   never served, and never quietly downgraded to a call with no identity.
 - **EDGE3** — A token whose expiry has passed: 401. The milestone's own token is
   minted to outlast the milestone, so this is a misconfiguration rather than an
@@ -318,10 +318,10 @@ up and accepting tokens nobody vouched for.
   cases of REQ17 are refused.
 - **EDGE16** — Two agents connected at once with different tokens: each call's
   row records that call's own person and agent, never the other's.
-- **EDGE17** — A mutation reaching the core naming no person, which is what a door
+- **EDGE17** — A mutation reaching the core naming no person, which is what an adapter
   with a defect would send: refused as `validation_failed`, so the store's own
   fallback value can never be reached through the connection.
-- **EDGE18** — A door started with nothing to check tokens against: it stops,
+- **EDGE18** — An adapter started with nothing to check tokens against: it stops,
   naming the missing setting.
 - **EDGE19** — A client naming itself with more than 200 characters: its
   connection is not served, and the answer says the name is too long. No real
@@ -351,11 +351,11 @@ up and accepting tokens nobody vouched for.
   catalog has been called against it in turn, then its `ownerSubject` still reads
   `alex`.
 - **AC5** (REQ6) — Given a project, an item under an epic with two blockers, and a
-  release, when each is read through both doors, then all five fields are present
-  on every entity, and each door's entity equals the other's field for field.
+  release, when each is read through both adapters, then all five fields are present
+  on every entity, and each adapter's entity equals the other's field for field.
 - **AC6** (REQ8, REQ14, EDGE12) — Given requests carrying `ownerSubject`,
   `createdBy`, `updatedBy`, `createdByAgent` and `updatedByAgent` in turn, when
-  each is sent to either door and when the same is attempted as a tool argument,
+  each is sent to either adapter and when the same is attempted as a tool argument,
   then every one fails with `validation_failed` naming the field and the store is
   unchanged; when a call presents a valid token and also carries a header of its
   own naming a different person, then the row records the token's person; and when
@@ -366,7 +366,7 @@ up and accepting tokens nobody vouched for.
   replacing call's and the blocker edges hold no such fields at all; and when an
   epic with children is deleted, then no row remains anywhere naming who deleted
   them.
-- **AC8** (REQ15, REQ18, REQ19, REQ22, EDGE1, EDGE6) — Given both doors running,
+- **AC8** (REQ15, REQ18, REQ19, REQ22, EDGE1, EDGE6) — Given both adapters running,
   when a well-formed call is sent with no `Authorization` header and again with a
   header carrying something that is not a bearer token, then each comes back as
   401 carrying `WWW-Authenticate`, the store is unchanged, and a call presenting a
@@ -374,7 +374,7 @@ up and accepting tokens nobody vouched for.
 - **AC9** (REQ16, REQ17, EDGE2, EDGE3, EDGE4, EDGE5) — Given tokens that in turn
   are signed by something else, expired, issued for a different recipient, carry
   no `sub`, carry an empty `sub`, and carry a `sub` of 201 characters, when each
-  is presented at each door, then all twelve calls come back 401 and the store is
+  is presented at each adapter, then all twelve calls come back 401 and the store is
   unchanged.
 - **AC10** (REQ20) — Given a call refused for its token and a call refused for its
   contents, when the two replies are compared, then they differ in numeric status
@@ -389,7 +389,7 @@ up and accepting tokens nobody vouched for.
   itself with 201 characters, when it opens a connection, then it is not served
   and the answer says the name is too long.
 - **AC13** (REQ23, REQ24, REQ25, REQ26) — Given a stand-in core recording what it
-  receives, when one call is made through each door, then the request body it
+  receives, when one call is made through each adapter, then the request body it
   receives is field for field what the same call sent before this epic, the two
   identities arrive alongside it, no token of the caller's appears anywhere in what
   the core received, and the values recorded equal the values asserted.
@@ -399,7 +399,7 @@ up and accepting tokens nobody vouched for.
   invoked the same way, then each is served; and when a call naming a person is
   made to the core presenting no credential of any kind, then it is served, the
   core asking for none.
-- **AC15** (REQ29, REQ30, EDGE18) — Given each door configured from outside with
+- **AC15** (REQ29, REQ30, EDGE18) — Given each adapter configured from outside with
   what to check a token against, when it starts and a call is made, then the call
   succeeds; and when it is started with that setting missing, then it stops with a
   message naming the setting.
@@ -409,7 +409,7 @@ up and accepting tokens nobody vouched for.
   then in every run each item records its own connection's person exactly as the
   token held it, and neither run's identity appears on the other's row.
 - **AC17** (REQ1, REQ3, REQ5, REQ6) — the milestone's loop, gated. Given both
-  doors running against the real core and store, when a project is created on the
+  adapters running against the real core and store, when a project is created on the
   web API and the milestone's north-star loop is then run over the agent surface
   alone, then every row it wrote names the person the token was for and the agent
   the connection announced, and the project names that person as its owner. This
@@ -433,7 +433,7 @@ up and accepting tokens nobody vouched for.
   its row: audit says who made this, ownership says whose this is. Attributes: one
   value per project, set when the project is created and never afterwards; relates
   to **subject**, being one.
-- **the two doors** — the agent surface ([spec-4](../06-mcp-server/spec-4.md)) and
+- **the two adapters** — the agent surface ([spec-4](../06-mcp-server/spec-4.md)) and
   the web API ([spec-5](../07-web-api/spec-5.md)); **the core** — the service that
   owns the store and the single write path, reached by both
   ([spec-3](../05-operation-catalog/spec-3.md)).
@@ -450,12 +450,12 @@ redefined here.
   need to tell two of someone's own agents apart — a login server has to arrive
   before the gate is useful, and the token in configuration becomes the thing being
   replaced rather than the thing being used.
-- **ASM2** — That token is minted to outlast the milestone; if false, both doors
+- **ASM2** — That token is minted to outlast the milestone; if false, both adapters
   stop serving on a date nobody chose, and every caller's configuration has to be
   rewritten at once.
 - **ASM3** — The core keeps being reachable only from the machine it runs on and
-  only by its two doors; if false, anything on that machine could call it and name
-  any person, and the gate on the doors would be protecting nothing.
+  only by its two adapters; if false, anything on that machine could call it and name
+  any person, and the gate on the adapters would be protecting nothing.
 - **ASM4** — Every MCP client worth serving already sends the name of itself the
   protocol asks for; if false, the acting agent is empty on the surface that exists
   to record it, and the second identity earns nothing.

@@ -200,7 +200,7 @@ answers Q2
 | the project's handle and its id reach the same project | yes | yes |
 | what each connection is told about its project | its own project's name, handle, id and description | the same words for every project |
 | a call knows which project it acts in | from the server it was made on | from the request, read into the per-call context |
-| an address naming **no** project | refused at the door | **served** |
+| an address naming **no** project | refused when the connection opens | **served** |
 
 Candidate A, three connections — two at one project's handle and its id, one at
 another project:
@@ -219,7 +219,7 @@ core asked about a project (times)   -> 3
 
 The core was asked exactly once per connection, which is what REQ10 asks for and
 what keeps a mistyped address from being discovered on every call instead of at
-the door.
+the adapter.
 
 Candidate B serves the same two addresses and its tool handlers can see which
 project a call came in on — but every connection is told the same thing:
@@ -238,7 +238,7 @@ piece of text held on the server, and the code that answers an opening request
 reads that one field and nothing about the request. So a server can say something
 true of every project it serves, or one project's own words — never both. The last
 line is the second cost: told to accept every address, the transport accepts
-`/mcp/` as readily as `/mcp/billing`, so nothing is refused at the door and EDGE2
+`/mcp/` as readily as `/mcp/billing`, so nothing is refused when the connection opens and EDGE2
 fails outright.
 
 ### FIND4 — What a connection is told rides in the opening exchange, and independent clients read it back

@@ -11,7 +11,7 @@
   refusals, and eight kinds of request that cannot be read — come back word for
   word identical to what the core's own connection answers. There is no
   translation to write, because there is nothing to translate.
-- **What a request means is decided by the same code at both doors, so the app
+- **What a request means is decided by the same code at both adapters, so the app
   turns down what it cannot read without the request ever crossing.** The eight
   unreadable requests were refused by the app itself and the stand-in core
   received none of them; every readable request reached it exactly once. Three of
@@ -121,9 +121,9 @@ requests whose arrival was checked against what the core's catalog was invoked
 with, one for one; a defect planted inside the core, a core that was never
 started, and a core made to answer nothing at all; a core answering with one
 field more than this build knows about; a listing of 5,000 items timed through
-each door; a slow call and a fast one together; 100 runs of a caller that stops
+each adapter; a slow call and a fast one together; 100 runs of a caller that stops
 listening while the core is still writing; every other way of knocking on the
-app's door, including a request that says it came from a page and a request sent
+app's adapter, including a request that says it came from a page and a request sent
 as plain text; the app bound to the address a machine uses to reach itself, with
 a control run first to establish which of this machine's addresses reach a server
 at all; sixteen callers at once
@@ -141,9 +141,9 @@ probe; and any crowd larger than sixteen callers.
 
 ## Findings
 
-### FIND1 — The web app is the core's own answering side with the calling library underneath, and both doors answer identically
+### FIND1 — The web app is the core's own answering side with the calling library underneath, and both adapters answer identically
 
-**Confidence:** solid — twenty-five requests driven through three doors and
+**Confidence:** solid — twenty-five requests driven through three adapters and
 compared as whole values · answers Q1
 
 The core's handler reads a request, runs it against an operation catalog, and
@@ -152,7 +152,7 @@ catalog interface. So the web app is that handler with one argument changed, and
 the address changed from `/` to `/api`. Nothing was translated, because the
 request and reply are the core's own.
 
-Twenty-five requests were written once and sent to three doors — the core's own
+Twenty-five requests were written once and sent to three adapters — the core's own
 connection, candidate A, and candidate B:
 
 | what was sent | the replies agree | reached the core: A / B |
@@ -168,7 +168,7 @@ no entity and is still plainly not a refusal:
 a delete's empty success -> {"outcome":"answer"}
 ```
 
-### FIND2 — The same code reads a request at both doors, so an unreadable one never crosses
+### FIND2 — The same code reads a request at both adapters, so an unreadable one never crosses
 
 **Confidence:** solid — the stand-in core's own count, taken per case · answers Q1
 
@@ -403,10 +403,10 @@ one calling library for its life, and that is what recovers.
 
 ### FIND11 — Five thousand items cross two hops whole and in order, and reading them back costs about three times what passing them through does
 
-**Confidence:** solid — three runs per door, compared against the core's own ·
+**Confidence:** solid — three runs per adapter, compared against the core's own ·
 answers Q3
 
-| the door | three runs | what arrived |
+| the adapter | three runs | what arrived |
 | --- | --- | --- |
 | straight to the core | 102, 50, 38 ms | 5,000 items, the core's own order |
 | candidate A (decodes and rewrites) | 150, 127, 96 ms | the same 5,000, the same order, the same 2,233,924 characters |
@@ -495,7 +495,7 @@ which this probe did not build. The recommendation below therefore carries epic
 - **Build the web app as the core's own request handler with the calling library
   underneath, serving `/api`** (FIND1, FIND2, FIND3) — the request and reply are
   the core's own, so there is nothing to translate, and twenty-five requests come
-  back identical at both doors without a line written for it. This is what makes
+  back identical at both adapters without a line written for it. This is what makes
   spec-5's demand for one contract structural rather than a promise: there is one
   piece of code deciding what a request means and one deciding what a reply says.
   The epic's work is the program around it — where it listens, what it is told

@@ -82,10 +82,10 @@ class ManyAtOnceTest {
             anItem()
         }
 
-        FrontDoor(core).use { door ->
-            val onSearchByHandle = door.connectedAt(searchRevamp.slug)
-            val onSearchById = door.connectedAt(searchRevamp.id.toString())
-            val onBilling = door.connectedAt(billing.slug)
+        RunningAdapter(core).use { adapter ->
+            val onSearchByHandle = adapter.connectedAt(searchRevamp.slug)
+            val onSearchById = adapter.connectedAt(searchRevamp.id.toString())
+            val onBilling = adapter.connectedAt(billing.slug)
 
             val slow = thread(isDaemon = true) {
                 onSearchByHandle.getItem(THE_SLOW_ONE)
@@ -128,8 +128,8 @@ class ManyAtOnceTest {
         }
         core.answering = { many }
 
-        FrontDoor(core).use { door ->
-            val client = door.connectedAt(searchRevamp.slug)
+        RunningAdapter(core).use { adapter ->
+            val client = adapter.connectedAt(searchRevamp.slug)
 
             val started = System.nanoTime()
             val answered = client.callTool(McpSchema.CallToolRequest.builder("list_items").arguments(emptyMap()).build())
@@ -147,8 +147,8 @@ class ManyAtOnceTest {
 
     @Test
     fun `a tool call sent before the opening handshake is not served`() {
-        FrontDoor(core).use { door ->
-            val answered = door.callingWithoutOpeningAt("$TOOLS_PATH/${searchRevamp.slug}")
+        RunningAdapter(core).use { adapter ->
+            val answered = adapter.callingWithoutOpeningAt("$TOOLS_PATH/${searchRevamp.slug}")
 
             assertTrue(
                 answered.status != 200,

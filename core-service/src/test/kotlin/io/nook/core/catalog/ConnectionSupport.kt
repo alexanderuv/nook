@@ -49,7 +49,7 @@ internal class Connection(
     private val client = CatalogClient(address, waitLimit)
 
     /**
-     * The caller, bound to somebody — as a door binds it, and for the same
+     * The caller, bound to somebody — as an adapter binds it, and for the same
      * reason: a mutation reaching the core naming nobody is refused, so a check
      * about what the *connection* does has to name somebody to get past that.
      */
@@ -172,10 +172,10 @@ internal fun rawCall(method: String, params: String = "{}", id: String = "1"): S
 internal val ONE_CALL: JsonElement = JsonPrimitive(1)
 
 /**
- * One request, written out and sent as a door sends it: the call itself, and
+ * One request, written out and sent as an adapter sends it: the call itself, and
  * beside it the two names saying who it is for.
  *
- * [naming] is what a door tells the core, and the default is somebody — because
+ * [naming] is what an adapter tells the core, and the default is somebody — because
  * a check about the *shape* of a request would otherwise be answered by the
  * refusal every mutation naming nobody earns, which is a different check.
  */

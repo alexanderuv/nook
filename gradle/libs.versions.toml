@@ -14,10 +14,10 @@ mcpSdk = "2.0.0"
 # `ee11` flavour is the one speaking the servlet revision (6.1) the SDK is built
 # against; the other flavours in the same release speak older ones.
 jetty = "12.1.11"
-# Reads the bearer token both front doors are presented with. One jar with
+# Reads the bearer token both adapters are presented with. One jar with
 # nothing behind it, where the alternatives bring four, six and thirty-seven —
 # and it knows about neither a servlet nor a Ktor route, which is what lets one
-# reading serve both doors.
+# reading serve both adapters.
 nimbusJoseJwt = "10.9.1"
 zonkyPostgres = "2.2.2"
 # PostgreSQL version for the embedded test binaries (latest 17.x line).

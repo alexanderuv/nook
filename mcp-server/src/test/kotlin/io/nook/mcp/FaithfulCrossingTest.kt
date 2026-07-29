@@ -25,13 +25,13 @@ class FaithfulCrossingTest {
 
     private val core = StandInCore().apply { projects += project }
 
-    private val door = FrontDoor(core)
+    private val adapter = RunningAdapter(core)
 
-    private val client = door.connectedAt(project.slug)
+    private val client = adapter.connectedAt(project.slug)
 
     @AfterTest
     fun letGo() {
-        door.close()
+        adapter.close()
     }
 
     /** Calls [tool] and hands back the values the core was invoked with, the project aside. */

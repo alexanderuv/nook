@@ -13,7 +13,7 @@ import kotlin.uuid.Uuid
 /**
  * Which project a connection is for, and how it knows.
  *
- * Everything here is about the door rather than about a tool: what a connection
+ * Everything here is about the adapter rather than about a tool: what a connection
  * is told on opening, how many times the core is asked, and which project the
  * calls made on a connection act inside.
  */
@@ -49,9 +49,9 @@ class ConnectedProjectTest {
 
     @Test
     fun `a connection at a project's handle and one at its id are told the same four things about it`() {
-        FrontDoor(core).use { door ->
-            val byHandle = door.connectedAt(searchRevamp.slug)
-            val byId = door.connectedAt(searchRevamp.id.toString())
+        RunningAdapter(core).use { adapter ->
+            val byHandle = adapter.connectedAt(searchRevamp.slug)
+            val byId = adapter.connectedAt(searchRevamp.id.toString())
 
             byHandle.wasToldAbout(searchRevamp)
             byId.wasToldAbout(searchRevamp)
@@ -65,9 +65,9 @@ class ConnectedProjectTest {
 
     @Test
     fun `each project's connections are told their own project and nothing of the other's`() {
-        FrontDoor(core).use { door ->
-            val onSearch = door.connectedAt(searchRevamp.slug)
-            val onBilling = door.connectedAt(billing.slug)
+        RunningAdapter(core).use { adapter ->
+            val onSearch = adapter.connectedAt(searchRevamp.slug)
+            val onBilling = adapter.connectedAt(billing.slug)
 
             onSearch.wasToldAbout(searchRevamp)
             onBilling.wasToldAbout(billing)
@@ -84,15 +84,15 @@ class ConnectedProjectTest {
 
     @Test
     fun `the core is asked which project an address names once per connection, not once per call`() {
-        FrontDoor(core).use { door ->
-            val client = door.connectedAt(searchRevamp.slug)
+        RunningAdapter(core).use { adapter ->
+            val client = adapter.connectedAt(searchRevamp.slug)
             client.listTools()
             repeat(3) { client.getItem("add-search") }
 
             assertEquals(
                 listOf("search-revamp"),
                 core.projectQuestions.map { it.values.single() },
-                "the address was resolved more than once, or somewhere other than at the door",
+                "the address was resolved more than once, or somewhere other than when the connection opens",
             )
             assertEquals(3, core.toolCalls.size, "the calls did not all reach the core")
         }
@@ -100,9 +100,9 @@ class ConnectedProjectTest {
 
     @Test
     fun `every call reaches the core naming its own connection's project, by id`() {
-        FrontDoor(core).use { door ->
-            val onSearch = door.connectedAt(searchRevamp.slug)
-            val onBilling = door.connectedAt(billing.slug)
+        RunningAdapter(core).use { adapter ->
+            val onSearch = adapter.connectedAt(searchRevamp.slug)
+            val onBilling = adapter.connectedAt(billing.slug)
 
             onSearch.getItem("add-search")
             onBilling.getItem("send-invoice")
@@ -119,8 +119,8 @@ class ConnectedProjectTest {
     @Test
     fun `naming an entity of another project leaves the connection where it was`() {
         val anItemOfBilling = "cccccccc-0000-0000-0000-0000000000b1"
-        FrontDoor(core).use { door ->
-            val onSearch = door.connectedAt(searchRevamp.slug)
+        RunningAdapter(core).use { adapter ->
+            val onSearch = adapter.connectedAt(searchRevamp.slug)
 
             onSearch.getItem(anItemOfBilling)
             onSearch.getItem("add-search")

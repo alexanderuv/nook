@@ -35,7 +35,7 @@ private val THE_FIVE = listOf("ownerSubject", "createdBy", "updatedBy", "created
  * Who a call is for is settled by the token it presented and by nothing a caller
  * writes — so each of the five fields sent as an argument is refused by the rule
  * that was already there for any field nobody defined, and a caller putting the
- * two crossing headers on its own request reaches a door that never reads them.
+ * two crossing headers on its own request reaches an adapter that never reads them.
  *
  * The other half is what is deliberately *not* recorded: a blocker edge names
  * nobody by having no column to name one in, and a delete leaves no trace of who
@@ -88,12 +88,12 @@ class UnnameableActorTest {
     }
 
     @Test
-    fun `a call that names somebody else in a header of its own records the person its door read`() {
+    fun `a call that names somebody else in a header of its own records the person its adapter read`() {
         connectionTo(db).use { connection ->
-            // What the door tells the core is one thing; what a caller writes
+            // What the adapter tells the core is one thing; what a caller writes
             // on its own request is another, and only the first reaches here —
-            // the doors take the person from the token and read no such header.
-            // Sent straight at the core this *is* the door's word, which is the
+            // the adapters take the person from the token and read no such header.
+            // Sent straight at the core this *is* the adapter's word, which is the
             // arrangement's whole assumption: only this machine can reach it.
             val body = rawCall("create_project", """{"name":"Whose Word"}""")
             assertIs<RpcReply.Answered>(rawReply(connection.address, body, naming = Actor(ALEX, AN_AGENT)))

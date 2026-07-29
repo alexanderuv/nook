@@ -19,12 +19,12 @@ private const val AS_JSON = "application/json"
 private const val AS_TEXT = "UTF-8"
 
 /**
- * The front door: every request arrives here, and what happens to it is decided
+ * The adapter: every request arrives here, and what happens to it is decided
  * by the project its address names.
  *
  * A connection opening is where the project is settled. The core is asked
  * whether the address names anything, once, before there is a server for it to
- * reach — so a wrong address is answered at the door rather than discovered
+ * reach — so a wrong address is answered when the connection opens rather than discovered
  * again on every call, and an agent whose configuration never took effect is
  * told so by the thing it was trying to connect to.
  *
@@ -100,8 +100,8 @@ internal class Dispatcher(private val catalog: OperationCatalog) : HttpServlet()
      */
     private fun opening(address: String, request: HttpServletRequest, response: HttpServletResponse) {
         val project = try {
-            // Bound like every other call, though this one records nobody: a
-            // door tells the core who a call is for whatever the call does, and
+            // Bound like every other call, though this one records nobody: an
+            // adapter tells the core who a call is for whatever the call does, and
             // one place where it does not is one place a rule has an exception.
             catalog.forActor(request.actor()).getProject(address)
         } catch (refused: StructuredErrorException) {

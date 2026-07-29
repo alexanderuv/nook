@@ -59,15 +59,15 @@ class OfferedToolsTest {
 
     private val core = StandInCore().apply { projects += project }
 
-    private val door = FrontDoor(core)
+    private val adapter = RunningAdapter(core)
 
-    private val client = door.connectedAt(project.slug)
+    private val client = adapter.connectedAt(project.slug)
 
     private val offered = client.listTools().tools()
 
     @AfterTest
     fun letGo() {
-        door.close()
+        adapter.close()
     }
 
     @Test

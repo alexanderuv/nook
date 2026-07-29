@@ -4,7 +4,7 @@
 
 This explains, in plain terms, how Nook runs when it stops being a thing on one
 laptop and starts being something you reach over the internet — and how to do that
-without closing the door on turning Nook into a product later.
+without closing off the option of turning Nook into a product later.
 
 Two goals drive everything here:
 
@@ -42,7 +42,7 @@ Everything below follows from that split.
 
 ## Getting on the internet (goal 1)
 
-### Don't build a login screen yet — put a locked door in front
+### Don't build a login screen yet — put a lock in front
 
 Today Nook has no login, on purpose: it only listens on the local machine (§8). The
 moment it's on the internet, "no login" is no longer safe — anyone who finds the
@@ -58,7 +58,7 @@ afternoon:
 - **oauth2-proxy** (sign in with an existing account, e.g. Google, before reaching
   the app)
 
-Nook itself stays exactly as it is — no login code — but now it sits behind a door
+Nook itself stays exactly as it is — no login code — but now it sits behind a lock
 only you can open. This keeps the "no accounts inside Nook yet" decision honest even
 though it's reachable worldwide.
 

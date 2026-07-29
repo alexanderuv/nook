@@ -17,7 +17,7 @@ receives requests off the network — runs on your behalf; the protocol library
 ships its long-lived-HTTP transport as one, and Jetty is the web container that
 will run it. **The core** is the program that owns the database, built by epics
 03 and 04. **The calling library** is the one piece of code, shared by both
-front doors, that calls the core and reads its replies, built by epic 05. **A
+adapters, that calls the core and reads its replies, built by epic 05. **A
 shape** is one of the plain data classes in `:contract` that a call carries, and
 **a shape's description of itself** is the runtime information the serialization
 library keeps about it — its field names, which of them may be left out, and
@@ -267,7 +267,7 @@ the caller could have written. If a tool declared them as a closed list instead,
 the protocol library would turn back a bad status before Nook's code ever ran,
 and the agent would get the library's wording rather than the core's verdict —
 which REQ28 forbids and which would make the same call reach two different
-verdicts depending on the door it came in by. So the allowed words go in the
+verdicts depending on the adapter it came in by. So the allowed words go in the
 argument's description, where an agent reads them, and the verdict stays the
 core's.
 
@@ -346,10 +346,10 @@ be written once, so `:contract` gained a small public enum for them and the way
 to read one out of a refusal. Both sides need it — the core to say it, this
 module to act on it — and neither can hold it.
 
-A project's server is closed at the door on the next request rather than inside
+A project's server is closed as the next request arrives rather than inside
 the call that discovered its project was gone. Closing it mid-call would take
 away the very response that was about to tell the agent why, so the call records
-what it found and the door acts on it.
+what it found and the adapter acts on it.
 
 The dispatcher reads the whole of the address after the mount rather than its
 first piece. No reference holds a slash, so an address with more in it is one
@@ -492,7 +492,7 @@ behavior suites epics 03 to 05 built, which keep their two runs.
 - **no-go: declaring the vocabularies as a closed list of allowed values in a
   tool's arguments** — it looks like a kindness to the agent and it moves the
   verdict from the core to the protocol library, so the same bad status reaches
-  two different answers depending on which door it came in by, and the agent
+  two different answers depending on which adapter it came in by, and the agent
   loses the refusal that spells out the four words it could have written (REQ28);
   instead: the allowed words go in the argument's description, and the core
   decides.

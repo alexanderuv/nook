@@ -52,7 +52,7 @@ const val API_PATH: String = "/api"
  * why there is nothing here that reads a request or decides a verdict. What it
  * contributes is an address, an engine, a binding, and the calling library
  * underneath — and the same shared function the core mounts does the rest. So a
- * request written once is accepted at both doors and comes back saying the same
+ * request written once is accepted at both addresses and comes back saying the same
  * thing, structurally rather than by two programs agreeing to.
  *
  * Everything else this app answers at is the web server's own reply, carrying
@@ -62,11 +62,11 @@ const val API_PATH: String = "/api"
  *
  * A call arrives here presenting a bearer token and is turned away without one.
  * [tokens] is what that token is checked against, and it is built before this
- * is: a door started with nothing to check tokens against must stop rather than
+ * is: an adapter started with nothing to check tokens against must stop rather than
  * serve, and building the reading afterwards would be one ordering away from
  * serving anyway.
  *
- * No acting agent is ever recorded through this door. A person works here
+ * No acting agent is ever recorded through this adapter. A person works here
  * directly, so the field holds nothing rather than a repeat of their own name.
  *
  * [host] is fixed by whoever builds this and is not a setting the app offers —

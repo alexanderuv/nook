@@ -1,8 +1,8 @@
 plugins {
     id("nook.kotlin-jvm")
     id("nook.persistence-boundary")
-    // The stand-in core both adapters measure their door against ships from
-    // here. Held in either adapter it would be two stand-ins, and two doors
+    // The stand-in core both adapters measure themselves against ships from
+    // here. Held in either adapter it would be two stand-ins, and two adapters
     // shown to agree while being measured against stand-ins free to differ have
     // been shown nothing.
     id("java-test-fixtures")
@@ -29,21 +29,21 @@ dependencies {
     // one: a caller builds the calling library and nothing else.
     implementation(libs.ktor.client.cio)
 
-    // The reading of a bearer token, which both front doors mount from here.
+    // The reading of a bearer token, which both adapters mount from here.
     // Two readings in two modules would make "the identity is the same
-    // whichever door a call arrives at" a promise two programs keep rather than
+    // whichever adapter a call arrives at" a promise two programs keep rather than
     // a fact — the first time one of them added a check the other did not, it
     // would stop being true. The core gains a jar it never calls, which is what
     // that guarantee costs.
     //
     // `implementation`: nothing of the library appears in what this module
-    // offers — a secret goes in and a person's name comes out — so a door
+    // offers — a secret goes in and a person's name comes out — so an adapter
     // mounts the reading without taking on the library that does it.
     implementation(libs.nimbus.jose.jwt)
 
     // Nothing in this epic mints a token — the milestone's one is minted by
     // hand and written into a caller's configuration. The checks still need
-    // tokens to present, and both doors' checks need the same ones, so the
+    // tokens to present, and both adapters' checks need the same ones, so the
     // minting ships beside the stand-in core for the same reason that does.
     testFixturesApi(libs.nimbus.jose.jwt)
 

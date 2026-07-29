@@ -23,11 +23,11 @@ public const val NO_VERDICT: String = "this call produced no verdict, and nothin
  * The whole of what a request means, from the text that arrived to the text
  * that goes back.
  *
- * Both front doors mount this and neither adds to it. The core hands it the
+ * Both adapters mount this and neither adds to it. The core hands it the
  * catalog over its own store; the app behind the web UI hands it the calling
  * library. So there is one piece of code deciding what a request is,
  * which is what makes "the same request reaches the same verdict at either
- * door" structural rather than a promise two programs keep by discipline.
+ * adapter" structural rather than a promise two programs keep by discipline.
  *
  * What is here is reading and running, and not a web server: this module
  * defines the shapes every program agrees on, and each program keeps its own

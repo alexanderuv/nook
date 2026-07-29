@@ -9,7 +9,7 @@ application {
 
 dependencies {
     implementation(project(":contract"))
-    // The stand-in core and its entity fixtures, shared with the other door.
+    // The stand-in core and its entity fixtures, shared with the other adapter.
     testImplementation(testFixtures(project(":contract")))
     // The protocol, and the web container that hosts it. Nothing here serves
     // with Ktor: the library ships its transport as a servlet, which Jetty runs

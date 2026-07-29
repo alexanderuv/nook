@@ -22,59 +22,59 @@ import kotlin.test.assertTrue
  * immediately.
  *
  * The requests that cannot be read matter as much as the eleven that can: each
- * has to be turned down at both doors, in the same words, and reach the core at
+ * has to be turned down at both addresses, in the same words, and reach the core at
  * neither.
  */
 class OneContractTest {
 
-    private val doors = BothDoors()
+    private val both = CoreAndApi()
 
-    private val core = doors.core
+    private val core = both.core
 
     @AfterTest
     fun letGo() {
-        doors.close()
+        both.close()
     }
 
     /**
-     * [body] sent to each door in turn, with the record of what reached the
+     * [body] sent to each adapter in turn, with the record of what reached the
      * core wiped between them: the two replies, and the two ways the core was
      * reached, have to be equal as whole values.
      */
-    private fun bothDoorsAgreeOn(what: String, body: String, reaching: Int) {
+    private fun bothAgreeOn(what: String, body: String, reaching: Int) {
         core.invocations.clear()
-        // The core is reached the way a door reaches it, naming who the call
+        // The core is reached the way an adapter reaches it, naming who the call
         // is for beside the request — so that what the two are compared on is
         // the request and its verdict, not which identity happened to carry it.
-        val throughTheCore = replyFrom(doors.coreAddress, body, naming = Actor(ALEX))
+        val throughTheCore = replyFrom(both.coreAddress, body, naming = Actor(ALEX))
         val reachedByTheCore = core.invocations.toList()
 
         core.invocations.clear()
-        val throughTheApp = replyFrom(doors.apiAddress, body)
+        val throughTheApp = replyFrom(both.apiAddress, body)
         val reachedByTheApp = core.invocations.toList()
 
-        assertEquals(throughTheCore, throughTheApp, "$what: the two doors answered differently")
-        assertEquals(reachedByTheCore, reachedByTheApp, "$what: the two doors reached the core differently")
+        assertEquals(throughTheCore, throughTheApp, "$what: the two both answered differently")
+        assertEquals(reachedByTheCore, reachedByTheApp, "$what: the two both reached the core differently")
         assertEquals(reaching, reachedByTheApp.size, "$what: the core was reached ${reachedByTheApp.size} times")
     }
 
     @Test
-    fun `each of the eleven operations answers the same at both doors, reaching the core once`() {
-        eleven.forEach { (what, body) -> bothDoorsAgreeOn(what, body, reaching = 1) }
+    fun `each of the eleven operations answers the same at both addresses, reaching the core once`() {
+        eleven.forEach { (what, body) -> bothAgreeOn(what, body, reaching = 1) }
         assertEquals(11, eleven.size, "the eleven operations were not all driven")
     }
 
     @Test
-    fun `each of the four refusals answers the same at both doors`() {
-        fourRefusals.forEach { (what, body) -> bothDoorsAgreeOn(what, body, reaching = 1) }
+    fun `each of the four refusals answers the same at both addresses`() {
+        fourRefusals.forEach { (what, body) -> bothAgreeOn(what, body, reaching = 1) }
         // Each of them really was a failure, and the four were really four.
-        val codes = fourRefusals.values.map { assertIs<RpcReply.Failed>(doors.answer(it)).error.code }
+        val codes = fourRefusals.values.map { assertIs<RpcReply.Failed>(both.answer(it)).error.code }
         assertEquals(4, codes.toSet().size, "the four refusals did not arrive under four different numbers")
     }
 
     @Test
-    fun `each request that cannot be read is turned down the same at both doors, reaching the core at neither`() {
-        unreadable.forEach { (what, body) -> bothDoorsAgreeOn(what, body, reaching = 0) }
+    fun `each request that cannot be read is turned down the same at both addresses, reaching the core at neither`() {
+        unreadable.forEach { (what, body) -> bothAgreeOn(what, body, reaching = 0) }
         assertEquals(8, unreadable.size, "the requests that cannot be read were not all driven")
     }
 
@@ -83,7 +83,7 @@ class OneContractTest {
         // One address rather than one per operation is what makes this possible
         // at all: an unknown operation is a reply naming it, and an unknown
         // address is the web server's business.
-        val unknown = assertIs<RpcReply.Failed>(doors.answer(rawCall("teleport_item")))
+        val unknown = assertIs<RpcReply.Failed>(both.answer(rawCall("teleport_item")))
         assertEquals(RpcCode.METHOD_NOT_FOUND, unknown.error.code)
         assertTrue(unknown.error.message.contains("teleport_item"), unknown.error.message)
     }
@@ -92,11 +92,11 @@ class OneContractTest {
     fun `every other address is the web server's own reply, carrying no error of Nook's`() {
         val elsewhere = mapOf(
             "the root, which the interface arrives at later" to
-                sentTo(doors.appAddress + "/", rawCall("list_projects")),
+                sentTo(both.appAddress + "/", rawCall("list_projects")),
             "reading the one address rather than sending it a request" to
-                sentTo(doors.apiAddress, "", method = "GET"),
+                sentTo(both.apiAddress, "", method = "GET"),
             "an operation given an address of its own" to
-                sentTo("${doors.apiAddress}/create_project", rawCall("create_project", """{"name":"A"}""")),
+                sentTo("${both.apiAddress}/create_project", rawCall("create_project", """{"name":"A"}""")),
         )
         elsewhere.forEach { (what, answered) ->
             assertNotEquals(200, answered.status, "$what: this app served an address it does not define")
@@ -108,7 +108,7 @@ class OneContractTest {
         assertEquals(emptyList(), core.invocations, "an address this app does not define reached the core")
 
         // And the one address it does define is still served.
-        assertIs<RpcReply.Answered>(doors.answer(rawCall("list_projects")))
+        assertIs<RpcReply.Answered>(both.answer(rawCall("list_projects")))
     }
 
     private companion object {
@@ -139,7 +139,7 @@ class OneContractTest {
             "it is not a thing to ask for" to rawCall("get_item", """{"project":"$PROJECT","ref":"$NOT_ALLOWED"}"""),
         )
 
-        /** Eight requests neither door can read, one for each way of getting it wrong. */
+        /** Eight requests neither adapter can read, one for each way of getting it wrong. */
         val unreadable = mapOf(
             "contents that are not the format at all" to "this is not JSON",
             "an envelope that is not a request" to """{"method":"list_projects","id":1}""",

@@ -74,7 +74,7 @@ moved to `:contract` as a function from request text to reply text. The core
 hands it the catalog over its own store; `:web-app` hands it the calling
 library. Each program keeps its own address, its own engine and its own
 binding, and neither holds a rule about what a request contains — so "the same
-request reaches the same verdict at either door" is structural rather than two
+request reaches the same verdict at either adapter" is structural rather than two
 programs agreeing to it. What moved is not a web server: `:contract` defines the
 shapes every program agrees on and ships no engine to listen with.
 
@@ -127,7 +127,7 @@ sit and wait, kept off the small pool the server answers on, which is also what
 leaves an abandoned write running to its own end. One calling library serves the
 life of the program, so an app started before the core recovers on its own once
 the core is there, without being rebuilt. The host is fixed to the loopback
-address in code, exactly as the core and the agent front door fix theirs: this
+address in code, exactly as the core and the MCP server fix theirs: this
 surface asked for no credential, so that binding was the whole of the protection
 (epic 08 added a bearer token to it; the binding now keeps a token travelling in
 the clear off any other machine),
@@ -144,9 +144,9 @@ planning artifacts):
 | Criterion | Test |
 | --- | --- |
 | AC1 | `OneContractTest` — each of the eleven operations is served by name at `/api`, a twelfth is refused naming what was asked for, and every other address on this app is the web server's own reply |
-| AC2 | `OneContractTest` — a project named on one of the four that act on the whole instance, and left unnamed on one of the seven that act inside one, are each turned down at both doors and reach the core at neither; `FidelityTest` — a project-scoped call reaches the core naming its project, and an instance-level one reaches it naming none |
+| AC2 | `OneContractTest` — a project named on one of the four that act on the whole instance, and left unnamed on one of the seven that act inside one, are each turned down at both adapters and reach the core at neither; `FidelityTest` — a project-scoped call reaches the core naming its project, and an instance-level one reaches it naming none |
 | AC3 | `OneContractTest` — one request written once, sent to the core's own connection and to `/api`, comes back equal as a whole value and reaches the core the same way at each, for all eleven operations and for each of the four refusals |
-| AC4 | `OneContractTest` — eight requests neither door can read, each turned down identically and reaching the core at neither, with the next call served normally; `UnreadableArgumentsTest` in `:contract` — for every one of the eleven argument shapes, a field it does not define, a required one left out and one holding the wrong kind each come back naming the field at fault, in Nook's words, with no mention of a serialization library, no advice about its settings, no echo of the request and no internal type name |
+| AC4 | `OneContractTest` — eight requests neither adapter can read, each turned down identically and reaching the core at neither, with the next call served normally; `UnreadableArgumentsTest` in `:contract` — for every one of the eleven argument shapes, a field it does not define, a required one left out and one holding the wrong kind each come back naming the field at fault, in Nook's words, with no mention of a serialization library, no advice about its settings, no echo of the request and no internal type name |
 | AC5 | `FidelityTest` — a name carrying emoji and non-Latin script, a description carrying line breaks and quotation marks, a blocker list keeping its duplicate, and a reference that is nearly an id all reach the core as written, compared as whole values |
 | AC6 | `FidelityTest` — an update changing one field, one clearing a field, one setting it to empty text and one naming no field at all reach the core as four different things |
 | AC7 | `FidelityTest` — each filter part reaches the core alone and all five together, a part supplied with no values reaches it with no values rather than being turned into "do not filter on this", and a blocker list supplied empty arrives empty |
@@ -172,7 +172,7 @@ of this machine's addresses reach it at all; only those are then tried against
 the loopback-bound app, and on a machine with no such address it stops and says
 so instead of passing emptily.
 
-The two front doors differ deliberately on one point. The agent surface turns
+The two adapters differ deliberately on one point. The agent surface turns
 away a request carrying a page's address, because a page in a browser reaches
 the loopback address as readily as an agent does; this surface serves one
 exactly as it serves a request carrying none, and spec-5 names revisiting that

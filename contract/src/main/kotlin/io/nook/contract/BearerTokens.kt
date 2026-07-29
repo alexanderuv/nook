@@ -13,7 +13,7 @@ import java.text.ParseException
 
 /**
  * The recipient a token must have been issued for, and the realm a refusal
- * names. One value at both doors rather than one each: the same token is
+ * names. One value at both adapters rather than one each: the same token is
  * presented at either, and a setting for it would be a second copy of something
  * that must not differ.
  */
@@ -29,7 +29,7 @@ public const val MAX_ACTOR_LENGTH: Int = 200
 /** The claim naming who a token is about, as the standard names it. */
 private const val SUBJECT_CLAIM = "sub"
 
-/** How the milestone's token is signed, and the only signing either door accepts. */
+/** How the milestone's token is signed, and the only signing either adapter accepts. */
 private val SIGNED_WITH: JWSAlgorithm = JWSAlgorithm.HS256
 
 /** The one scheme a caller presents an already-issued identity under. */
@@ -52,10 +52,10 @@ public const val BEARER_CHALLENGE: String =
     """Bearer realm="$NOOK", error="invalid_token", error_description="$NO_VALID_TOKEN""""
 
 /**
- * What a door is stopped with when the secret it was given could check no
+ * What an adapter is stopped with when the secret it was given could check no
  * token: absent, or too short for the signing it would have to verify.
  *
- * It carries none of the library's own words about key length, and the door
+ * It carries none of the library's own words about key length, and the adapter
  * that catches it says which setting is at fault instead — an operator can act
  * on a setting's name and can do nothing with a number of bits.
  */
@@ -65,8 +65,8 @@ public class UnusableSecretException(said: String, cause: Throwable) : IllegalSt
  * The reading of a bearer token: a secret goes in, and the person a presented
  * token names comes out, or nobody.
  *
- * Both front doors mount this one and neither adds to it, which is what makes
- * "the identity is the same whichever door a call arrives at" a fact rather
+ * Both adapters mount this one and neither adds to it, which is what makes
+ * "the identity is the same whichever adapter a call arrives at" a fact rather
  * than a promise two programs keep. It lives beside the shared answering
  * function for the same reason that one does.
  *
@@ -94,7 +94,7 @@ public class BearerTokens(secret: String) {
         // not kept: it is the library's own rule about key length being
         // consulted at startup, rather than a byte count copied here to drift
         // from it. Left to the processor below, the same rule would first be
-        // applied to the first token to arrive — by which time the door is
+        // applied to the first token to arrive — by which time the adapter is
         // already serving.
         try {
             MACVerifier(secretBytes)

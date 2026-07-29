@@ -18,7 +18,7 @@ is to say which — the information is right there in the exception the client c
 requirement. Its REQ24 obliged a failure reply to say whether the core had answered
 at all — that it could not be reached, or that it answered and something inside it
 broke — on the reasoning that one is worth attempting again and the other is not.
-Both doors serve one reply shape ([ADR-2](./adr-2.md)), so that requirement put
+Both adapters serve one reply shape ([ADR-2](./adr-2.md)), so that requirement put
 Nook's internal topology into every contract at once — the MCP surface's included,
 whose callers are agents outside this repo: it told a caller there is a "core", that
 it is reachable separately, and that its being down is a state they should recognize.

@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
 /** What a call presenting no valid bearer token comes back as. */
 private const val UNAUTHORIZED = 401
 
-/** What every call this door does answer comes back as, whatever the answer says. */
+/** What every call this adapter does answer comes back as, whatever the answer says. */
 private const val ANSWERED = 200
 
 /**
@@ -39,16 +39,16 @@ private const val ANSWERED = 200
  */
 class GatedApiTest {
 
-    private val doors = BothDoors()
+    private val both = CoreAndApi()
 
-    private val core = doors.core
+    private val core = both.core
 
     @AfterTest
     fun letGo() {
-        doors.close()
+        both.close()
     }
 
-    /** Every token this door must refuse, under the name of what is wrong with it. */
+    /** Every token this adapter must refuse, under the name of what is wrong with it. */
     private val badTokens: Map<String, String?> = mapOf(
         "no Authorization header at all" to null,
         "a header carrying something that is not a bearer token" to "Something-Else abcdef",
@@ -66,7 +66,7 @@ class GatedApiTest {
     @Test
     fun `every call presenting no valid token is refused, and none of them reaches the core`() {
         badTokens.forEach { (what, header) ->
-            val answered = sentTo(doors.apiAddress, rawCall("list_projects"), presenting = header)
+            val answered = sentTo(both.apiAddress, rawCall("list_projects"), presenting = header)
 
             assertEquals(UNAUTHORIZED, answered.status, what)
             assertTrue(
@@ -79,7 +79,7 @@ class GatedApiTest {
 
     @Test
     fun `a refusal names how a caller is meant to present a token`() {
-        val answered = sentTo(doors.apiAddress, rawCall("list_projects"), presenting = null)
+        val answered = sentTo(both.apiAddress, rawCall("list_projects"), presenting = null)
         val challenge = answered.header(WWW_AUTHENTICATE)
 
         assertTrue(challenge != null, "a refusal carried no challenge at all")
@@ -91,17 +91,17 @@ class GatedApiTest {
     }
 
     @Test
-    fun `a refused call leaves the door serving, and the next valid one is served normally`() {
-        assertEquals(UNAUTHORIZED, sentTo(doors.apiAddress, rawCall("list_projects"), presenting = null).status)
+    fun `a refused call leaves the adapter serving, and the next valid one is served normally`() {
+        assertEquals(UNAUTHORIZED, sentTo(both.apiAddress, rawCall("list_projects"), presenting = null).status)
 
-        assertIs<RpcReply.Answered>(doors.answer(rawCall("list_projects")), "the next call was not served normally")
+        assertIs<RpcReply.Answered>(both.answer(rawCall("list_projects")), "the next call was not served normally")
         assertEquals(1, core.invocations.size, "the refused call reached the core after all")
     }
 
     @Test
     fun `a call refused for its token and one refused for its contents are told apart`() {
-        val forItsToken = sentTo(doors.apiAddress, rawCall("list_projects"), presenting = null)
-        val forItsContents = sentTo(doors.apiAddress, rawCall("get_item", """{"project":"p","ref":"$NOT_ALLOWED"}"""))
+        val forItsToken = sentTo(both.apiAddress, rawCall("list_projects"), presenting = null)
+        val forItsContents = sentTo(both.apiAddress, rawCall("get_item", """{"project":"p","ref":"$NOT_ALLOWED"}"""))
 
         assertEquals(UNAUTHORIZED, forItsToken.status)
         assertEquals(ANSWERED, forItsContents.status, "a refusal of the request did not arrive as an answer")
@@ -113,7 +113,7 @@ class GatedApiTest {
         assertEquals(
             ErrorCode.VALIDATION_FAILED,
             assertIs<RpcReply.Failed>(
-                doors.answer(rawCall("get_item", """{"project":"p","ref":"$NOT_ALLOWED"}""")),
+                both.answer(rawCall("get_item", """{"project":"p","ref":"$NOT_ALLOWED"}""")),
             ).error.asStructuredError()?.code,
             "a refusal of the request carried no domain reason",
         )
@@ -121,11 +121,11 @@ class GatedApiTest {
 
     @Test
     fun `a caller naming somebody else in headers of its own is recorded as the person its token named`() {
-        // The two crossing headers are what a *door* tells the core. A caller
-        // writing them itself reaches a door that never reads them, and whose
+        // The two crossing headers are what a *adapter* tells the core. A caller
+        // writing them itself reaches an adapter that never reads them, and whose
         // only source for who the call is for is the token it presented.
         sentTo(
-            doors.apiAddress,
+            both.apiAddress,
             rawCall("create_project", """{"name":"Whose Word"}"""),
             naming = Actor("somebody-else", "some-other-agent"),
         )
@@ -137,7 +137,7 @@ class GatedApiTest {
     fun `the five fields a caller might name are each refused as a field the operation does not define`() {
         listOf("ownerSubject", "createdBy", "updatedBy", "createdByAgent", "updatedByAgent").forEach { field ->
             val body = rawCall("create_project", """{"name":"Smuggled","$field":"somebody-else"}""")
-            val refused = assertIs<RpcReply.Failed>(doors.answer(body), field)
+            val refused = assertIs<RpcReply.Failed>(both.answer(body), field)
 
             assertEquals(ErrorCode.VALIDATION_FAILED, refused.error.asStructuredError()?.code, field)
             assertTrue(
@@ -149,9 +149,9 @@ class GatedApiTest {
     }
 
     @Test
-    fun `every call through this door names its person and no acting agent`() {
-        doors.answer(rawCall("list_projects"))
-        doors.answer(rawCall("create_project", """{"name":"Search revamp"}"""))
+    fun `every call through this adapter names its person and no acting agent`() {
+        both.answer(rawCall("list_projects"))
+        both.answer(rawCall("create_project", """{"name":"Search revamp"}"""))
 
         assertEquals(listOf(Actor(ALEX, null), Actor(ALEX, null)), core.invocations.map { it.actor })
         assertNull(core.invocations.first().actor.agent, "a person working directly was credited to an agent")

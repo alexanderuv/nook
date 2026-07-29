@@ -30,10 +30,10 @@ public data class Invocation(
  * a core that records what it was asked and hands back what it was told to.
  * What the eleven operations actually *do* belongs to the write and read
  * services and is checked against a real store where they live; running them
- * again through here would measure that work rather than the door's.
+ * again through here would measure that work rather than the adapter's.
  *
  * It lives beside the contract rather than in either adapter because both need
- * it, and needing the same one is the point: two doors shown to agree while
+ * it, and needing the same one is the point: two adapters shown to agree while
  * being measured against stand-ins free to differ have been shown nothing.
  *
  * What each adapter's checks need beyond the record is where the two do differ.
@@ -198,7 +198,7 @@ public fun noProject(ref: String): Nothing = throw StructuredErrorException(
  * What a core nobody can reach does when it is asked anything.
  *
  * It fails the way a call over a network fails — with nothing that could be
- * mistaken for the core having answered — which is the whole distinction a door
+ * mistaken for the core having answered — which is the whole distinction an adapter
  * has to draw between an address that names nothing and a core that is not
  * there.
  */

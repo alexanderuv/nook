@@ -168,7 +168,7 @@ misbehaves after it lands:
 - **What to revert, in what order.**
 - **What revert alone can't undo** — data already migrated, caches already
   warmed, messages already sent — with the step that handles each.
-- **Where the door closes** — if the change is irreversible past some point,
+- **Where turning back stops being possible** — if the change is irreversible past some point,
   name that point; the builder must know where it is.
 -->
 

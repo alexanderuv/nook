@@ -84,7 +84,7 @@ every other milestone stacks on this layer.
   and it is these filters combined rather than an operation of its own.
 - **REQ5 · P0** — The internal RPC API: the operation catalog exposed once by
   the core service for both adapters. *Why:* GOAL2, GOAL4 — one contract, reached
-  the same way by both front doors.
+  the same way by both adapters.
 - **REQ6 · P0** — The MCP server: streamable HTTP at `/mcp/{projectRef}`,
   project bound per connection and reported to the client when the connection
   opens, the catalog's seven project-scoped operations as tools (projects are not

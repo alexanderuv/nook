@@ -5,7 +5,7 @@ the design is settled, the core service's structure layer is built — schema, t
 nine write operations, the five reads, and their tests — and so are the
 connection both adapters reach the core by, `:mcp-server`, which serves the
 seven project-scoped operations as tools at one address per project, and
-`:web-app`, which serves all eleven at `/api`. Both doors speak JSON-RPC 2.0
+`:web-app`, which serves all eleven at `/api`. Both adapters speak JSON-RPC 2.0
 over one answering side held in `:contract`. Both now require a bearer token
 (`NOOK_TOKEN_SECRET`), take the person from its `sub` claim, and record that
 person plus the acting agent on every row the operations write. The document
@@ -41,6 +41,12 @@ an operation to add, not as a contract to break.
 - **Design scope excludes implementation detail.** Specs pin mechanisms, data
   ownership, and flows. Template section content and UI screen detail are
   development-time concerns (see `docs/07`).
+- **Call a component by its name, never by a figure of speech.** `:mcp-server`
+  is the MCP server and `:web-app` serves the web API; the two of them together
+  are the **adapters** (`ARCHITECTURE.md` §3.3). "Door", "front door" and the
+  like are banned — a reader meeting one has to map it back onto a real program,
+  and a coined name travels from prose into field and class names, where it
+  becomes a contract.
 - **Document kinds** are defined in `docs/02-document-layer.md` and stored as
   smallint codes (see the DB changelog).
 - Enums throughout the schema are smallint codes, never strings.

@@ -8,12 +8,12 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 /**
- * The reading of a bearer token, against every shape of token a door will be
+ * The reading of a bearer token, against every shape of token an adapter will be
  * presented with.
  *
  * The table is the point: six of its rows are the standard's own business and
- * every token library refuses them, and five are Nook's, reaching a door as
- * ordinary tokens that verify — a door that skipped them would record an empty
+ * every token library refuses them, and five are Nook's, reaching an adapter as
+ * ordinary tokens that verify — an adapter that skipped them would record an empty
  * person, a person made of spaces, or a name wider than any column that holds
  * one.
  */
@@ -53,7 +53,7 @@ class BearerTokenTest {
     }
 
     @Test
-    fun `the ten tokens a door must refuse name nobody`() {
+    fun `the ten tokens an adapter must refuse name nobody`() {
         val refused = mapOf(
             "signed with something else" to tokenFor(ALEX, secret = ANOTHER_SECRET),
             "expired an hour ago" to tokenFor(ALEX, until = Instant.now().minus(1, ChronoUnit.HOURS)),
@@ -80,7 +80,7 @@ class BearerTokenTest {
     }
 
     @Test
-    fun `a door with nothing usable to check tokens against stops when its reading is built`() {
+    fun `an adapter with nothing usable to check tokens against stops when its reading is built`() {
         assertFailsWith<UnusableSecretException>("built with no secret at all") { BearerTokens("") }
         assertFailsWith<UnusableSecretException>("built with a secret under 256 bits") {
             BearerTokens(THE_SECRET.dropLast(1))
