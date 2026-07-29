@@ -68,7 +68,9 @@ are started from the distributions the build already produces — a folder of ja
 a start script each, which is what an operator runs — so each program holds only its
 own dependencies, and the separation the run exists to observe is real rather than
 asserted. Thirteen checks across seven files, about eighteen seconds all told against
-a database the run owns and can take away.
+a database the run owns and can take away. It passes on the laptop it was built
+on and on the Linux the continuous-integration run uses, which is the first time
+anything here has been shown to start on a second architecture.
 
 **What it proves.** The milestone's loop has run over MCP against three real programs
 and one real database, driven by the protocol library's own client, and returned

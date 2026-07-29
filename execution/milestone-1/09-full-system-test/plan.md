@@ -380,7 +380,7 @@ depends on it.
   the database reports beyond the run's own are there with the core and gone
   without it (REQ2, REQ18, REQ19, AC2, AC13).
 
-- [ ] **STEP8** — Close the epic: amend spec-7 to record the three criteria this
+- [x] **STEP8** — Close the epic: amend spec-7 to record the three criteria this
   epic narrows and where each is covered instead; add the new target to
   `.github/workflows/ci.yaml` beside `check`; write this epic's README results —
   what the assembled run proves, the four debts it settles, each of spec-7's
@@ -392,13 +392,15 @@ depends on it.
   of spec-7's fourteen criteria appears in the mapping against either a test that
   exists or a stated reason it is deferred.
 
-  Done except for the push: spec-7 carries the three narrowings in place, the
-  continuous-integration run asks for `./gradlew check systemTest`, and this
-  epic's README carries the results, the criterion-to-test mapping and what is
-  deferred. `./gradlew clean` then `check systemTest --no-build-cache` is green —
-  441 checks under `check`, 13 under `systemTest` — and both adapters still
-  resolve no database library. What is left is committing and pushing, and the
-  verdict of the run that follows.
+  Done: spec-7 carries the three narrowings in place, the continuous-integration
+  run asks for `./gradlew check systemTest`, and this epic's README carries the
+  results, the criterion-to-test mapping and what is deferred. `./gradlew clean`
+  then `check systemTest --no-build-cache` is green — 441 checks under `check`,
+  13 under `systemTest` — and both adapters still resolve no database library.
+  The continuous-integration run is green too, with `:system-test:systemTest`
+  executed rather than replayed, which closes the discovery's limitation about
+  one machine and one architecture: the assembled run starts and passes on the
+  Linux the milestone is verified on as well as on the laptop it was built on.
 
   Added to the blast radius: `CLAUDE.md`, which now says a fifth module exists
   and that the build has two targets. A session guide that described four modules
